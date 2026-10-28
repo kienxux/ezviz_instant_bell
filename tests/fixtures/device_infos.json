@@ -1,0 +1,1942 @@
+{
+ "BE0000001": {
+  "CLOUD": "REMOVED",
+  "VTM": "REMOVED",
+  "P2P": "REMOVED",
+  "CONNECTION": {
+   "localIp": "192.0.2.1",
+   "netIp": "192.0.2.1",
+   "localRtspPort": 0,
+   "netRtspPort": 0,
+   "localCmdPort": 9010,
+   "netCmdPort": 0,
+   "localStreamPort": 9020,
+   "netHttpPort": 0,
+   "localHttpPort": 0,
+   "netStreamPort": 0,
+   "netType": 0,
+   "wanIp": "192.0.2.1",
+   "upnp": false
+  },
+  "KMS": "REMOVED",
+  "STATUS": {
+   "diskNum": 1,
+   "diskState": "0---------------",
+   "globalStatus": 1,
+   "pirStatus": 0,
+   "isEncrypt": 0,
+   "encryptPwd": "REMOVED",
+   "upgradeAvailable": 0,
+   "upgradeProcess": 0,
+   "upgradeStatus": 2,
+   "alarmSoundMode": 5,
+   "cloudType": 1,
+   "diskStatus": "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+   "privacyStatus": 0,
+   "optionals": {
+    "latestUnbandTime": 1749540298073,
+    "gesture_remind_type": -1,
+    "updateCode": 0,
+    "BodyDetectTimeInterval": -1,
+    "diskCid": "035344534432353685e526487e018c9b,-,-,-,-,-,-,-,-,-,-,-,-,-,-,-",
+    "display_mode": {
+     "mode": 0
+    },
+    "device_screen_overtime": 15,
+    "Record_Mode": {
+     "mode": -1
+    },
+    "Auto_night_vision": 0,
+    "device_wifi_mode": 0,
+    "wanIp": "192.0.2.1",
+    "CustomVoice": [],
+    "hfullViewURL": "",
+    "daylightSavingTime": 1,
+    "Alarm_DetectHumanCar": {
+     "type": 0
+    },
+    "tzCode": 128,
+    "Alarm_AdvancedDetect": {
+     "type": -1
+    },
+    "ChimeMusic": {
+     "doorbell": 0,
+     "pir": 0,
+     "volume": 4,
+     "doorbell_enable": 0,
+     "pir_enable": 0
+    },
+    "updateProcessExtend": "",
+    "CustomVoice_Volume": {
+     "volume": 0,
+     "microphone_volume": 0
+    },
+    "diskHealth": "-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+    "httpPort": 0,
+    "inverse_mode": {
+     "mode": 0,
+     "enable": 0,
+     "position": 0
+    },
+    "OnlineStatus": 1,
+    "timeZone": "UTC+01:00",
+    "video_para": {
+     "channel": 1,
+     "MainEncode": -1,
+     "SubEncode": -1
+    },
+    "cmdPort": 0,
+    "cloudChannelList": [
+     {
+      "status": 0,
+      "channel": 0,
+      "recordType": 0,
+      "streamType": 0
+     },
+     {
+      "status": 1,
+      "channel": 1,
+      "recordType": 0,
+      "streamType": 0
+     },
+     {
+      "status": -1,
+      "channel": 2,
+      "recordType": 0,
+      "streamType": 0
+     }
+    ],
+    "Alarm_Light": {
+     "luminance": 0
+    },
+    "ROI": {
+     "xCoord": "0.00",
+     "yCoord": "0.00",
+     "width": "0.00",
+     "height": "0.00"
+    },
+    "pri_cover_area": {
+     "cover_num": -1,
+     "cover_data": [
+      {
+       "ltop_x": 0,
+       "ltop_y": 0,
+       "rlow_x": 0,
+       "rlow_y": 0
+      },
+      {
+       "ltop_x": 0,
+       "ltop_y": 0,
+       "rlow_x": 0,
+       "rlow_y": 0
+      },
+      {
+       "ltop_x": 0,
+       "ltop_y": 0,
+       "rlow_x": 0,
+       "rlow_y": 0
+      },
+      {
+       "ltop_x": 0,
+       "ltop_y": 0,
+       "rlow_x": 0,
+       "rlow_y": 0
+      }
+     ]
+    },
+    "upnpMappingMode": 0,
+    "diskCapacity": "244016,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+    "kms_version": 100,
+    "domain": "BE0000001",
+    "timeFormat": 2,
+    "sound_detect_type": {
+     "type": -1,
+     "db": -1
+    },
+    "talkMode": {
+     "mode": 2
+    },
+    "NightVision_Model": {
+     "graphicType": 0,
+     "luminance": 0,
+     "duration": 0
+    },
+    "RecordCoverStorage": 0,
+    "image_para": {
+     "brightness": 0,
+     "contrast": 0,
+     "saturation": 0,
+     "sharpness": 0
+    },
+    "superState": 0,
+    "voiceIndex": 0,
+    "latestUnbindTime": 1749540298073,
+    "lastUpgradeTime": 1771140563944,
+    "device_screen_lightness": 8
+   }
+  },
+  "TIME_PLAN": [
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 0,
+    "enable": 0,
+    "weekPlans": [
+     {
+      "weekDay": "0,1,2,3,4,5,6",
+      "timePlan": []
+     }
+    ]
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 5,
+    "enable": -1,
+    "weekPlans": [
+     {
+      "weekDay": "0",
+      "timePlan": []
+     },
+     {
+      "weekDay": "1",
+      "timePlan": []
+     },
+     {
+      "weekDay": "2",
+      "timePlan": []
+     },
+     {
+      "weekDay": "3",
+      "timePlan": []
+     },
+     {
+      "weekDay": "4",
+      "timePlan": []
+     },
+     {
+      "weekDay": "5",
+      "timePlan": []
+     },
+     {
+      "weekDay": "6",
+      "timePlan": []
+     }
+    ]
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 7,
+    "enable": -1,
+    "weekPlans": [
+     {
+      "weekDay": "0",
+      "timePlan": []
+     },
+     {
+      "weekDay": "1",
+      "timePlan": []
+     },
+     {
+      "weekDay": "2",
+      "timePlan": []
+     },
+     {
+      "weekDay": "3",
+      "timePlan": []
+     },
+     {
+      "weekDay": "4",
+      "timePlan": []
+     },
+     {
+      "weekDay": "5",
+      "timePlan": []
+     },
+     {
+      "weekDay": "6",
+      "timePlan": []
+     }
+    ]
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 200,
+    "enable": -1,
+    "weekPlans": [
+     {
+      "weekDay": "0,1,2,3,4,5,6",
+      "timePlan": []
+     }
+    ]
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 8,
+    "enable": -1,
+    "weekPlans": [
+     {
+      "weekDay": "0,1,2,3,4,5,6",
+      "timePlan": []
+     }
+    ]
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 12,
+    "enable": 0,
+    "weekPlans": [
+     {
+      "weekDay": "0",
+      "timePlan": []
+     },
+     {
+      "weekDay": "1",
+      "timePlan": []
+     },
+     {
+      "weekDay": "2",
+      "timePlan": []
+     },
+     {
+      "weekDay": "3",
+      "timePlan": []
+     },
+     {
+      "weekDay": "4",
+      "timePlan": []
+     },
+     {
+      "weekDay": "5",
+      "timePlan": []
+     },
+     {
+      "weekDay": "6",
+      "timePlan": []
+     }
+    ]
+   }
+  ],
+  "CHANNEL": {
+   "NONE": {}
+  },
+  "QOS": "REMOVED",
+  "NODISTURB": {
+   "alarmEnable": 0,
+   "callingEnable": 0
+  },
+  "FEATURE": {},
+  "UPGRADE": {
+   "isNeedUpgrade": 3,
+   "upgradePackageInfo": {
+    "devType": "CS-CP5-R100-1W2TFC",
+    "firmwareCode": "CS-CP5-R100-1W2TFC",
+    "version": "V1.0.1 build 260417",
+    "language": null,
+    "platform": null,
+    "md5": "00000000000000000000000000000000",
+    "type": 0,
+    "packageUrl": "devupgrade-ali.ys7.com/5fe8f6cd71c601e67d71e2e29f0b28b1/digicap.dav",
+    "packageSize": 13031126,
+    "isGray": false,
+    "desc": "EZVIZ always strives to listen to our customers and improve functions based on actual feedback.\nIn this firmware update, we fixed some bugs and optimized device performance. ",
+    "title": null
+   }
+  },
+  "FEATURE_INFO": {
+   "0": {
+    "global": {
+     "NetworkSecurityProtection": {
+      "PortSecurity": {
+       "portSecurityList": [
+        {
+         "portNo": 8000,
+         "enabled": false
+        }
+       ],
+       "enabled": true
+      }
+     },
+     "SoundSetting": {
+      "MuteEnabled": {
+       "enabled": false
+      },
+      "MutePlan": {
+       "plan": [],
+       "enabled": false
+      }
+     },
+     "EZLink": {
+      "LocalDeviceAssociation": [
+       {
+        "devType": "CS-CPD5-R100-1H2",
+        "serialNum": "BE0000001-BE0000002",
+        "channelNo": 1,
+        "associationStatus": "T",
+        "version": "V5.3.6 build 250925",
+        "deviceName": "Tor"
+       }
+      ],
+      "SceneLink": [],
+      "LocalLink": "{}"
+     }
+    }
+   },
+   "1": {
+    "Video": {
+     "CloudStorage": {
+      "CloudTriggerRule": {
+       "rules": []
+      }
+     },
+     "Microphone": {
+      "MicrophoneVolume": 0
+     },
+     "IntelligentAPP": {
+      "DownloadedAPP": {
+       "APP": []
+      },
+      "DynamicReservedResource": {
+       "reserverdResource": {
+        "memory": 0,
+        "channel": 0,
+        "ability": 0,
+        "mediaMem": 0,
+        "flash": 0
+       },
+       "platform": ""
+      }
+     },
+     "LightCtrl": {
+      "NightLightEnable": true
+     },
+     "WifiStatus": {
+      "NetStatus": {
+       "type": "2.4G",
+       "signal": "-41",
+       "ssid": "TestWifi"
+      }
+     },
+     "FaceContrast": {
+      "StrangerDetectionCfg": {
+       "faceContrastList": [
+        {
+         "faceContrast": {
+          "faceContrastType": "faceContrast",
+          "enable": false,
+          "id": 0
+         }
+        }
+       ]
+      }
+     },
+     "Loitering": {
+      "LoiteringEnable": {
+       "enable": true
+      }
+     }
+    }
+   }
+  },
+  "SWITCH": [
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 2,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 7,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 10,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 22,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 29,
+    "enable": true
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 39,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 41,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 42,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 200,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 202,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 300,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 301,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 302,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 303,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 304,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 305,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 306,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 451,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 602,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 603,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 604,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 615,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 700,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 701,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001",
+    "channelNo": 0,
+    "type": 702,
+    "enable": false
+   }
+  ],
+  "CUSTOM_TAG": {},
+  "VIDEO_QUALITY": {
+   "NONE": {}
+  },
+  "resourceInfos": [
+   {
+    "resourceId": "00000000000000000000000000000000",
+    "resourceName": "Tor",
+    "deviceSerial": "BE0000001",
+    "superDeviceSerial": "BE0000001",
+    "localIndex": "0",
+    "shareType": 0,
+    "permission": -1,
+    "resourceType": 0,
+    "resourceCover": "REMOVED",
+    "isShow": 1,
+    "videoLevel": 0,
+    "streamBizUrl": "biz=1",
+    "groupId": "REMOVED",
+    "customSetTag": 0,
+    "resourceIdentifier": "global",
+    "resourceCategory": "global",
+    "conceal": 0,
+    "globalState": 1,
+    "child": false
+   }
+  ],
+  "WIFI": {
+   "netName": "wlan0",
+   "netType": "wireless",
+   "address": "192.0.2.1",
+   "mask": "192.0.2.1",
+   "gateway": "192.0.2.1",
+   "signal": 54,
+   "ssid": "TestWifi"
+  },
+  "deviceInfos": {
+   "name": "Tor",
+   "deviceSerial": "BE0000001",
+   "fullSerial": null,
+   "deviceType": "CS-CP5-R100-1W2TFC",
+   "devicePicPrefix": "REMOVED",
+   "version": "V1.0.1 build 250925",
+   "supportExt": {
+    "46": "1",
+    "68": "1",
+    "69": "1",
+    "26": "4",
+    "152": "1",
+    "232": "1",
+    "375": "1",
+    "452": "1",
+    "233": "1",
+    "234": 22,
+    "499": "1",
+    "434": "1",
+    "659": "1",
+    "30": "0",
+    "519": "4,5,6",
+    "31": "0",
+    "10": "1",
+    "13": "3",
+    "15": "1",
+    "141": "0",
+    "185": "1",
+    "240": "1",
+    "483": "1",
+    "341": "1",
+    "4": "1",
+    "367": "1",
+    "566": "3,4",
+    "106": "2",
+    "568": "1",
+    "80": "1",
+    "9": "1",
+    "769": "2",
+    "42": "1"
+   },
+   "status": 1,
+   "userDeviceCreateTime": null,
+   "channelNumber": 22,
+   "hik": false,
+   "deviceCategory": "DBScreen",
+   "deviceSubCategory": "CP5",
+   "ezDeviceCapability": "{\"262\":\"1\",\"175\":\"1\",\"263\":\"0\",\"264\":\"1\",\"232\":\"0\",\"265\":\"1\",\"551\":\"1\",\"233\":\"0\",\"266\":\"0\",\"234\":1,\"267\":\"1\",\"289\":\"1\",\"30\":\"0\",\"31\":\"0\"}",
+   "customType": "CS-CP5-R100-1W2TFC",
+   "offlineTime": null,
+   "offlineNotify": 0,
+   "instructionBook": "http://devpic.ezvizlife.com/device/image/CS-CP5-R100-1W2TFC/instruction.jpeg",
+   "authCode": "2-2-V2.12.1",
+   "userName": "vl3srm",
+   "riskLevel": 0,
+   "offlineTimestamp": 1792937057743,
+   "mac": null,
+   "extStatus": 1,
+   "classify": 1,
+   "tags": null,
+   "casIp": "eucas.ezvizlife.com",
+   "casPort": 6500
+  }
+ },
+ "BE0000001-BE0000002": {
+  "CLOUD": "REMOVED",
+  "VTM": "REMOVED",
+  "P2P": "REMOVED",
+  "CONNECTION": {
+   "localIp": "192.0.2.1",
+   "netIp": "192.0.2.1",
+   "localRtspPort": 0,
+   "netRtspPort": 0,
+   "localCmdPort": 9010,
+   "netCmdPort": 0,
+   "localStreamPort": 9020,
+   "netHttpPort": 0,
+   "localHttpPort": 0,
+   "netStreamPort": 0,
+   "netType": 0,
+   "wanIp": "192.0.2.1",
+   "upnp": false
+  },
+  "KMS": "REMOVED",
+  "STATUS": {
+   "diskNum": 0,
+   "diskState": "----------------",
+   "globalStatus": 1,
+   "pirStatus": 0,
+   "isEncrypt": 0,
+   "encryptPwd": "REMOVED",
+   "upgradeAvailable": 0,
+   "upgradeProcess": 0,
+   "upgradeStatus": 2,
+   "alarmSoundMode": 2,
+   "cloudType": 1,
+   "diskStatus": "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+   "privacyStatus": 0,
+   "optionals": {
+    "updateCode": 0,
+    "BodyDetectTimeInterval": 1,
+    "talk_speaker_volume": 9,
+    "device_screen_overtime": 10,
+    "language": "ENG",
+    "device_auto_rouse": 0,
+    "Record_Mode": {
+     "mode": 0
+    },
+    "Auto_night_vision": 0,
+    "Battery_WorkStatus": {
+     "KeepAlive": 0,
+     "WorkTime": 0,
+     "SpecialBusiness": 1
+    },
+    "networkingMode": 1,
+    "inverse_mode": {
+     "mode": 0,
+     "enable": 0,
+     "position": 0
+    },
+    "timeZone": "UTC+01:00",
+    "device_video_time": 0,
+    "video_para": {
+     "channel": 1,
+     "MainEncode": 0,
+     "SubEncode": 0
+    },
+    "Alarm_Light": {
+     "luminance": 0
+    },
+    "ROI": {
+     "xCoord": "0.00",
+     "yCoord": "0.00",
+     "width": "0.00",
+     "height": "0.00"
+    },
+    "IndicatorLight": {
+     "enable": 0,
+     "mode": 1
+    },
+    "PresetEffect": {
+     "channel": 0,
+     "index": ""
+    },
+    "RecordCoverStorage": 0,
+    "image_para": {
+     "brightness": 50,
+     "contrast": 50,
+     "saturation": 50,
+     "sharpness": 50
+    },
+    "voiceIndex": 0,
+    "gesture_remind_type": -1,
+    "display_mode": {
+     "mode": 1
+    },
+    "OneClickMute": -1,
+    "AlgorithmInfo": [
+     {
+      "SubType": "0",
+      "channel": 1,
+      "Value": "6"
+     },
+     {
+      "SubType": "2",
+      "channel": 1,
+      "Value": "0"
+     },
+     {
+      "SubType": "3",
+      "channel": 1,
+      "Value": "0"
+     },
+     {
+      "SubType": "4",
+      "channel": 1,
+      "Value": "0"
+     },
+     {
+      "SubType": "6",
+      "channel": 1,
+      "Value": "0"
+     },
+     {
+      "SubType": "9",
+      "channel": 1,
+      "Value": "0"
+     },
+     {
+      "SubType": "5",
+      "channel": 1,
+      "Value": "50"
+     }
+    ],
+    "preset": 0,
+    "device_bell": {
+     "Type": 0,
+     "CustomRingIndex": 0,
+     "Volume": 0
+    },
+    "device_wifi_mode": 1,
+    "device_ICR_DSS": {
+     "mode": 0,
+     "sensitivity": 1,
+     "autoTimeBegin": "00:00",
+     "autoTimeEnd": "00:00"
+    },
+    "device_static_DNS": 0,
+    "CustomVoice": [],
+    "Route_LinkageStatus": 0,
+    "daylightSavingTime": 1,
+    "Alarm_DetectHumanCar": {
+     "type": 0
+    },
+    "tzCode": 134,
+    "Alarm_AdvancedDetect": {
+     "type": 0
+    },
+    "SpeakerConfig": {
+     "RingSwitch": -1,
+     "RingIndex": -1,
+     "IntelligentSwitch": -1,
+     "IntelligentIndex": -1
+    },
+    "ChimeMusic": {
+     "doorbell": 0,
+     "pir": 0,
+     "volume": 4,
+     "doorbell_enable": 0,
+     "pir_enable": 0
+    },
+    "updateProcessExtend": "",
+    "OSD": [
+     {
+      "name": "",
+      "channel": "0"
+     }
+    ],
+    "CustomVoice_Volume": {
+     "volume": 4,
+     "microphone_volume": 90
+    },
+    "diskHealth": "-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+    "returnToPoint": 0,
+    "cloudChannelList": [
+     {
+      "status": 0,
+      "channel": 0
+     },
+     {
+      "status": 0,
+      "channel": 1
+     }
+    ],
+    "pri_cover_area": {
+     "cover_num": 0,
+     "cover_data": [
+      {
+       "ltop_x": 0,
+       "ltop_y": 0,
+       "rlow_x": 0,
+       "rlow_y": 0
+      },
+      {
+       "ltop_x": 0,
+       "ltop_y": 0,
+       "rlow_x": 0,
+       "rlow_y": 0
+      },
+      {
+       "ltop_x": 0,
+       "ltop_y": 0,
+       "rlow_x": 0,
+       "rlow_y": 0
+      },
+      {
+       "ltop_x": 0,
+       "ltop_y": 0,
+       "rlow_x": 0,
+       "rlow_y": 0
+      }
+     ]
+    },
+    "diskCapacity": "-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+    "kms_version": 100,
+    "timeFormat": 2,
+    "talkMode": {
+     "mode": 1
+    },
+    "NightVision_Model": {
+     "graphicType": 0,
+     "luminance": 0,
+     "duration": 90
+    },
+    "sound_detect_type": {
+     "type": 1,
+     "db": 0
+    },
+    "ICR": 0,
+    "batteryCameraWorkMode": 2,
+    "lastUpgradeTime": 1778665230818,
+    "device_screen_lightness": 5
+   }
+  },
+  "TIME_PLAN": [
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 17,
+    "enable": 1,
+    "weekPlans": [
+     {
+      "weekDay": "0",
+      "timePlan": []
+     },
+     {
+      "weekDay": "1",
+      "timePlan": []
+     },
+     {
+      "weekDay": "2",
+      "timePlan": []
+     },
+     {
+      "weekDay": "3",
+      "timePlan": []
+     },
+     {
+      "weekDay": "4",
+      "timePlan": []
+     },
+     {
+      "weekDay": "5",
+      "timePlan": []
+     },
+     {
+      "weekDay": "6",
+      "timePlan": []
+     }
+    ]
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 1,
+    "enable": 1,
+    "weekPlans": [
+     {
+      "weekDay": "0",
+      "timePlan": [
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       }
+      ]
+     },
+     {
+      "weekDay": "1",
+      "timePlan": [
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       }
+      ]
+     },
+     {
+      "weekDay": "2",
+      "timePlan": [
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       }
+      ]
+     },
+     {
+      "weekDay": "3",
+      "timePlan": [
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       }
+      ]
+     },
+     {
+      "weekDay": "4",
+      "timePlan": [
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       }
+      ]
+     },
+     {
+      "weekDay": "5",
+      "timePlan": [
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       }
+      ]
+     },
+     {
+      "weekDay": "6",
+      "timePlan": [
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       },
+       {
+        "startTime": "0:0",
+        "endTime": "24:0"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 4,
+    "enable": 0,
+    "weekPlans": [
+     {
+      "weekDay": "0",
+      "timePlan": []
+     },
+     {
+      "weekDay": "1",
+      "timePlan": []
+     },
+     {
+      "weekDay": "2",
+      "timePlan": []
+     },
+     {
+      "weekDay": "3",
+      "timePlan": []
+     },
+     {
+      "weekDay": "4",
+      "timePlan": []
+     },
+     {
+      "weekDay": "5",
+      "timePlan": []
+     },
+     {
+      "weekDay": "6",
+      "timePlan": []
+     }
+    ]
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 7,
+    "enable": 1,
+    "weekPlans": [
+     {
+      "weekDay": "0",
+      "timePlan": []
+     },
+     {
+      "weekDay": "1",
+      "timePlan": []
+     },
+     {
+      "weekDay": "2",
+      "timePlan": []
+     },
+     {
+      "weekDay": "3",
+      "timePlan": []
+     },
+     {
+      "weekDay": "4",
+      "timePlan": []
+     },
+     {
+      "weekDay": "5",
+      "timePlan": []
+     },
+     {
+      "weekDay": "6",
+      "timePlan": []
+     }
+    ]
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 12,
+    "enable": 0,
+    "weekPlans": [
+     {
+      "weekDay": "0",
+      "timePlan": []
+     },
+     {
+      "weekDay": "1",
+      "timePlan": []
+     },
+     {
+      "weekDay": "2",
+      "timePlan": []
+     },
+     {
+      "weekDay": "3",
+      "timePlan": []
+     },
+     {
+      "weekDay": "4",
+      "timePlan": []
+     },
+     {
+      "weekDay": "5",
+      "timePlan": []
+     },
+     {
+      "weekDay": "6",
+      "timePlan": []
+     }
+    ]
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 14,
+    "enable": 0,
+    "weekPlans": [
+     {
+      "weekDay": "0",
+      "timePlan": []
+     },
+     {
+      "weekDay": "1",
+      "timePlan": []
+     },
+     {
+      "weekDay": "2",
+      "timePlan": []
+     },
+     {
+      "weekDay": "3",
+      "timePlan": []
+     },
+     {
+      "weekDay": "4",
+      "timePlan": []
+     },
+     {
+      "weekDay": "5",
+      "timePlan": []
+     },
+     {
+      "weekDay": "6",
+      "timePlan": []
+     }
+    ]
+   }
+  ],
+  "CHANNEL": {
+   "00000000000000000000000000000000": {
+    "channelDeviceSerial": null,
+    "channelNo": 1,
+    "privacyStatus": 0,
+    "powerStatus": 0,
+    "globalStatus": 0,
+    "signalStatus": 1
+   }
+  },
+  "QOS": "REMOVED",
+  "NODISTURB": {
+   "alarmEnable": 0,
+   "callingEnable": 0
+  },
+  "FEATURE": {},
+  "UPGRADE": {
+   "isNeedUpgrade": 3,
+   "upgradePackageInfo": {
+    "devType": "CS-CPD5-R100-1H2",
+    "firmwareCode": "CS-CPD5-R100-1H2",
+    "version": "V5.3.6 build 260512",
+    "language": null,
+    "platform": null,
+    "md5": "00000000000000000000000000000000",
+    "type": 0,
+    "packageUrl": "devupgrade-ali.ys7.com/06512eb8a04adb47e723d331fc8f4ce5/digicap.dav",
+    "packageSize": 9579164,
+    "isGray": false,
+    "desc": "EZVIZ always strives to listen to our customers and improve functions based on actual feedback.\nIn this firmware update, we fixed some bugs and optimized device performance. ",
+    "title": null
+   }
+  },
+  "FEATURE_INFO": {
+   "0": {
+    "DoorLock": {
+     "SensorLight": {
+      "RadarFMCfg": {
+       "enabled": true
+      }
+     }
+    },
+    "global": {
+     "EZLink": {
+      "SceneLink": "{}",
+      "LocalLink": "{}"
+     },
+     "KeyMgr": {
+      "CardKeyInfo": {
+       "KeyInfo": [
+        {
+         "settingStatus": 0,
+         "keyName": "Alice",
+         "keyID": 1,
+         "startTime": 1743638400,
+         "endTime": 1743897600,
+         "authorityType": 1,
+         "enabled": 1
+        },
+        {
+         "settingStatus": 0,
+         "keyName": "Bob",
+         "keyID": 2,
+         "startTime": 1743638400,
+         "endTime": 1743897600,
+         "authorityType": 1,
+         "enabled": 1
+        }
+       ],
+       "totalKeyNum": 2
+      }
+     }
+    }
+   },
+   "1": {
+    "Video": {
+     "CloudStorage": {
+      "CloudTriggerRule": {
+       "rules": []
+      }
+     },
+     "Microphone": {
+      "MicrophoneVolume": 90
+     },
+     "IntelligentAPP": {
+      "DownloadedAPP": {
+       "APP": []
+      },
+      "DynamicReservedResource": {
+       "reserverdResource": {
+        "memory": 0,
+        "channel": 0,
+        "ability": 0,
+        "mediaMem": 0,
+        "flash": 0
+       },
+       "platform": ""
+      }
+     },
+     "EnergySaving": {
+      "EnergyModeCfg": {
+       "energyMode": ""
+      }
+     },
+     "SoundSetting": {
+      "MuteEnabled": {
+       "enabled": false
+      },
+      "RingtonesList": {
+       "ringtonesList": []
+      },
+      "MutePlan": {
+       "plan": [],
+       "enabled": false
+      }
+     },
+     "LightCtrl": {
+      "NightLightEnable": false
+     },
+     "DisplayScreen": {
+      "BrithtnessCfg": {
+       "brightness": 5,
+       "autoEnabled": false
+      }
+     },
+     "Loitering": {
+      "LoiteringEnable": {
+       "enable": true
+      }
+     },
+     "FaceContrast": {
+      "StrangerDetectionCfg": {
+       "faceContrastList": [
+        {
+         "faceContrast": {
+          "faceContrastType": "faceContrast",
+          "enable": false,
+          "id": 0
+         }
+        }
+       ]
+      }
+     }
+    }
+   }
+  },
+  "SWITCH": [
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 1,
+    "enable": true
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 2,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 3,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 7,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 8,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 10,
+    "enable": true
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 15,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 21,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 22,
+    "enable": true
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 25,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 29,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 31,
+    "enable": true
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 32,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 38,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 39,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 41,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 42,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 200,
+    "enable": true
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 202,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 300,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 301,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 302,
+    "enable": true
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 303,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 304,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 305,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 306,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 451,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 602,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 603,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 604,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 611,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 613,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 614,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 615,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 617,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 650,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 651,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 652,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 700,
+    "enable": true
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 701,
+    "enable": false
+   },
+   {
+    "deviceSerial": "BE0000001-BE0000002",
+    "channelNo": 0,
+    "type": 702,
+    "enable": false
+   }
+  ],
+  "CUSTOM_TAG": {},
+  "VIDEO_QUALITY": {
+   "00000000000000000000000000000000": [
+    {
+     "streamType": 1,
+     "videoLevel": 1
+    },
+    {
+     "streamType": 1,
+     "videoLevel": 2
+    },
+    {
+     "streamType": 1,
+     "videoLevel": 3
+    }
+   ]
+  },
+  "resourceInfos": [
+   {
+    "resourceId": "00000000000000000000000000000000",
+    "resourceName": "BE0000001-BE0000002",
+    "deviceSerial": "BE0000001-BE0000002",
+    "superDeviceSerial": "BE0000001",
+    "localIndex": "0",
+    "shareType": 0,
+    "permission": -1,
+    "resourceType": 10,
+    "resourceCover": "REMOVED",
+    "isShow": 1,
+    "videoLevel": 0,
+    "streamBizUrl": "biz=1",
+    "groupId": "REMOVED",
+    "customSetTag": 0,
+    "resourceIdentifier": "global",
+    "resourceCategory": "global",
+    "conceal": 0,
+    "globalState": 1,
+    "child": true
+   },
+   {
+    "resourceId": "00000000000000000000000000000000",
+    "resourceName": "Tor",
+    "deviceSerial": "BE0000001-BE0000002",
+    "superDeviceSerial": "BE0000001",
+    "localIndex": "1",
+    "shareType": 0,
+    "permission": -1,
+    "resourceType": 50,
+    "resourceCover": "REMOVED",
+    "isShow": 1,
+    "videoLevel": 3,
+    "streamBizUrl": "biz=1",
+    "groupId": "REMOVED",
+    "customSetTag": 0,
+    "resourceIdentifier": "Video",
+    "resourceCategory": "Video",
+    "conceal": 0,
+    "globalState": 2,
+    "child": true
+   }
+  ],
+  "WIFI": {
+   "netName": "wlan0",
+   "netType": "wireless",
+   "address": "192.0.2.1",
+   "mask": "192.0.2.1",
+   "gateway": "192.0.2.1",
+   "signal": 54,
+   "ssid": "TestWifi"
+  },
+  "deviceInfos": {
+   "name": "Tor",
+   "deviceSerial": "BE0000001-BE0000002",
+   "fullSerial": null,
+   "deviceType": "CS-CPD5-R100-1H2",
+   "devicePicPrefix": "REMOVED",
+   "version": "V5.3.6 build 250925",
+   "supportExt": {
+    "44": "0",
+    "709": "1",
+    "154": "0",
+    "232": "0",
+    "233": "0",
+    "234": 1,
+    "236": "1",
+    "313": "0",
+    "632": "1",
+    "237": "1",
+    "238": "1",
+    "91": "0",
+    "51": "0",
+    "519": "4,5,6",
+    "97": "1",
+    "10": "1",
+    "54": "1",
+    "11": "1",
+    "12": "1",
+    "16": "16-9",
+    "481": "1",
+    "483": "1",
+    "242": "1",
+    "363": "2",
+    "1": "1",
+    "2": "1",
+    "244": "1",
+    "487": "1",
+    "5": "0",
+    "566": "3,4",
+    "8": "1",
+    "61": "1",
+    "63": "1",
+    "68": "1",
+    "26": "0",
+    "28": "1",
+    "172": "1",
+    "452": "1",
+    "333": "1",
+    "575": "4",
+    "499": "1",
+    "459": "2",
+    "30": "0",
+    "31": "0",
+    "260": "1",
+    "140": "0",
+    "261": "1",
+    "141": "1",
+    "142": "1",
+    "143": "0",
+    "583": "1",
+    "101": "1",
+    "662": "1",
+    "102": "1",
+    "543": "1",
+    "302": "1",
+    "149": "1",
+    "503": "1",
+    "108": "1"
+   },
+   "status": 1,
+   "userDeviceCreateTime": null,
+   "channelNumber": 1,
+   "hik": false,
+   "deviceCategory": "BDoorBell",
+   "deviceSubCategory": "CPD5",
+   "ezDeviceCapability": "{\"262\":\"1\",\"175\":\"1\",\"263\":\"0\",\"264\":\"1\",\"232\":\"0\",\"265\":\"1\",\"551\":\"1\",\"233\":\"0\",\"266\":\"0\",\"234\":1,\"267\":\"1\",\"289\":\"1\",\"30\":\"0\",\"31\":\"0\"}",
+   "customType": null,
+   "offlineTime": null,
+   "offlineNotify": 0,
+   "instructionBook": "http://devpic.ezvizlife.com/device/image/CS-CPD5-R100-1H2/instruction.jpeg",
+   "authCode": "2-2-V2.12.1",
+   "userName": "",
+   "riskLevel": 0,
+   "offlineTimestamp": 1793167230000,
+   "mac": null,
+   "extStatus": null,
+   "classify": 2,
+   "tags": null,
+   "casIp": "eucas.ezvizlife.com",
+   "casPort": 6500
+  }
+ }
+}

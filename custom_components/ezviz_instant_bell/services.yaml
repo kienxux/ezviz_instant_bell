@@ -1,0 +1,12 @@
+unlock_door:
+  fields:
+    serial:
+      required: false
+      selector:
+        text:
+unlock_gate:
+  fields:
+    serial:
+      required: false
+      selector:
+        text:

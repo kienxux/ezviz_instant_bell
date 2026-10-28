@@ -23,8 +23,8 @@ blueprint:
     open_button:
       name: Open door button
       description: >
-        The button that opens the door. This can be the button of another EZVIZ
-        integration, so nothing you already use has to change.
+        The button that opens the door: the "Unlock Door" button of this integration
+        (or any other button that opens your door).
       selector:
         entity:
           filter:

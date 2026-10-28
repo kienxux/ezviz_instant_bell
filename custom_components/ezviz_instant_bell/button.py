@@ -8,14 +8,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import InstantBellConfigEntry
-from .const import (
-    CONF_CREATE_BUTTONS,
-    CONF_DOOR_LOCK_NO,
-    CONF_GATE_LOCK_NO,
-    DEFAULT_DOOR_LOCK_NO,
-    DEFAULT_GATE_LOCK_NO,
-)
-from .entity import InstantBellEntity
+from .entity import ActionEntity
 from .hub import InstantBellHub
 
 
@@ -23,24 +16,19 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: InstantBellConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     hub = entry.runtime_data
-    if not entry.options.get(CONF_CREATE_BUTTONS, False):
-        # Off by default so existing buttons (and phone widgets that use them)
-        # stay untouched. Remove any that were created earlier.
-        registry = er.async_get(hass)
-        for item in er.async_entries_for_config_entry(registry, entry.entry_id):
-            if item.domain == "button":
-                registry.async_remove(item.entity_id)
-        return
-    door = entry.options.get(CONF_DOOR_LOCK_NO, DEFAULT_DOOR_LOCK_NO)
-    gate = entry.options.get(CONF_GATE_LOCK_NO, DEFAULT_GATE_LOCK_NO)
+    # Version 0.1.0 had optional buttons under other IDs; they are replaced.
+    registry = er.async_get(hass)
+    for item in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if item.domain == "button" and item.unique_id.endswith(("_open_door", "_open_gate")):
+            registry.async_remove(item.entity_id)
     entities: list[UnlockButton] = []
     for serial in hub.serials:
-        entities.append(UnlockButton(hub, serial, "open_door", door))
-        entities.append(UnlockButton(hub, serial, "open_gate", gate))
+        entities.append(UnlockButton(hub, serial, "unlock_gate", hub.gate_lock_no))
+        entities.append(UnlockButton(hub, serial, "unlock_door", hub.door_lock_no))
     async_add_entities(entities)
 
 
-class UnlockButton(InstantBellEntity, ButtonEntity):
+class UnlockButton(ActionEntity, ButtonEntity):
     """Opens exactly one lock; never falls back to a different one."""
 
     def __init__(self, hub: InstantBellHub, serial: str, key: str, lock_no: int) -> None:

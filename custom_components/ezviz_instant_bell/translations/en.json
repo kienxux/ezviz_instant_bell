@@ -8,6 +8,10 @@
           "username": "Email or phone",
           "password": "Password",
           "region": "Region"
+        },
+        "menu_options": {
+          "legacy": "Use the login of my existing EZVIZ HP7 setup",
+          "manual": "Enter the EZVIZ login again"
         }
       },
       "code": {
@@ -19,7 +23,7 @@
       },
       "devices": {
         "title": "Choose your doorbell",
-        "description": "Select the door station. For an HP7 or CP7 this is the entry marked BDoorBell.",
+        "description": "Select the door station. For an HP7 or CP7 this is the entry marked BDoorBell. The indoor monitor is found automatically.",
         "data": {
           "devices": "Doorbells"
         }
@@ -52,18 +56,181 @@
           "poll_interval": "Ring check interval (seconds)",
           "door_lock_no": "Lock number of the door",
           "gate_lock_no": "Lock number of the gate",
-          "create_buttons": "Create Open door and Open gate buttons"
+          "monitor_serials": "Indoor monitor serial numbers"
         },
         "data_description": {
           "poll_interval": "How often EZVIZ is asked for new rings. Shorter means a quicker notification.",
           "door_lock_no": "Normally 2 on an HP7 / CP7.",
           "gate_lock_no": "Normally 1 on an HP7 / CP7.",
-          "create_buttons": "Off by default. Leave it off while you keep using the buttons of another EZVIZ integration, so their entity IDs and your phone widgets stay as they are."
+          "monitor_serials": "Leave empty to find the monitor automatically. Otherwise list the serial numbers separated by commas (for a house with several monitors)."
         }
       }
     }
   },
   "entity": {
+    "sensor": {
+      "name": {
+        "name": "Device Name"
+      },
+      "version": {
+        "name": "Firmware"
+      },
+      "status": {
+        "name": "Status",
+        "state": {
+          "online": "online",
+          "offline": "offline"
+        }
+      },
+      "signal": {
+        "name": "WiFi Signal"
+      },
+      "ssid": {
+        "name": "WiFi SSID"
+      },
+      "local_ip": {
+        "name": "Local IP"
+      },
+      "wan_ip": {
+        "name": "WAN IP"
+      },
+      "motion": {
+        "name": "Motion",
+        "state": {
+          "detected": "detected",
+          "none": "none"
+        }
+      },
+      "last_alarm_time": {
+        "name": "Last Alarm"
+      },
+      "alarm_name": {
+        "name": "Alarm Type"
+      },
+      "seconds_last_trigger": {
+        "name": "Seconds Since Last Motion"
+      },
+      "upgrade_available": {
+        "name": "Update Available",
+        "state": {
+          "yes": "yes",
+          "no": "no"
+        }
+      },
+      "mic_volume": {
+        "name": "Microphone Volume"
+      },
+      "terminals": {
+        "name": "Terminals in use",
+        "unit_of_measurement": "terminals"
+      }
+    },
+    "binary_sensor": {
+      "motion_trigger": {
+        "name": "Motion Detection"
+      },
+      "smart_detection_alarm": {
+        "name": "Smart Detection Alarm"
+      },
+      "intelligent_detection_alarm": {
+        "name": "Intelligent Detection"
+      },
+      "doorbell_ringing": {
+        "name": "Doorbell Ringing"
+      },
+      "gate_open": {
+        "name": "Gate Open"
+      },
+      "unlock_lock": {
+        "name": "Lock Unlocked"
+      },
+      "unlock_rfid": {
+        "name": "RFID Unlock"
+      },
+      "unlock_face": {
+        "name": "Face Unlock"
+      },
+      "unlock_palm": {
+        "name": "Palm Unlock"
+      },
+      "unlock_code": {
+        "name": "Code Unlock"
+      },
+      "unlock_app": {
+        "name": "App Unlock"
+      },
+      "feature_mute": {
+        "name": "Mute"
+      },
+      "feature_loitering": {
+        "name": "Loitering Detection"
+      },
+      "feature_stranger_detection": {
+        "name": "Stranger Detection"
+      },
+      "feature_human_detection": {
+        "name": "Human Detection"
+      }
+    },
+    "button": {
+      "unlock_gate": {
+        "name": "Unlock Gate"
+      },
+      "unlock_door": {
+        "name": "Unlock Door"
+      }
+    },
+    "switch": {
+      "chime_sound": {
+        "name": "Doorbell Chime"
+      },
+      "chime_sound_monitor": {
+        "name": "Indoor Monitor Chime"
+      },
+      "dnd": {
+        "name": "Do Not Disturb"
+      },
+      "privacy": {
+        "name": "Privacy"
+      },
+      "defence": {
+        "name": "Armed"
+      },
+      "label_light": {
+        "name": "Name Tag Light"
+      },
+      "chime_pir": {
+        "name": "Motion Sound Alert"
+      },
+      "chime_pir_monitor": {
+        "name": "Monitor Motion Sound Alert"
+      }
+    },
+    "number": {
+      "chime_volume": {
+        "name": "Doorbell Volume"
+      },
+      "chime_volume_monitor": {
+        "name": "Monitor Volume"
+      },
+      "chime_ringtone": {
+        "name": "Doorbell Ringtone"
+      },
+      "chime_pir_ringtone": {
+        "name": "Motion Ringtone"
+      },
+      "chime_ringtone_monitor": {
+        "name": "Monitor Doorbell Ringtone"
+      },
+      "chime_pir_ringtone_monitor": {
+        "name": "Monitor Motion Ringtone"
+      }
+    },
+    "camera": {
+      "last_snapshot": {
+        "name": "Last Snapshot"
+      }
+    },
     "event": {
       "bell": {
         "name": "Doorbell",
@@ -83,31 +250,52 @@
       "last_picture": {
         "name": "Last picture"
       }
-    },
-    "button": {
-      "open_door": {
-        "name": "Open door"
-      },
-      "open_gate": {
-        "name": "Open gate"
-      }
-    },
-    "sensor": {
-      "terminals": {
-        "name": "Terminals in use",
-        "unit_of_measurement": "terminals"
-      }
     }
   },
   "exceptions": {
     "unlock_failed": {
       "message": "Could not open the lock: {error}"
+    },
+    "setting_failed": {
+      "message": "Could not change the setting: {error}"
+    },
+    "no_such_doorbell": {
+      "message": "No doorbell with that serial number is set up."
+    },
+    "serial_needed": {
+      "message": "More than one doorbell is set up: give the serial number."
     }
   },
   "issues": {
     "terminals_almost_full": {
       "title": "EZVIZ terminal slots almost used up",
       "description": "{count} of {limit} terminals are registered on this EZVIZ account. When all are used, new logins fail. Open the EZVIZ app, go to your account's logged-in devices and remove the ones you no longer use."
+    },
+    "legacy_running": {
+      "title": "The old EZVIZ HP7 integration is still running",
+      "description": "Entities of the earlier ezviz_hp7 integration could not be taken over because that integration is still running. Switch it off (Settings > Devices & services > EZVIZ HP7 > three dots > Disable) or remove it in HACS and restart, then reload this integration. Your entity IDs, dashboards and phone widgets then stay as they are."
+    }
+  },
+  "services": {
+    "unlock_door": {
+      "name": "Unlock door",
+      "description": "Open the door.",
+      "fields": {
+        "serial": {
+          "name": "Serial number",
+          "description": "Serial number of the doorbell. Optional when only one is set up."
+        }
+      }
+    },
+    "unlock_gate": {
+      "name": "Unlock gate",
+      "description": "Open the gate.",
+      "fields": {
+        "serial": {
+          "name": "Serial number",
+          "description": "Serial number of the doorbell. Optional when only one is set up."
+        }
+      }
     }
   }
 }

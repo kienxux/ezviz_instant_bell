@@ -1,12 +1,16 @@
 {
   "domain": "ezviz_instant_bell",
-  "name": "Instant Bell for EZVIZ",
-  "codeowners": ["@kienxux"],
+  "name": "EZVIZ Video Intercom",
+  "codeowners": [
+    "@kienxux"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/kienxux/ezviz_instant_bell",
   "integration_type": "hub",
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/kienxux/ezviz_instant_bell/issues",
-  "requirements": ["pyezvizapi>=1.0.5.0"],
-  "version": "0.1.0"
+  "requirements": [
+    "pyezvizapi>=1.0.5.0"
+  ],
+  "version": "0.2.0"
 }

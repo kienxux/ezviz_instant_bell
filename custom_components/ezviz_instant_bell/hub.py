@@ -19,9 +19,14 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_DEVICES,
+    CONF_DOOR_LOCK_NO,
+    CONF_GATE_LOCK_NO,
+    CONF_MONITOR_SERIALS,
     CONF_NAMES,
     CONF_POLL_INTERVAL,
     CONF_REGION,
+    DEFAULT_DOOR_LOCK_NO,
+    DEFAULT_GATE_LOCK_NO,
     DEFAULT_POLL_INTERVAL,
     DEFAULT_REGION,
     DOMAIN,
@@ -31,7 +36,8 @@ from .const import (
     SIGNAL_PICTURE,
     UNLOCK_COOLDOWN,
 )
-from . import ezviz
+from . import ezviz, state
+from .device_api import DeviceApi
 from .feature_code import resolve_feature_code
 from .parsing import (
     BellEvent,
@@ -60,6 +66,10 @@ class InstantBellHub:
         self.signal_event = SIGNAL_EVENT.format(entry_id=entry.entry_id)
         self.signal_picture = SIGNAL_PICTURE.format(entry_id=entry.entry_id)
         self.push_connected = False
+        # Indoor monitors that belong to each door station, by door serial.
+        self.monitors: dict[str, list[str]] = {}
+        self.api = DeviceApi(lambda: self._client)
+        self.coordinator: Any = None  # StatusCoordinator, set by async_setup_entry
 
         self._client: Any = None
         self._mqtt: Any = None
@@ -84,6 +94,7 @@ class InstantBellHub:
         await self.hass.async_add_executor_job(self._login, code)
 
         await self.hass.async_add_executor_job(self._start_push)
+        await self._async_find_monitors()
 
         interval = self.entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
         await self._async_poll(None)  # first list only remembers what is there
@@ -100,6 +111,51 @@ class InstantBellHub:
         mqtt, self._mqtt = self._mqtt, None
         if mqtt is not None:
             await self.hass.async_add_executor_job(self._stop_push, mqtt)
+
+    async def _async_find_monitors(self) -> None:
+        """Work out which indoor monitors belong to the chosen door stations.
+
+        The option lists them by hand; empty means: take the part of a
+        composite serial (``MONITOR-DOOR``) that the account lists as a device.
+        """
+        text = str(self.entry.options.get(CONF_MONITOR_SERIALS) or "")
+        manual = [part.strip() for part in text.replace(";", ",").split(",") if part.strip()]
+        if manual:
+            self.monitors = {serial: list(manual) for serial in self.serials}
+            return
+        try:
+            devices = await self.hass.async_add_executor_job(self._list_serials)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Could not look for indoor monitors: %s", err)
+            devices = {}
+        self.monitors = {s: state.find_monitors(s, devices) for s in self.serials}
+
+    def _list_serials(self) -> dict[str, Any]:
+        with self._call_lock:
+            return ezviz.list_devices(self._client)
+
+    @property
+    def door_lock_no(self) -> int:
+        return int(self.entry.options.get(CONF_DOOR_LOCK_NO, DEFAULT_DOOR_LOCK_NO))
+
+    @property
+    def gate_lock_no(self) -> int:
+        return int(self.entry.options.get(CONF_GATE_LOCK_NO, DEFAULT_GATE_LOCK_NO))
+
+    async def async_call(self, func: Any, *args: Any, **kwargs: Any) -> Any:
+        """Run a blocking call on the shared session, one at a time."""
+
+        def _run() -> Any:
+            with self._call_lock:
+                return func(*args, **kwargs)
+
+        return await self.hass.async_add_executor_job(_run)
+
+    async def async_relogin(self) -> None:
+        """Log in again with the stored password (an expired session otherwise stays broken)."""
+        storage = Path(self.hass.config.path(".storage"))
+        code = await self.hass.async_add_executor_job(resolve_feature_code, storage)
+        await self.hass.async_add_executor_job(self._login, code)
 
     # ------------------------------------------------------------------
     # Blocking helpers (run in the executor)
@@ -216,6 +272,14 @@ class InstantBellHub:
     # ------------------------------------------------------------------
     # Actions
     # ------------------------------------------------------------------
+
+    async def async_download_picture(self, url: str, serial: str) -> bytes | None:
+        """Download a picture of an alarm (or None if EZVIZ does not give it)."""
+        try:
+            return await self.hass.async_add_executor_job(self._download_picture, url, serial)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Picture download failed: %s", err)
+            return None
 
     async def async_terminal_names(self) -> list[str]:
         """Names of the terminals registered on the account."""
