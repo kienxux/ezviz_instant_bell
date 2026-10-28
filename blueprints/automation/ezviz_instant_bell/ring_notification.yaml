@@ -30,10 +30,14 @@ blueprint:
           filter:
             - domain: button
     notify_service:
-      name: Phone notification service
-      description: The service of the companion app, for example notify.mobile_app_my_phone.
+      name: Phone notification services
+      description: >
+        The service of the companion app of each phone that should get the message,
+        for example notify.mobile_app_my_phone. Add one entry per phone. The first
+        person who taps "Open door" opens it.
       selector:
         text:
+          multiple: true
     picture_wait:
       name: Seconds to wait for the picture
       default: 10
@@ -56,7 +60,9 @@ mode: restart
 variables:
   bell_entity: !input bell
   picture_entity: !input picture
-  notify_service: !input notify_service
+  notify_input: !input notify_service
+  # Older automations hold a single text; newer ones a list.
+  notify_services: "{{ notify_input if notify_input is not string else [notify_input] }}"
   action_id: "EZVIZ_OPEN_{{ trigger.to_state.last_changed.timestamp() | int }}"
 
 triggers:
@@ -77,18 +83,22 @@ actions:
     timeout:
       seconds: !input picture_wait
     continue_on_timeout: true
-  - action: "{{ notify_service }}"
-    data:
-      title: Someone is at the door
-      message: The doorbell rang.
-      data:
-        tag: ezviz_instant_bell_ring
-        image: "{{ state_attr(picture_entity, 'entity_picture') }}"
-        attachment:
-          url: "{{ state_attr(picture_entity, 'entity_picture') }}"
-        actions:
-          - action: "{{ action_id }}"
-            title: Open door
+  - repeat:
+      for_each: "{{ notify_services }}"
+      sequence:
+        - action: "{{ repeat.item }}"
+          continue_on_error: true
+          data:
+            title: Someone is at the door
+            message: The doorbell rang.
+            data:
+              tag: ezviz_instant_bell_ring
+              image: "{{ state_attr(picture_entity, 'entity_picture') }}"
+              attachment:
+                url: "{{ state_attr(picture_entity, 'entity_picture') }}"
+              actions:
+                - action: "{{ action_id }}"
+                  title: Open door
   - wait_for_trigger:
       - trigger: event
         event_type: mobile_app_notification_action
