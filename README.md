@@ -2,7 +2,7 @@
 
 A Home Assistant integration for EZVIZ video intercoms (HP7 / CP7 family, door station with indoor monitor). It shows everything the intercom reports, lets you change its settings, and adds what other integrations do not have: **when someone rings you get the picture at once, and you can open the door with one tap without answering the call.**
 
-> **Status: version 0.4.0.** Ring detection and push events were measured on a real door station (CS-CPD5 with CS-CP5 monitor), and the reading of its data is tested against an anonymised copy of that device's answers. The door and gate buttons, the chime sliders and the switches use the same EZVIZ calls as the earlier `ezviz_hp7` integration but have not yet been checked on a real device with this code; please check each (see "First check"). **Live video** (cloud or local network) is ported from the earlier integration and has not yet been run on a real device with this code: please check it (see "First check"). Not affiliated with EZVIZ or Hikvision.
+> **Status: version 0.4.1.** Ring detection and push events were measured on a real door station (CS-CPD5 with CS-CP5 monitor), and the reading of its data is tested against an anonymised copy of that device's answers. The door and gate buttons, the chime sliders and the switches use the same EZVIZ calls as the earlier `ezviz_hp7` integration but have not yet been checked on a real device with this code; please check each (see "First check"). **Live video** (cloud or local network) is ported from the earlier integration and has not yet been run on a real device with this code: please check it (see "First check"). Not affiliated with EZVIZ or Hikvision.
 
 ## What you get
 

@@ -43,7 +43,8 @@ def item_from_message(message: dict[str, Any], tz: tzinfo) -> HistoryItem | None
     except (TypeError, ValueError):
         subtype = None
     picture = message.get("pic")
-    serial = message.get("from") or message.get("deviceSerial")
+    # "from" is the NAME of the device on most entries; "deviceSerial" is the serial.
+    serial = message.get("deviceSerial") or message.get("from")
     return HistoryItem(
         message_id=str(message_id),
         serial=str(serial) if serial else None,

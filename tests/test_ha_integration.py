@@ -1036,3 +1036,12 @@ async def test_history_failure_gives_an_error(hass: HomeAssistant, client: FakeC
     client.get_device_messages_list = boom
     with pytest.raises(HomeAssistantError):
         await hub.async_history_day(SERIAL, dt_util.now().date() - timedelta(days=2))
+
+
+async def test_history_includes_entries_that_name_the_device_in_from(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    unlock = ring_message("m-unlock", 30)
+    unlock.update({"subType": 2401, "from": "Tor", "deviceSerial": SERIAL, "title": "EZVIZ app open the gate"})
+    client.messages = [unlock]
+    items = await entry.runtime_data.async_history_day(SERIAL, dt_util.now().date())
+    assert [i.message_id for i in items] == ["m-unlock"]

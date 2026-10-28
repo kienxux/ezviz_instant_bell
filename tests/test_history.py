@@ -33,3 +33,10 @@ def test_day_text_round_trip():
     day = parse_day("20261028")
     assert day_text(day) == "20261028"
     assert parse_day("nonsense") is None
+
+
+def test_serial_is_taken_from_deviceserial_not_from_the_name():
+    """On real entries (e.g. unlock 2401) "from" holds the device name."""
+    entry = {"msgId": "x", "time": 1000, "title": "EZVIZ app open the gate", "from": "Tor",
+             "deviceSerial": "BE1-BE2", "subType": 2401, "pic": "https://example.invalid/p"}
+    assert item_from_message(entry, TZ).serial == "BE1-BE2"
