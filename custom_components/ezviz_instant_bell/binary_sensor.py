@@ -177,6 +177,11 @@ class AlarmBinary(StatusEntity, BinarySensorEntity):
 
         self._off_unsub = async_call_later(self.hass, PULSE_SECONDS, _off)
         self.async_write_ha_state()
+        if self._kind.key == "doorbell_ringing" or self._kind.key in UNLOCK_KEYS:
+            # Ring -> open the dashboard: have the live video ready.
+            relay = self._hub.live_relays.get(self._serial)
+            if relay is not None:
+                self.hass.async_create_task(relay.prewarm())
         if self._kind.key in UNLOCK_KEYS:
             self._fire_unlock(fields)
 

@@ -19,9 +19,8 @@ from .const import DOMAIN, LEGACY_DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-# The live video entity is not part of this integration (yet), so it stays
-# where it is and is not removed.
-NOT_MOVED_SUFFIXES = ("_live",)
+# Nothing is left behind: the live video entity moves over as well.
+NOT_MOVED_SUFFIXES: tuple[str, ...] = ()
 
 _RUNNING = {ConfigEntryState.LOADED, ConfigEntryState.SETUP_IN_PROGRESS, ConfigEntryState.SETUP_RETRY}
 
@@ -50,7 +49,7 @@ def async_migrate_legacy(hass: HomeAssistant, entry: ConfigEntry, serials: set[s
         if item.platform == LEGACY_DOMAIN
         and item.config_entry_id in legacy_ids
         and _belongs_to(item.unique_id, serials)
-        and not item.unique_id.endswith(NOT_MOVED_SUFFIXES)
+        and not (NOT_MOVED_SUFFIXES and item.unique_id.endswith(NOT_MOVED_SUFFIXES))
     ]
     if not candidates:
         return 0, False

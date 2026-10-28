@@ -38,6 +38,7 @@ from .const import (
 )
 from . import ezviz, state
 from .device_api import DeviceApi
+from .stream_support import StreamSupport
 from .feature_code import resolve_feature_code
 from .parsing import (
     BellEvent,
@@ -70,11 +71,19 @@ class InstantBellHub:
         self.monitors: dict[str, list[str]] = {}
         self.api = DeviceApi(lambda: self._client)
         self.coordinator: Any = None  # StatusCoordinator, set by async_setup_entry
+        # Live video: keys and addresses, and the stream relay of each door station.
+        self.live_relays: dict[str, Any] = {}
+        self.stream_modes: dict[str, str] = {}
 
         self._client: Any = None
         self._mqtt: Any = None
         self._account: str = entry.data["username"]
         self._call_lock = threading.Lock()  # one request at a time on the shared session
+        self.stream = StreamSupport(
+            lambda: self._client,
+            entry.data.get(CONF_REGION, DEFAULT_REGION),
+            self._call_lock,
+        )
         self._tracker = NewMessageTracker()
         self._dedupe = EventDeduper()
         self._unsub_poll: Any = None
@@ -105,6 +114,13 @@ class InstantBellHub:
     async def async_stop(self) -> None:
         """Stop push and polling."""
         self._stopping = True
+        relays = list(self.live_relays.values())
+        self.live_relays.clear()
+        for relay in relays:
+            try:
+                await relay.stop()
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Stopping a stream relay failed: %s", err)
         if self._unsub_poll:
             self._unsub_poll()
             self._unsub_poll = None

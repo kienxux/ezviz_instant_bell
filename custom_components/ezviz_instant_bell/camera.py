@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from homeassistant.components.camera import Camera
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -11,12 +13,21 @@ from .coordinator import StatusCoordinator
 from .entity import StatusEntity
 from .hub import InstantBellHub
 
+_LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: InstantBellConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     hub = entry.runtime_data
     async_add_entities(LastSnapshotCamera(hub, hub.coordinator, serial) for serial in hub.serials)
+    # The live video is a bonus: if it cannot start, the rest keeps working.
+    try:
+        from .live_camera import async_setup_live_entities
+
+        await async_setup_live_entities(hass, hub, async_add_entities)
+    except Exception:  # noqa: BLE001
+        _LOGGER.exception("Live video could not be set up")
 
 
 class LastSnapshotCamera(StatusEntity, Camera):

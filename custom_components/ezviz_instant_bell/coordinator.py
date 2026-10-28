@@ -39,6 +39,24 @@ class StatusCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self._fail_streak = 0
         self._last_alarm_time: dict[str, str | None] = {}
         self._last_alarm_detail: dict[str, dict[str, Any]] = {}
+        self._slowed_for_stream = False
+
+    def _apply_stream_aware_interval(self) -> None:
+        """Read the status a quarter as often while someone watches the local stream.
+
+        Several of the requests are passed on to the doorbell, and answering
+        them competes with its streaming on its small processor. Back to the
+        normal rate as soon as the last viewer leaves.
+        """
+        watching = any(
+            getattr(relay, "_active_lan", False) and getattr(relay, "_active_clients", 0) > 0
+            for relay in self._hub.live_relays.values()
+        )
+        if watching == self._slowed_for_stream:
+            return
+        self._slowed_for_stream = watching
+        self.update_interval = timedelta(seconds=UPDATE_INTERVAL * (4 if watching else 1))
+        _LOGGER.debug("Status interval now %ss (local stream viewers: %s)", self.update_interval.total_seconds(), watching)
 
     def _read(self) -> dict[str, dict[str, Any]]:
         """Blocking: read all door stations with one pass over the cloud."""
@@ -54,6 +72,7 @@ class StatusCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         return result
 
     async def _async_update_data(self) -> dict[str, dict[str, Any]]:
+        self._apply_stream_aware_interval()
         failure: str | None = None
         data: dict[str, dict[str, Any]] = {}
         try:

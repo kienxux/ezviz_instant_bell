@@ -10,3 +10,23 @@ unlock_gate:
       required: false
       selector:
         text:
+set_video_encryption:
+  fields:
+    serial:
+      required: false
+      selector:
+        text:
+    enable:
+      required: true
+      selector:
+        boolean:
+    verification_code:
+      required: true
+      selector:
+        text:
+fetch_encryption_key:
+  fields:
+    code:
+      required: false
+      selector:
+        text:

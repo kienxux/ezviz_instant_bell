@@ -9,12 +9,12 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv, issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN
+from .const import CONF_ENCRYPTION_KEY, DOMAIN
 from .coordinator import StatusCoordinator
 from .hub import InstantBellHub
 from .migration import async_migrate_legacy
@@ -66,8 +66,81 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async def unlock_gate(call: ServiceCall) -> None:
         await _unlock(call, False)
 
+    def _hubs() -> list[tuple[ConfigEntry, InstantBellHub]]:
+        found = []
+        for entry in hass.config_entries.async_entries(DOMAIN):
+            hub = getattr(entry, "runtime_data", None)
+            if isinstance(hub, InstantBellHub):
+                found.append((entry, hub))
+        return found
+
+    async def set_video_encryption(call: ServiceCall) -> None:
+        wanted = str(call.data.get("serial") or "").strip()
+        for _entry, hub in _hubs():
+            for serial in hub.serials:
+                if not wanted or serial == wanted or same_device(serial, wanted):
+                    try:
+                        await hass.async_add_executor_job(
+                            hub.stream.set_video_encryption,
+                            serial,
+                            bool(call.data.get("enable", False)),
+                            str(call.data.get("verification_code", "")),
+                        )
+                    except Exception as err:  # noqa: BLE001
+                        raise HomeAssistantError(
+                            translation_domain=DOMAIN,
+                            translation_key="setting_failed",
+                            translation_placeholders={"error": str(err)},
+                        ) from err
+                    return
+        raise ServiceValidationError(translation_domain=DOMAIN, translation_key="no_such_doorbell")
+
+    async def fetch_encryption_key(call: ServiceCall) -> None:
+        """Get the camera key and keep it in the options.
+
+        Call once without a code (EZVIZ then e-mails a one-time code), then
+        again with the code.
+        """
+        code = str(call.data.get("code", "")).strip()
+        for entry, hub in _hubs():
+            for serial in hub.serials:
+                try:
+                    key = await hass.async_add_executor_job(hub.stream.fetch_camera_key_with_code, serial, code)
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.error(
+                        "Key fetch failed for %s: %s. If EZVIZ just sent a one-time code, call this "
+                        "action again with code: \"<that code>\".",
+                        serial,
+                        err,
+                    )
+                    continue
+                if not key:
+                    _LOGGER.warning(
+                        "No key returned for %s. Check your mail for a one-time code and call this "
+                        "action again with it in the 'code' field.",
+                        serial,
+                    )
+                    continue
+                hass.config_entries.async_update_entry(entry, options={**entry.options, CONF_ENCRYPTION_KEY: key})
+                _LOGGER.warning("Stored the camera key for %s; the entry reloads and decrypts the stream.", serial)
+
     hass.services.async_register(DOMAIN, "unlock_door", unlock_door, SERVICE_SCHEMA)
     hass.services.async_register(DOMAIN, "unlock_gate", unlock_gate, SERVICE_SCHEMA)
+    hass.services.async_register(
+        DOMAIN,
+        "set_video_encryption",
+        set_video_encryption,
+        vol.Schema(
+            {
+                vol.Optional("serial"): cv.string,
+                vol.Required("enable"): cv.boolean,
+                vol.Required("verification_code"): cv.string,
+            }
+        ),
+    )
+    hass.services.async_register(
+        DOMAIN, "fetch_encryption_key", fetch_encryption_key, vol.Schema({vol.Optional("code"): cv.string})
+    )
     return True
 
 

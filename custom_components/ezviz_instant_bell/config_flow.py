@@ -26,22 +26,36 @@ from homeassistant.helpers.selector import (
 
 from . import ezviz
 from .const import (
+    CONF_AGGRESSIVE_MPEGTS,
     CONF_DEVICES,
+    CONF_DIAGNOSTIC_DUMPS,
+    CONF_ENCRYPTION_KEY,
     CONF_DOOR_LOCK_NO,
     CONF_GATE_LOCK_NO,
     CONF_MONITOR_SERIALS,
     CONF_NAMES,
     CONF_POLL_INTERVAL,
+    CONF_RELAY_BIND,
+    CONF_RELAY_PORT,
     CONF_REGION,
+    CONF_STREAM_MODE,
+    CONF_STREAM_QUALITY,
+    CONF_STREAM_SOURCE,
+    CONF_VIDEO_CODEC,
     DEFAULT_DOOR_LOCK_NO,
     DEFAULT_GATE_LOCK_NO,
     DEFAULT_POLL_INTERVAL,
     DEFAULT_REGION,
+    DEFAULT_RELAY_BIND,
     DOMAIN,
     LEGACY_DOMAIN,
     MAX_POLL_INTERVAL,
     MIN_POLL_INTERVAL,
     REGIONS,
+    STREAM_MODES,
+    STREAM_QUALITIES,
+    STREAM_SOURCES,
+    VIDEO_CODECS,
 )
 from .feature_code import resolve_feature_code
 
@@ -49,6 +63,19 @@ _LOGGER = logging.getLogger(__name__)
 
 # Device categories that are the door station of an HP7 / CP7 style intercom.
 DOORBELL_CATEGORIES = {"BDoorBell"}
+
+# Live video options with the same names in the earlier ezviz_hp7 integration.
+LIVE_OPTION_KEYS = (
+    CONF_RELAY_PORT,
+    CONF_RELAY_BIND,
+    CONF_AGGRESSIVE_MPEGTS,
+    CONF_VIDEO_CODEC,
+    CONF_STREAM_SOURCE,
+    CONF_STREAM_MODE,
+    CONF_STREAM_QUALITY,
+    CONF_ENCRYPTION_KEY,
+    CONF_DIAGNOSTIC_DUMPS,
+)
 
 # Region names of the earlier ezviz_hp7 integration and the hosts they meant.
 LEGACY_REGIONS = {
@@ -75,6 +102,7 @@ class InstantBellConfigFlow(ConfigFlow, domain=DOMAIN):
         self._asked = False  # the "start from the old setup?" menu was shown
         self._preselect: list[str] = []
         self._monitors = ""
+        self._live_options: dict[str, Any] = {}
 
     def _legacy_entries(self) -> list[Any]:
         return self.hass.config_entries.async_entries(LEGACY_DOMAIN)
@@ -163,6 +191,7 @@ class InstantBellConfigFlow(ConfigFlow, domain=DOMAIN):
         if isinstance(monitors, (list, tuple)):
             monitors = ",".join(str(m) for m in monitors)
         self._monitors = str(monitors).strip()
+        self._live_options = {k: legacy.options[k] for k in LIVE_OPTION_KEYS if k in legacy.options}
         if not self._username or not self._password:
             return await self.async_step_manual()
         await self.async_set_unique_id(self._username.lower())
@@ -226,7 +255,10 @@ class InstantBellConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_DEVICES: chosen,
                     CONF_NAMES: {s: self._devices[s]["name"] for s in chosen},
                 },
-                options={CONF_MONITOR_SERIALS: self._monitors} if self._monitors else {},
+                options={
+                    **self._live_options,
+                    **({CONF_MONITOR_SERIALS: self._monitors} if self._monitors else {}),
+                },
             )
         options = [
             SelectOptionDict(
@@ -300,22 +332,34 @@ class InstantBellConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class InstantBellOptionsFlow(OptionsFlow):
-    """Ring check interval, indoor monitors and lock numbers."""
+    """Ring check interval, indoor monitors, lock numbers and live video."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
-            return self.async_create_entry(
-                data={
-                    CONF_POLL_INTERVAL: int(user_input[CONF_POLL_INTERVAL]),
-                    CONF_MONITOR_SERIALS: str(user_input.get(CONF_MONITOR_SERIALS) or "").strip(),
-                    CONF_DOOR_LOCK_NO: int(user_input[CONF_DOOR_LOCK_NO]),
-                    CONF_GATE_LOCK_NO: int(user_input[CONF_GATE_LOCK_NO]),
-                }
-            )
+            data: dict[str, Any] = {
+                CONF_POLL_INTERVAL: int(user_input[CONF_POLL_INTERVAL]),
+                CONF_MONITOR_SERIALS: str(user_input.get(CONF_MONITOR_SERIALS) or "").strip(),
+                CONF_DOOR_LOCK_NO: int(user_input[CONF_DOOR_LOCK_NO]),
+                CONF_GATE_LOCK_NO: int(user_input[CONF_GATE_LOCK_NO]),
+                CONF_RELAY_PORT: int(user_input.get(CONF_RELAY_PORT) or 0),
+                CONF_RELAY_BIND: str(user_input.get(CONF_RELAY_BIND) or DEFAULT_RELAY_BIND).strip(),
+                CONF_AGGRESSIVE_MPEGTS: bool(user_input.get(CONF_AGGRESSIVE_MPEGTS, False)),
+                CONF_VIDEO_CODEC: user_input[CONF_VIDEO_CODEC],
+                CONF_STREAM_SOURCE: user_input[CONF_STREAM_SOURCE],
+                CONF_STREAM_MODE: user_input[CONF_STREAM_MODE],
+                CONF_STREAM_QUALITY: user_input[CONF_STREAM_QUALITY],
+                CONF_ENCRYPTION_KEY: str(user_input.get(CONF_ENCRYPTION_KEY) or "").strip(),
+                CONF_DIAGNOSTIC_DUMPS: bool(user_input.get(CONF_DIAGNOSTIC_DUMPS, False)),
+            }
+            return self.async_create_entry(data=data)
         opts = self.config_entry.options
         number = lambda low, high: NumberSelector(  # noqa: E731
             NumberSelectorConfig(min=low, max=high, step=1, mode=NumberSelectorMode.BOX)
         )
+
+        def choice(values: list[str]) -> SelectSelector:
+            return SelectSelector(SelectSelectorConfig(options=values, mode=SelectSelectorMode.DROPDOWN))
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
@@ -332,6 +376,29 @@ class InstantBellOptionsFlow(OptionsFlow):
                     vol.Required(
                         CONF_GATE_LOCK_NO, default=opts.get(CONF_GATE_LOCK_NO, DEFAULT_GATE_LOCK_NO)
                     ): number(1, 8),
+                    vol.Required(CONF_STREAM_SOURCE, default=opts.get(CONF_STREAM_SOURCE, "cloud")): choice(
+                        STREAM_SOURCES
+                    ),
+                    vol.Required(CONF_STREAM_MODE, default=opts.get(CONF_STREAM_MODE, "auto")): choice(
+                        STREAM_MODES
+                    ),
+                    vol.Required(CONF_VIDEO_CODEC, default=opts.get(CONF_VIDEO_CODEC, "auto")): choice(
+                        VIDEO_CODECS
+                    ),
+                    vol.Required(CONF_STREAM_QUALITY, default=opts.get(CONF_STREAM_QUALITY, "main")): choice(
+                        STREAM_QUALITIES
+                    ),
+                    vol.Required(CONF_RELAY_PORT, default=int(opts.get(CONF_RELAY_PORT) or 0)): number(0, 65535),
+                    vol.Required(CONF_RELAY_BIND, default=opts.get(CONF_RELAY_BIND, DEFAULT_RELAY_BIND)): TextSelector(),
+                    vol.Required(
+                        CONF_AGGRESSIVE_MPEGTS, default=bool(opts.get(CONF_AGGRESSIVE_MPEGTS, False))
+                    ): bool,
+                    vol.Optional(
+                        CONF_ENCRYPTION_KEY, description={"suggested_value": opts.get(CONF_ENCRYPTION_KEY, "")}
+                    ): TextSelector(),
+                    vol.Required(
+                        CONF_DIAGNOSTIC_DUMPS, default=bool(opts.get(CONF_DIAGNOSTIC_DUMPS, False))
+                    ): bool,
                 }
             ),
         )

@@ -56,14 +56,24 @@
           "poll_interval": "Ring check interval (seconds)",
           "door_lock_no": "Lock number of the door",
           "gate_lock_no": "Lock number of the gate",
-          "monitor_serials": "Indoor monitor serial numbers"
+          "monitor_serials": "Indoor monitor serial numbers",
+          "relay_port": "Fixed TCP port for the live relay (0 = random, suggested 8554 for go2rtc / mediamtx)",
+          "relay_bind": "Relay listen host (127.0.0.1 = local-only, safe default; 0.0.0.0 exposes the UNAUTHENTICATED raw stream to other hosts, e.g. Frigate — trusted networks only, requires a fixed port)",
+          "aggressive_mpegts": "Aggressive MPEG-TS compatibility (enable if you see 'Immediate exit requested' in logs; safe to leave OFF by default)",
+          "video_codec": "Video codec (auto = detect; hevc transcodes H.265 to H.264 for WebRTC; hevc_copy passes H.265 through untouched for low-power hosts / Frigate / Safari)",
+          "stream_source": "Stream source (cloud = EZVIZ VTM relay; local = direct LAN, bypasses the cloud and fixes 'no live' on firmware that won't push to the cloud — needs HA on the same network as the doorbell; auto = try local then cloud)",
+          "stream_mode": "Live view delivery (auto = default: detects the codec and picks for you — H.264 → webrtc, HEVC → mjpeg; webrtc = HA Stream/go2rtc, has audio + low latency but can't show HEVC without transcoding; mjpeg = per-viewer ffmpeg to motion-JPEG, codec-agnostic and robust for HEVC/multi-viewer but no audio)",
+          "stream_quality": "LAN stream quality (main = full resolution; sub = the device's low-resolution substream, far cheaper to decode — use it if video accumulates delay on a weak host such as a Raspberry Pi. Applies to the 'local' source only)",
+          "encryption_key": "Encryption key (usually the device's 6-character verification code, from its label). Only needed if the doorbell encrypts the video and the cloud won't hand the key over: it is then used to decrypt the stream so the live view works without turning encryption off.",
+          "diagnostic_dumps": "Diagnostic dumps (writes two .bin files in /config capturing the start of the stream, for bitstream analysis when reporting a video problem. Leave OFF: not useful in normal operation)"
         },
         "data_description": {
           "poll_interval": "How often EZVIZ is asked for new rings. Shorter means a quicker notification.",
           "door_lock_no": "Normally 2 on an HP7 / CP7.",
           "gate_lock_no": "Normally 1 on an HP7 / CP7.",
           "monitor_serials": "Leave empty to find the monitor automatically. Otherwise list the serial numbers separated by commas (for a house with several monitors)."
-        }
+        },
+        "description": "Live video options apply after the integration reloads."
       }
     }
   },
@@ -229,6 +239,9 @@
     "camera": {
       "last_snapshot": {
         "name": "Last Snapshot"
+      },
+      "live": {
+        "name": "Live"
       }
     },
     "event": {
@@ -274,6 +287,35 @@
     "legacy_running": {
       "title": "The old EZVIZ HP7 integration is still running",
       "description": "Entities of the earlier ezviz_hp7 integration could not be taken over because that integration is still running. Switch it off (Settings > Devices & services > EZVIZ HP7 > three dots > Disable) or remove it in HACS and restart, then reload this integration. Your entity IDs, dashboards and phone widgets then stay as they are."
+    },
+    "hevc_webrtc": {
+      "title": "HEVC live view on WebRTC mode",
+      "description": "Doorbell {serial} streams HEVC/H.265, but Stream mode is set to WebRTC. Browsers can't show HEVC over WebRTC and go2rtc must transcode, which fails on weak hosts (grey screen or 'connection refused').\n\nOpen Configure on the integration and set Stream mode to 'mjpeg' (codec-agnostic, no go2rtc), then Reload. Alternatively, to keep WebRTC, set Video codec to 'hevc' to transcode to H.264."
+    },
+    "stream_encrypted": {
+      "title": "Device is encrypting the video stream",
+      "description": "Doorbell {serial} is scrambling the video stream (Image/Video Encryption is on). The container stays readable but the payloads are scrambled, so ffmpeg cannot decode and the live view stays black.\n\nOpen the EZVIZ app → the device → Settings → **Image/Video Encryption** and turn it off (it asks for the 6-letter device code). Note: a firmware or app update can silently re-enable it."
+    },
+    "encryption_otp": {
+      "title": "Encryption code needed for {serial}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Enter the code EZVIZ e-mailed you",
+            "description": "Doorbell {serial} encrypts its video, and EZVIZ has just e-mailed a 4-digit security code (subject \"[Device Encryption] Security Code\") to your account address. That code unlocks the stream, and it expires after about 30 minutes.\n\nEnter it below. Do **not** use the 6-character code printed on the device label — this firmware rejects it. Submitting an empty field asks EZVIZ for a fresh code.",
+            "data": {
+              "code": "Security code from the e-mail"
+            }
+          }
+        },
+        "error": {
+          "invalid_code": "EZVIZ did not accept that code. It has probably expired — submit an empty field to have a new one sent.",
+          "resent": "A new code has been sent. Check your e-mail and enter it here."
+        },
+        "abort": {
+          "no_device": "That doorbell is no longer set up in Home Assistant."
+        }
+      }
     }
   },
   "services": {
@@ -294,6 +336,34 @@
         "serial": {
           "name": "Serial number",
           "description": "Serial number of the doorbell. Optional when only one is set up."
+        }
+      }
+    },
+    "set_video_encryption": {
+      "name": "Set video encryption",
+      "description": "Turn the doorbell's Image/Video Encryption on or off. Encryption blocks the local live stream. This changes a security setting of the device.",
+      "fields": {
+        "serial": {
+          "name": "Serial number",
+          "description": "Serial number of the doorbell. Optional when only one is set up."
+        },
+        "enable": {
+          "name": "Encryption on",
+          "description": "On to enable encryption, off to disable it."
+        },
+        "verification_code": {
+          "name": "Verification code",
+          "description": "The 6-character code on the device label, or the short code EZVIZ e-mails on newer firmware."
+        }
+      }
+    },
+    "fetch_encryption_key": {
+      "name": "Fetch encryption key",
+      "description": "Get the key that decrypts the video of an encrypted doorbell. Call once without a code (EZVIZ e-mails a one-time code), then again with the code.",
+      "fields": {
+        "code": {
+          "name": "Code",
+          "description": "The 4-digit code from the e-mail. Leave empty to have one sent."
         }
       }
     }

@@ -25,6 +25,23 @@ def _enable_custom_integrations(enable_custom_integrations):
     yield
 
 
+@pytest.fixture(autouse=True)
+def _local_sockets(socket_enabled):
+    """The stream relay listens on a port of this computer."""
+    yield
+
+
+@pytest.fixture(autouse=True)
+def _no_codec_probe():
+    """The live video would try to open a real stream to look at the codec."""
+
+    async def _mjpeg(_relay):
+        return "mjpeg"
+
+    with patch("custom_components.ezviz_instant_bell.live_camera._resolve_auto_stream_mode", _mjpeg):
+        yield
+
+
 INFOS = json.loads((Path(__file__).parent / "fixtures" / "device_infos.json").read_text())
 SERIAL = "BE0000001-BE0000002"
 MONITOR = "BE0000001"
@@ -73,6 +90,28 @@ class FakeClient:
         self.calls: list[tuple] = []
         self.chime = dict(CHIME)
         self.infos = copy.deepcopy(INFOS)
+        self.cam_key_answers: list = ["KEY123"]  # strings are returned, exceptions raised
+        self.cam_key_calls: list[tuple] = []
+        self.video_enc_calls: list[dict] = []
+        self.fail_video_enc = False
+
+    # -- live video: keys and encryption
+    def get_cam_key(self, serial, smscode=None):
+        self.cam_key_calls.append((serial, smscode))
+        answer = self.cam_key_answers.pop(0) if self.cam_key_answers else None
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    def set_video_enc(self, serial, enable=1, camera_verification_code=None, old_password=None):
+        self.video_enc_calls.append(
+            {"serial": serial, "enable": enable, "code": camera_verification_code, "old": old_password}
+        )
+        if self.fail_video_enc:
+            raise RuntimeError("1011 verification code incorrect")
+
+    def export_token(self):
+        return {"session_id": "sid", "username": "internal-user"}
 
     # -- cloud list, pictures, push, unlock
     def get_device_messages_list(self, **kwargs):
@@ -539,8 +578,10 @@ async def test_old_entities_keep_their_entity_ids(hass: HomeAssistant, client: F
     assert reg.async_get(made["chime_volume_monitor"]).platform == DOMAIN
     # no second copy was created under a different entity ID
     assert not [e for e in reg.entities if e.endswith("_2")]
-    # the live video entity is not ours yet: it stays as it was
-    assert reg.async_get(made["live"]).platform == LEGACY_DOMAIN
+    # the live video moves too, and keeps its entity ID
+    live = reg.async_get(made["live"])
+    assert live.platform == DOMAIN and live.entity_id == "camera.front_door_live"
+    assert hass.states.get("camera.front_door_live") is not None
     # the device keeps its ID and the name the user gave it
     devices = dr.async_get(hass)
     device = devices.async_get_device(identifiers={(DOMAIN, SERIAL)})
@@ -691,3 +732,186 @@ async def test_options_flow(hass: HomeAssistant, client: FakeClient) -> None:
         await hass.async_block_till_done()
     assert result["type"] == "create_entry"
     assert entry.options["poll_interval"] == 3
+
+
+# --- live video -----------------------------------------------------------------
+
+
+async def test_live_camera_has_the_old_unique_id(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    eid = legacy_entity(hass, "camera", "live")
+    state = hass.states.get(eid)
+    assert state is not None
+    assert state.attributes["stream_mode"] == "mjpeg"
+    assert SERIAL in entry.runtime_data.live_relays
+    # the relay listens only on this computer unless told otherwise
+    assert entry.runtime_data.live_relays[SERIAL]._bind_host == "127.0.0.1"
+
+
+async def test_unload_stops_the_relay(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    hub = entry.runtime_data
+    assert hub.live_relays
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hub.live_relays == {}
+
+
+async def test_live_video_failure_does_not_break_the_rest(hass: HomeAssistant, client: FakeClient) -> None:
+    async def boom(*_a, **_k):
+        raise RuntimeError("no ffmpeg")
+
+    with patch("custom_components.ezviz_instant_bell.live_camera.async_setup_live_entities", boom):
+        await setup(hass, client)
+    assert hass.states.get(legacy_entity(hass, "camera", "last_snapshot")) is not None
+
+
+async def test_stream_options_reach_the_relay(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(
+        hass, client, {"stream_source": "local", "stream_quality": "sub", "encryption_key": "ABC123", "relay_port": 0}
+    )
+    relay = entry.runtime_data.live_relays[SERIAL]
+    assert relay._stream_source == "local" and relay._stream_quality == "sub"
+    assert relay._configured_key == "ABC123"
+
+
+async def test_ring_wakes_up_the_stream(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    relay = entry.runtime_data.live_relays[SERIAL]
+    with patch.object(relay, "prewarm", return_value=None) as prewarm:
+        client.messages = [ring_message("m-live")]
+        await poll_once(hass)
+    assert prewarm.called
+
+
+async def test_fetch_encryption_key_service_keeps_the_key(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    await hass.services.async_call(DOMAIN, "fetch_encryption_key", {"code": "1234"}, blocking=True)
+    await hass.async_block_till_done()
+    assert client.cam_key_calls[0][1] == "1234"
+    assert entry.options["encryption_key"] == "KEY123"
+
+
+async def test_fetch_encryption_key_without_code_asks_for_one(hass: HomeAssistant, client: FakeClient) -> None:
+    from pyezvizapi.exceptions import EzvizAuthVerificationCode
+
+    entry = await setup(hass, client)
+    hub = entry.runtime_data
+    client.cam_key_answers = [EzvizAuthVerificationCode("20002"), EzvizAuthVerificationCode("20002")]
+    key = await hass.async_add_executor_job(hub.stream.get_camera_encryption_key, SERIAL)
+    assert key is None
+    assert "BE0000001" in hub.stream.key_needs_otp
+    # a code later unlocks the key
+    client.cam_key_answers = ["KEY999"]
+    key = await hass.async_add_executor_job(hub.stream.fetch_camera_key_with_code, SERIAL, "4321")
+    assert key == "KEY999" and not hub.stream.key_needs_otp
+    assert await hass.async_add_executor_job(hub.stream.get_camera_encryption_key, SERIAL) == "KEY999"
+
+
+async def test_encryption_repair_flow(hass: HomeAssistant, client: FakeClient) -> None:
+    from custom_components.ezviz_instant_bell.repairs import async_create_fix_flow
+
+    entry = await setup(hass, client)
+    flow = await async_create_fix_flow(hass, f"encryption_otp_{SERIAL}", {"serial": SERIAL})
+    flow.hass = hass
+    result = await flow.async_step_init()
+    assert result["type"] == "form" and result["step_id"] == "confirm"
+    result = await flow.async_step_confirm({"code": "1234"})
+    assert result["type"] == "create_entry"
+    assert entry.options["encryption_key"] == "KEY123"
+    # a wrong code is refused
+    client.cam_key_answers = [RuntimeError("bad"), RuntimeError("bad")]
+    result = await flow.async_step_confirm({"code": "0000"})
+    assert result["type"] == "form" and result["errors"] == {"code": "invalid_code"}
+
+
+async def test_set_video_encryption_service(hass: HomeAssistant, client: FakeClient) -> None:
+    await setup(hass, client)
+    await hass.services.async_call(
+        DOMAIN, "set_video_encryption", {"enable": False, "verification_code": "abcdef"}, blocking=True
+    )
+    first = client.video_enc_calls[0]
+    assert first["serial"] == "BE0000001" and first["enable"] == 0 and first["code"] == "ABCDEF"
+    client.fail_video_enc = True
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            DOMAIN, "set_video_encryption", {"enable": False, "verification_code": "abcdef"}, blocking=True
+        )
+
+
+async def test_lan_key_and_ip(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    support = entry.runtime_data.stream
+
+    class FakeCas:
+        def __init__(self, token):
+            self.token = token
+
+        def cas_get_encryption(self, serial):
+            assert serial == "BE0000001"
+            return {"Response": {"Session": {"@Key": "0123456789abcdef"}}}
+
+    class Endpoint:
+        host = "192.168.1.50"
+
+    with patch("pyezvizapi.cas.EzvizCAS", FakeCas), patch("requests.post") as post, patch(
+        "pyezvizapi.local_stream._local_sdk_endpoint_from_client", return_value=Endpoint()
+    ):
+        key = await hass.async_add_executor_job(support.fetch_lan_aes_key, SERIAL)
+        ip = await hass.async_add_executor_job(support.get_local_ip, SERIAL)
+    assert key == b"0123456789abcdef" and ip == "192.168.1.50"
+    assert post.call_args.kwargs["data"] == {"sessionId": "sid"}
+    assert support.get_related_device(SERIAL) == "BE0000002"
+    # the address is remembered when the cloud does not answer
+    with patch("pyezvizapi.local_stream._local_sdk_endpoint_from_client", side_effect=RuntimeError("504")):
+        assert await hass.async_add_executor_job(support.get_local_ip, SERIAL) == "192.168.1.50"
+
+
+async def test_lan_key_refused_gives_a_hint(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    support = entry.runtime_data.stream
+
+    class FakeCas:
+        def __init__(self, token):
+            pass
+
+        def cas_get_encryption(self, serial):
+            return {"Response": {"Result": "1052175"}}
+
+    with patch("pyezvizapi.cas.EzvizCAS", FakeCas), patch("requests.post"):
+        with pytest.raises(RuntimeError, match="Encryption"):
+            await hass.async_add_executor_job(support.fetch_lan_aes_key, SERIAL)
+
+
+async def test_status_is_read_less_often_while_watching_locally(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    hub = entry.runtime_data
+    relay = hub.live_relays[SERIAL]
+    base = hub.coordinator.update_interval
+    relay._active_lan = True
+    relay._active_clients = 1
+    hub.coordinator._apply_stream_aware_interval()
+    assert hub.coordinator.update_interval == base * 4
+    relay._active_clients = 0
+    hub.coordinator._apply_stream_aware_interval()
+    assert hub.coordinator.update_interval == base
+
+
+async def test_old_stream_settings_are_taken_over(hass: HomeAssistant, client: FakeClient) -> None:
+    MockConfigEntry(
+        domain=LEGACY_DOMAIN,
+        data={"username": "old@example.com", "password": "oldpw", "region": "eu", "serial": SERIAL},
+        options={"monitor_serial": "BE0000001", "stream_source": "auto", "relay_port": 8554, "encryption_key": "K1"},
+    ).add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
+        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
+    ):
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "legacy"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"devices": [SERIAL]})
+    assert result["options"] == {
+        "stream_source": "auto",
+        "relay_port": 8554,
+        "encryption_key": "K1",
+        "monitor_serials": "BE0000001",
+    }
