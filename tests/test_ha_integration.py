@@ -94,6 +94,7 @@ class FakeClient:
         self.cam_key_calls: list[tuple] = []
         self.video_enc_calls: list[dict] = []
         self.fail_video_enc = False
+        self.message_calls: list[tuple] = []
 
     # -- live video: keys and encryption
     def get_cam_key(self, serial, smscode=None):
@@ -114,7 +115,11 @@ class FakeClient:
         return {"session_id": "sid", "username": "internal-user"}
 
     # -- cloud list, pictures, push, unlock
-    def get_device_messages_list(self, **kwargs):
+    def get_device_messages_list(self, serials=None, **kwargs):
+        self.message_calls.append((serials, kwargs))
+        pages = getattr(self, "history_pages", None)
+        if pages is not None and kwargs.get("end_time", "") in pages and serials:
+            return {"message": list(pages[kwargs.get("end_time", "")])}
         return {"message": list(self.messages)}
 
     def download_alarm_image(self, url, serial=None):
@@ -953,3 +958,81 @@ async def test_no_old_open_buttons_for_new_setups(hass: HomeAssistant, client: F
     await setup(hass, client)
     reg = er.async_get(hass)
     assert reg.async_get_entity_id("button", DOMAIN, f"{SERIAL}_open_gate") is None
+
+
+# --- history in the media browser ---------------------------------------------
+
+
+async def browse(hass, identifier: str = ""):
+    from homeassistant.components.media_source import async_browse_media
+    from homeassistant.setup import async_setup_component
+
+    assert await async_setup_component(hass, "media_source", {})
+    await hass.async_block_till_done()
+    return await async_browse_media(hass, f"media-source://{DOMAIN}/{identifier}".rstrip("/"))
+
+
+async def test_media_browser_levels(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    root = await browse(hass)
+    assert [c.title for c in root.children] == [entry.title]
+    doors = await browse(hass, entry.entry_id)
+    assert [c.title for c in doors.children] == ["Tor"]
+    days = await browse(hass, f"{entry.entry_id}/{SERIAL}")
+    assert len(days.children) == 14 and days.children[0].title.startswith("Today")
+    today = dt_util.now().strftime("%Y%m%d")
+    client.messages = [ring_message("m-old", 600), ring_message("m-new", 5)]
+    events = await browse(hass, f"{entry.entry_id}/{SERIAL}/{today}")
+    assert [c.identifier.rsplit("/", 1)[1] for c in events.children] == ["m-new", "m-old"]
+    first = events.children[0]
+    assert first.media_class == "image" and first.can_play and "Your doorbell is ringing" in first.title
+    assert first.thumbnail == f"/api/{DOMAIN}/picture/{entry.entry_id}/{SERIAL}/{today}/m-new"
+    # the list is read for this door station only
+    assert client.message_calls[-1][0] == SERIAL
+
+
+async def test_media_browser_resolves_and_serves_the_picture(
+    hass: HomeAssistant, client: FakeClient, hass_client
+) -> None:
+    from homeassistant.components.media_source import async_resolve_media
+
+    entry = await setup(hass, client)
+    await browse(hass)
+    today = dt_util.now().strftime("%Y%m%d")
+    client.messages = [ring_message("m-1", 5)]
+    played = await async_resolve_media(
+        hass, f"media-source://{DOMAIN}/{entry.entry_id}/{SERIAL}/{today}/m-1", None
+    )
+    assert played.mime_type == "image/jpeg"
+    http = await hass_client()
+    response = await http.get(played.url)
+    assert response.status == 200 and await response.read() == b"JPEGDATA"
+    # unknown event
+    assert (await http.get(f"/api/{DOMAIN}/picture/{entry.entry_id}/{SERIAL}/{today}/nope")).status == 404
+    # unknown door station
+    assert (await http.get(f"/api/{DOMAIN}/picture/{entry.entry_id}/XXX/{today}/m-1")).status == 404
+
+
+async def test_history_reads_several_pages_and_keeps_the_answer(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    hub = entry.runtime_data
+    first_page = [ring_message(f"m{i}", 100 + i) for i in range(50)]
+    second_page = [ring_message("m-last", 400)]
+    client.history_pages = {"": first_page, "m49": second_page}
+    items = await hub.async_history_day(SERIAL, dt_util.now().date())
+    assert len(items) == 51 and items[0].message_id == "m0" and items[-1].message_id == "m-last"
+    calls = len(client.message_calls)
+    await hub.async_history_day(SERIAL, dt_util.now().date())
+    assert len(client.message_calls) == calls  # kept for a minute
+
+
+async def test_history_failure_gives_an_error(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    hub = entry.runtime_data
+
+    def boom(*_a, **_k):
+        raise RuntimeError("cloud down")
+
+    client.get_device_messages_list = boom
+    with pytest.raises(HomeAssistantError):
+        await hub.async_history_day(SERIAL, dt_util.now().date() - timedelta(days=2))

@@ -283,6 +283,9 @@
     },
     "serial_needed": {
       "message": "More than one doorbell is set up: give the serial number."
+    },
+    "history_failed": {
+      "message": "Could not read the event list from EZVIZ: {error}"
     }
   },
   "issues": {

@@ -6,7 +6,8 @@ import asyncio
 import logging
 import threading
 import time
-from datetime import timedelta
+from collections import OrderedDict
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,11 @@ from .const import (
     DEFAULT_POLL_INTERVAL,
     DEFAULT_REGION,
     DOMAIN,
+    HISTORY_MAX_PAGES,
+    HISTORY_PAGE_SIZE,
+    HISTORY_PAST_TTL,
+    HISTORY_PICTURE_CACHE,
+    HISTORY_TODAY_TTL,
     PICTURE_ATTEMPTS,
     PICTURE_RETRY_DELAY,
     SIGNAL_EVENT,
@@ -40,6 +46,7 @@ from . import ezviz, state
 from .device_api import DeviceApi
 from .stream_support import StreamSupport
 from .feature_code import resolve_feature_code
+from .history import HistoryItem, day_text, items_from_answer
 from .parsing import (
     BellEvent,
     EventDeduper,
@@ -91,6 +98,8 @@ class InstantBellHub:
         self._poll_failures = 0
         self._last_unlock: dict[tuple[str, int], float] = {}
         self._stopping = False
+        self._history: dict[tuple[str, str], tuple[float, list[HistoryItem]]] = {}
+        self._history_pictures: OrderedDict[tuple[str, str], bytes] = OrderedDict()
 
     # ------------------------------------------------------------------
     # Start / stop
@@ -296,6 +305,73 @@ class InstantBellHub:
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Picture download failed: %s", err)
             return None
+
+    # ------------------------------------------------------------------
+    # History (Media browser)
+    # ------------------------------------------------------------------
+
+    def _fetch_history_day(self, serial: str, day: date) -> list[HistoryItem]:
+        """Blocking: all list entries of one day (a few pages at most)."""
+        tz = dt_util.DEFAULT_TIME_ZONE
+        items: list[HistoryItem] = []
+        seen: set[str] = set()
+        end_time: str = ""
+        for _ in range(HISTORY_MAX_PAGES):
+            with self._call_lock:
+                answer = self._client.get_device_messages_list(
+                    serial, limit=HISTORY_PAGE_SIZE, date=day_text(day), end_time=end_time
+                )
+            page = items_from_answer(answer, tz)
+            fresh = [i for i in page if i.message_id not in seen]
+            if not fresh:
+                break
+            seen.update(i.message_id for i in fresh)
+            items.extend(fresh)
+            if len(page) < HISTORY_PAGE_SIZE:
+                break
+            # The list is paged by the ID of the last (oldest) entry.
+            end_time = min(page, key=lambda i: i.occurred.timestamp() if i.occurred else 0).message_id
+        wanted = [i for i in items if i.serial is None or same_device(i.serial, serial)]
+        wanted.sort(key=lambda i: i.occurred.timestamp() if i.occurred else 0, reverse=True)
+        return wanted
+
+    async def async_history_day(self, serial: str, day: date) -> list[HistoryItem]:
+        """Events of one day, newest first. Kept for a while, so that browsing is quick."""
+        key = (serial, day_text(day))
+        cached = self._history.get(key)
+        ttl = HISTORY_TODAY_TTL if day >= dt_util.now().date() else HISTORY_PAST_TTL
+        if cached and time.monotonic() - cached[0] < ttl:
+            return cached[1]
+        try:
+            items = await self.hass.async_add_executor_job(self._fetch_history_day, serial, day)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("History of %s for %s failed: %s", serial, day, err)
+            if cached:
+                return cached[1]
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="history_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
+        self._history[key] = (time.monotonic(), items)
+        return items
+
+    async def async_history_picture(self, serial: str, day: date, message_id: str) -> bytes | None:
+        """Picture of one past event (kept in memory only)."""
+        key = (serial, message_id)
+        if key in self._history_pictures:
+            self._history_pictures.move_to_end(key)
+            return self._history_pictures[key]
+        items = await self.async_history_day(serial, day)
+        item = next((i for i in items if i.message_id == message_id), None)
+        if item is None or not item.picture_url:
+            return None
+        data = await self.async_download_picture(item.picture_url, serial)
+        if data:
+            self._history_pictures[key] = data
+            while len(self._history_pictures) > HISTORY_PICTURE_CACHE:
+                self._history_pictures.popitem(last=False)
+        return data
 
     async def async_terminal_names(self) -> list[str]:
         """Names of the terminals registered on the account."""

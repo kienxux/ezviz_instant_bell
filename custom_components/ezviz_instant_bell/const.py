@@ -95,3 +95,11 @@ STREAM_QUALITIES = [STREAM_QUALITY_MAIN, STREAM_QUALITY_SUB]
 CONF_DIAGNOSTIC_DUMPS = "diagnostic_dumps"
 # Key that decrypts the video when Image/Video Encryption is on.
 CONF_ENCRYPTION_KEY = "encryption_key"
+
+# -- history browser (Media > EZVIZ Video Intercom) ---------------------------
+HISTORY_DAYS = 14  # how many days back the browser offers
+HISTORY_PAGE_SIZE = 50  # the cloud list gives at most 50 entries per request
+HISTORY_MAX_PAGES = 4
+HISTORY_TODAY_TTL = 60.0  # seconds a list of today is kept before asking again
+HISTORY_PAST_TTL = 900.0
+HISTORY_PICTURE_CACHE = 100  # pictures kept in memory (nothing is written to disk)

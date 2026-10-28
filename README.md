@@ -2,7 +2,7 @@
 
 A Home Assistant integration for EZVIZ video intercoms (HP7 / CP7 family, door station with indoor monitor). It shows everything the intercom reports, lets you change its settings, and adds what other integrations do not have: **when someone rings you get the picture at once, and you can open the door with one tap without answering the call.**
 
-> **Status: version 0.3.1.** Ring detection and push events were measured on a real door station (CS-CPD5 with CS-CP5 monitor), and the reading of its data is tested against an anonymised copy of that device's answers. The door and gate buttons, the chime sliders and the switches use the same EZVIZ calls as the earlier `ezviz_hp7` integration but have not yet been checked on a real device with this code; please check each (see "First check"). **Live video** (cloud or local network) is ported from the earlier integration and has not yet been run on a real device with this code: please check it (see "First check"). Not affiliated with EZVIZ or Hikvision.
+> **Status: version 0.4.0.** Ring detection and push events were measured on a real door station (CS-CPD5 with CS-CP5 monitor), and the reading of its data is tested against an anonymised copy of that device's answers. The door and gate buttons, the chime sliders and the switches use the same EZVIZ calls as the earlier `ezviz_hp7` integration but have not yet been checked on a real device with this code; please check each (see "First check"). **Live video** (cloud or local network) is ported from the earlier integration and has not yet been run on a real device with this code: please check it (see "First check"). Not affiliated with EZVIZ or Hikvision.
 
 ## What you get
 
@@ -16,6 +16,7 @@ A Home Assistant integration for EZVIZ video intercoms (HP7 / CP7 family, door s
 | **Sliders** | Chime volume (0-7) and ringtones for the doorbell and for the motion alert, on the door station and on every indoor monitor. |
 | **Camera** | `Live`: the live video of the door station (cloud or local network, with audio in the Home Assistant stream mode). `Last Snapshot`: the picture of the latest alarm. |
 | **Events** | `ezviz_instant_bell_unlock` (and, for old automations, `ezviz_hp7_unlock`) with the way the lock was opened, the card id and the card holder's name. |
+| **History** | *Media > EZVIZ Video Intercom*: the pictures of past events (rings, unlocks, motion), by day for the last 14 days. |
 | **Services** | `unlock_door`, `unlock_gate`, `set_video_encryption`, `fetch_encryption_key`. |
 | **Account** | `Terminals in use` and a repair notice before the 10-terminal limit of EZVIZ is reached. |
 
@@ -65,6 +66,14 @@ The `Live` camera works like the one of the earlier integration:
 - While someone watches the local stream, the status is read a quarter as often, because the door station's processor is small.
 - A ring or unlock wakes the stream up, so the first picture is quick when you open the dashboard.
 
+## History of events (pictures)
+
+Open **Media** in the Home Assistant sidebar and choose **EZVIZ Video Intercom** > your door station > a day. You get every event EZVIZ kept for that day with its picture: rings, door and gate openings, motion. The same list can be used in a dashboard card (media browser) or in automations (`media-source://ezviz_instant_bell/...`).
+
+- The list is what EZVIZ keeps in its message list (about the last days, like the EZVIZ app). Video clips are not part of it yet.
+- Pictures are fetched on demand and the last 100 are kept in memory; nothing is written to disk.
+- The first view of a day takes a moment (up to 4 requests of 50 entries); the list is then kept for a minute (today) or 15 minutes (older days).
+
 ## Notification automation
 
 Import the blueprint, then create an automation from it:
@@ -86,7 +95,7 @@ Ring check interval (seconds), serial numbers of the indoor monitors (empty = au
 
 ## Privacy
 
-Your EZVIZ login is stored by Home Assistant like other integrations. Pictures are kept only in memory (the latest one); nothing is written to disk. Nothing is sent anywhere except to EZVIZ.
+Your EZVIZ login is stored by Home Assistant like other integrations. Pictures are kept only in memory (the latest one, and up to 100 from the history browser); nothing is written to disk. Nothing is sent anywhere except to EZVIZ.
 
 ## Credits and licence
 
