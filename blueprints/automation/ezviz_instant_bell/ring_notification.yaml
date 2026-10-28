@@ -70,16 +70,18 @@ triggers:
     entity_id: !input bell
 
 conditions:
+  # A ring. "Unavailable -> restored state" happens at startup and is not a ring;
+  # "unknown -> ring" is the very first ring of a new entity and is one.
   - condition: template
     value_template: >
       {{ trigger.to_state.attributes.event_type == 'ring'
          and trigger.from_state is not none
-         and trigger.from_state.state not in ['unavailable', 'unknown'] }}
+         and trigger.from_state.state != 'unavailable' }}
 
 actions:
   - variables:
-      ring_time: "{{ trigger.to_state.last_changed }}"
-  - wait_template: "{{ states[picture_entity].last_changed > ring_time }}"
+      ring_time: "{{ trigger.to_state.last_changed.timestamp() }}"
+  - wait_template: "{{ states[picture_entity].last_changed.timestamp() > ring_time }}"
     timeout:
       seconds: !input picture_wait
     continue_on_timeout: true

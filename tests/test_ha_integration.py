@@ -1277,3 +1277,63 @@ async def test_a_clip_without_video_is_not_kept(hass: HomeAssistant, client: Fak
     assert job.state == "failed" and job.error
     assert hub.clips.ready_file(SERIAL, begin, end) is None
     assert hub.clips.job_for(SERIAL, begin, end) is not job  # a new try is possible
+
+
+# --- the ring notification blueprint -------------------------------------------
+
+
+BLUEPRINT = Path(__file__).parents[1] / "blueprints/automation/ezviz_instant_bell/ring_notification.yaml"
+
+
+async def setup_blueprint_automation(hass: HomeAssistant, entry, phones, picture_wait=5):
+    import shutil
+
+    from homeassistant.setup import async_setup_component
+
+    target = Path(hass.config.path("blueprints/automation/ezviz_instant_bell/ring_notification.yaml"))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(BLUEPRINT, target)
+    config = {
+        "automation": {
+            "alias": "Ring",
+            "use_blueprint": {
+                "path": "ezviz_instant_bell/ring_notification.yaml",
+                "input": {
+                    "bell": entity_id(hass, "event", "bell"),
+                    "picture": entity_id(hass, "image", "last_picture"),
+                    "open_button": "button.open_door",
+                    "notify_service": phones,
+                    "picture_wait": picture_wait,
+                    "tap_wait": 1,
+                },
+            },
+        }
+    }
+    assert await async_setup_component(hass, "automation", config)
+    await hass.async_block_till_done()
+    return target
+
+
+@pytest.mark.parametrize("phones", [["notify.mobile_app_a", "notify.mobile_app_b"], "notify.mobile_app_a"])
+async def test_blueprint_sends_the_notification_on_the_first_ring(
+    hass: HomeAssistant, client: FakeClient, phones
+) -> None:
+    from pytest_homeassistant_custom_component.common import async_mock_service
+
+    entry = await setup(hass, client)
+    notify_a = async_mock_service(hass, "notify", "mobile_app_a")
+    notify_b = async_mock_service(hass, "notify", "mobile_app_b")
+    target = await setup_blueprint_automation(hass, entry, phones)
+    try:
+        client.messages = [ring_message("first")]
+        await poll_once(hass)
+        await hass.async_block_till_done(wait_background_tasks=True)
+        await tick(hass, 1)
+        assert len(notify_a) == 1
+        assert len(notify_b) == (1 if isinstance(phones, list) else 0)
+        data = notify_a[0].data
+        assert data["title"] == "Someone is at the door"
+        assert data["data"]["actions"][0]["title"] == "Open door"
+        assert data["data"]["image"].startswith("/api/image_proxy/")
+    finally:
+        target.unlink(missing_ok=True)
