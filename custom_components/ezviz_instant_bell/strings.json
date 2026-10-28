@@ -1,0 +1,113 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Log in to EZVIZ",
+        "description": "Use the account that owns the doorbell. Logging in once registers this Home Assistant as one EZVIZ terminal.",
+        "data": {
+          "username": "Email or phone",
+          "password": "Password",
+          "region": "Region"
+        }
+      },
+      "code": {
+        "title": "Verification code",
+        "description": "EZVIZ sent you a verification code. Enter it here.",
+        "data": {
+          "code": "Verification code"
+        }
+      },
+      "devices": {
+        "title": "Choose your doorbell",
+        "description": "Select the door station. For an HP7 or CP7 this is the entry marked BDoorBell.",
+        "data": {
+          "devices": "Doorbells"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Log in again",
+        "description": "The login for {username} no longer works. Enter the current password.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "The account or password was not accepted.",
+      "invalid_code": "The verification code was not accepted.",
+      "cannot_connect": "EZVIZ could not be reached."
+    },
+    "abort": {
+      "already_configured": "This account is already set up.",
+      "no_devices": "No devices were found on this account.",
+      "cannot_connect": "EZVIZ could not be reached.",
+      "reauth_successful": "Login updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "data": {
+          "poll_interval": "Ring check interval (seconds)",
+          "door_lock_no": "Lock number of the door",
+          "gate_lock_no": "Lock number of the gate",
+          "create_buttons": "Create Open door and Open gate buttons"
+        },
+        "data_description": {
+          "poll_interval": "How often EZVIZ is asked for new rings. Shorter means a quicker notification.",
+          "door_lock_no": "Normally 2 on an HP7 / CP7.",
+          "gate_lock_no": "Normally 1 on an HP7 / CP7.",
+          "create_buttons": "Off by default. Leave it off while you keep using the buttons of another EZVIZ integration, so their entity IDs and your phone widgets stay as they are."
+        }
+      }
+    }
+  },
+  "entity": {
+    "event": {
+      "bell": {
+        "name": "Doorbell",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "Ring",
+              "door_unlock": "Door opened",
+              "gate_open": "Gate opened",
+              "other": "Other"
+            }
+          }
+        }
+      }
+    },
+    "image": {
+      "last_picture": {
+        "name": "Last picture"
+      }
+    },
+    "button": {
+      "open_door": {
+        "name": "Open door"
+      },
+      "open_gate": {
+        "name": "Open gate"
+      }
+    },
+    "sensor": {
+      "terminals": {
+        "name": "Terminals in use",
+        "unit_of_measurement": "terminals"
+      }
+    }
+  },
+  "exceptions": {
+    "unlock_failed": {
+      "message": "Could not open the lock: {error}"
+    }
+  },
+  "issues": {
+    "terminals_almost_full": {
+      "title": "EZVIZ terminal slots almost used up",
+      "description": "{count} of {limit} terminals are registered on this EZVIZ account. When all are used, new logins fail. Open the EZVIZ app, go to your account's logged-in devices and remove the ones you no longer use."
+    }
+  }
+}

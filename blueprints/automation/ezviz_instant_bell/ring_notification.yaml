@@ -1,0 +1,102 @@
+blueprint:
+  name: Doorbell ring with picture and Open door button
+  description: >
+    When the doorbell rings, waits for the picture and sends a notification to your
+    phone with an "Open door" button. The door only opens if you tap that button for
+    this ring, and only within the time set below. It never opens by itself.
+  domain: automation
+  input:
+    bell:
+      name: Doorbell event
+      selector:
+        entity:
+          filter:
+            - integration: ezviz_instant_bell
+              domain: event
+    picture:
+      name: Last picture
+      selector:
+        entity:
+          filter:
+            - integration: ezviz_instant_bell
+              domain: image
+    open_button:
+      name: Open door button
+      description: >
+        The button that opens the door. This can be the button of another EZVIZ
+        integration, so nothing you already use has to change.
+      selector:
+        entity:
+          filter:
+            - domain: button
+    notify_service:
+      name: Phone notification service
+      description: The service of the companion app, for example notify.mobile_app_my_phone.
+      selector:
+        text:
+    picture_wait:
+      name: Seconds to wait for the picture
+      default: 10
+      selector:
+        number:
+          min: 0
+          max: 30
+          unit_of_measurement: s
+    tap_wait:
+      name: Seconds the Open door button stays valid
+      default: 60
+      selector:
+        number:
+          min: 10
+          max: 300
+          unit_of_measurement: s
+
+mode: restart
+
+variables:
+  bell_entity: !input bell
+  picture_entity: !input picture
+  notify_service: !input notify_service
+  action_id: "EZVIZ_OPEN_{{ trigger.to_state.last_changed.timestamp() | int }}"
+
+triggers:
+  - trigger: state
+    entity_id: !input bell
+
+conditions:
+  - condition: template
+    value_template: >
+      {{ trigger.to_state.attributes.event_type == 'ring'
+         and trigger.from_state is not none
+         and trigger.from_state.state not in ['unavailable', 'unknown'] }}
+
+actions:
+  - variables:
+      ring_time: "{{ trigger.to_state.last_changed }}"
+  - wait_template: "{{ states[picture_entity].last_changed > ring_time }}"
+    timeout:
+      seconds: !input picture_wait
+    continue_on_timeout: true
+  - action: "{{ notify_service }}"
+    data:
+      title: Someone is at the door
+      message: The doorbell rang.
+      data:
+        tag: ezviz_instant_bell_ring
+        image: "{{ state_attr(picture_entity, 'entity_picture') }}"
+        attachment:
+          url: "{{ state_attr(picture_entity, 'entity_picture') }}"
+        actions:
+          - action: "{{ action_id }}"
+            title: Open door
+  - wait_for_trigger:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "{{ action_id }}"
+    timeout:
+      seconds: !input tap_wait
+    continue_on_timeout: false
+  - action: button.press
+    target:
+      entity_id: !input open_button
