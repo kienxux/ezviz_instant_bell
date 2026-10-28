@@ -286,6 +286,9 @@
     },
     "history_failed": {
       "message": "Could not read the event list from EZVIZ: {error}"
+    },
+    "recordings_failed": {
+      "message": "Could not read the recordings of the SD card from EZVIZ: {error}"
     }
   },
   "issues": {

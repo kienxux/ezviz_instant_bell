@@ -103,3 +103,12 @@ HISTORY_MAX_PAGES = 4
 HISTORY_TODAY_TTL = 60.0  # seconds a list of today is kept before asking again
 HISTORY_PAST_TTL = 900.0
 HISTORY_PICTURE_CACHE = 100  # pictures kept in memory (nothing is written to disk)
+
+# -- recordings of the SD card (Media > EZVIZ Video Intercom > Recordings) -------
+RECORDING_DAYS = HISTORY_DAYS
+RECORDING_PAGE_SIZE = 50
+RECORDING_MAX_PAGES = 6
+RECORDING_LIST_TTL_TODAY = 60.0
+RECORDING_LIST_TTL_PAST = 900.0
+CLIP_CACHE_DIR = "ezviz_instant_bell_clips"  # inside .storage
+CLIP_CACHE_MAX_BYTES = 500 * 1024 * 1024

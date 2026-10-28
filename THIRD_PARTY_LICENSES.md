@@ -61,3 +61,9 @@ permission and warranty text is the same as above.
 
 Not copied: it is installed as a normal dependency (`pyezvizapi` from PyPI) and
 keeps its own licence, <https://github.com/RenierM26/pyEzvizApi/blob/main/LICENSE.md>.
+
+`recordings.py` and `clip_stream.py` follow the method for playing recordings of the SD
+card that is described in pyEzvizApi pull request #266
+(<https://github.com/RenierM26/pyEzvizApi/pull/266>): the `/playback` address and its
+parameters, the client type and the stream type. The code is written independently and
+builds on the `pyezvizapi.stream` client of the installed library.

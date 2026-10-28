@@ -38,12 +38,18 @@ from .const import (
     HISTORY_TODAY_TTL,
     PICTURE_ATTEMPTS,
     PICTURE_RETRY_DELAY,
+    RECORDING_LIST_TTL_PAST,
+    RECORDING_LIST_TTL_TODAY,
+    RECORDING_MAX_PAGES,
+    RECORDING_PAGE_SIZE,
     SIGNAL_EVENT,
     SIGNAL_PICTURE,
     UNLOCK_COOLDOWN,
 )
 from . import ezviz, state
 from .device_api import DeviceApi
+from .clips import ClipStore
+from .recordings import Recording, channel_serial, day_window, recordings_from_answer
 from .stream_support import StreamSupport
 from .feature_code import resolve_feature_code
 from .history import HistoryItem, day_text, items_from_answer
@@ -100,6 +106,8 @@ class InstantBellHub:
         self._stopping = False
         self._history: dict[tuple[str, str], tuple[float, list[HistoryItem]]] = {}
         self._history_pictures: OrderedDict[tuple[str, str], bytes] = OrderedDict()
+        self._recordings: dict[tuple[str, str], tuple[float, list[Recording]]] = {}
+        self.clips = ClipStore(hass, self)
 
     # ------------------------------------------------------------------
     # Start / stop
@@ -123,6 +131,7 @@ class InstantBellHub:
     async def async_stop(self) -> None:
         """Stop push and polling."""
         self._stopping = True
+        await self.clips.async_stop()
         relays = list(self.live_relays.values())
         self.live_relays.clear()
         for relay in relays:
@@ -158,6 +167,14 @@ class InstantBellHub:
     def _list_serials(self) -> dict[str, Any]:
         with self._call_lock:
             return ezviz.list_devices(self._client)
+
+    @property
+    def client(self) -> Any:
+        return self._client
+
+    @property
+    def call_lock(self) -> threading.Lock:
+        return self._call_lock
 
     @property
     def door_lock_no(self) -> int:
@@ -372,6 +389,49 @@ class InstantBellHub:
             while len(self._history_pictures) > HISTORY_PICTURE_CACHE:
                 self._history_pictures.popitem(last=False)
         return data
+
+    # ------------------------------------------------------------------
+    # Recordings on the SD card (Media browser)
+    # ------------------------------------------------------------------
+
+    def _fetch_recordings_day(self, serial: str, day: date) -> list[Recording]:
+        """Blocking: every recording of one day (the list comes in pages of at most 50)."""
+        start, stop = day_window(day)
+        found: dict[Any, Recording] = {}
+        channel = channel_serial(serial)
+        for _ in range(RECORDING_MAX_PAGES):
+            with self._call_lock:
+                answer = self._client.search_records(serial, 1, channel, start, stop, size=RECORDING_PAGE_SIZE)
+            page = recordings_from_answer(answer)
+            fresh = [r for r in page if r.begin not in found]
+            if not fresh:
+                break
+            found.update((r.begin, r) for r in fresh)
+            if len(page) < RECORDING_PAGE_SIZE:
+                break
+            start = max(r.end for r in page).strftime("%Y-%m-%dT%H:%M:%S")
+        return [found[key] for key in sorted(found)]
+
+    async def async_recordings_day(self, serial: str, day: date) -> list[Recording]:
+        """Recordings of one day, oldest first. Kept for a while, so that browsing is quick."""
+        key = (serial, day_text(day))
+        cached = self._recordings.get(key)
+        ttl = RECORDING_LIST_TTL_TODAY if day >= dt_util.now().date() else RECORDING_LIST_TTL_PAST
+        if cached and time.monotonic() - cached[0] < ttl:
+            return cached[1]
+        try:
+            items = await self.hass.async_add_executor_job(self._fetch_recordings_day, serial, day)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Recordings of %s for %s failed: %s", serial, day, err)
+            if cached:
+                return cached[1]
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="recordings_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
+        self._recordings[key] = (time.monotonic(), items)
+        return items
 
     async def async_terminal_names(self) -> list[str]:
         """Names of the terminals registered on the account."""

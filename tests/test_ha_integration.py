@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -17,6 +18,7 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.ezviz_instant_bell import ezviz
+from custom_components.ezviz_instant_bell.recordings import parse_clip_id
 from custom_components.ezviz_instant_bell.const import DOMAIN, EVENT_UNLOCK, EVENT_UNLOCK_LEGACY, LEGACY_DOMAIN
 
 
@@ -29,6 +31,13 @@ def _enable_custom_integrations(enable_custom_integrations):
 def _local_sockets(socket_enabled):
     """The stream relay listens on a port of this computer."""
     yield
+
+
+@pytest.fixture(autouse=True)
+def _clip_folder(tmp_path):
+    """Fetched clips go to a folder of their own, not into the shared test config."""
+    with patch("custom_components.ezviz_instant_bell.clips.CLIP_CACHE_DIR", str(tmp_path / "clips")):
+        yield
 
 
 @pytest.fixture(autouse=True)
@@ -95,6 +104,9 @@ class FakeClient:
         self.video_enc_calls: list[dict] = []
         self.fail_video_enc = False
         self.message_calls: list[tuple] = []
+        self.records: list[dict] = []
+        self.record_calls: list[tuple] = []
+        self.fail_records = False
 
     # -- live video: keys and encryption
     def get_cam_key(self, serial, smscode=None):
@@ -124,6 +136,13 @@ class FakeClient:
 
     def download_alarm_image(self, url, serial=None):
         return b"JPEGDATA"
+
+    def search_records(self, serial, channel, channel_serial, start, stop, size=20):
+        self.record_calls.append((serial, channel, channel_serial, start, stop, size))
+        if self.fail_records:
+            raise RuntimeError("cloud down")
+        inside = [r for r in self.records if start <= r["begin"] <= stop]
+        return {"records": inside[:size]}
 
     def remote_unlock(self, serial, user_id, lock_no):
         if self.fail_unlock:
@@ -978,11 +997,13 @@ async def test_media_browser_levels(hass: HomeAssistant, client: FakeClient) -> 
     assert [c.title for c in root.children] == [entry.title]
     doors = await browse(hass, entry.entry_id)
     assert [c.title for c in doors.children] == ["Tor"]
-    days = await browse(hass, f"{entry.entry_id}/{SERIAL}")
+    kinds = await browse(hass, f"{entry.entry_id}/{SERIAL}")
+    assert [c.title for c in kinds.children] == ["Recordings (SD card)", "Pictures of events"]
+    days = await browse(hass, f"{entry.entry_id}/{SERIAL}/pic")
     assert len(days.children) == 14 and days.children[0].title.startswith("Today")
     today = dt_util.now().strftime("%Y%m%d")
     client.messages = [ring_message("m-old", 600), ring_message("m-new", 5)]
-    events = await browse(hass, f"{entry.entry_id}/{SERIAL}/{today}")
+    events = await browse(hass, f"{entry.entry_id}/{SERIAL}/pic/{today}")
     assert [c.identifier.rsplit("/", 1)[1] for c in events.children] == ["m-new", "m-old"]
     first = events.children[0]
     assert first.media_class == "image" and first.can_play and "Your doorbell is ringing" in first.title
@@ -1001,7 +1022,7 @@ async def test_media_browser_resolves_and_serves_the_picture(
     today = dt_util.now().strftime("%Y%m%d")
     client.messages = [ring_message("m-1", 5)]
     played = await async_resolve_media(
-        hass, f"media-source://{DOMAIN}/{entry.entry_id}/{SERIAL}/{today}/m-1", None
+        hass, f"media-source://{DOMAIN}/{entry.entry_id}/{SERIAL}/pic/{today}/m-1", None
     )
     assert played.mime_type == "image/jpeg"
     http = await hass_client()
@@ -1045,3 +1066,214 @@ async def test_history_includes_entries_that_name_the_device_in_from(hass: HomeA
     client.messages = [unlock]
     items = await entry.runtime_data.async_history_day(SERIAL, dt_util.now().date())
     assert [i.message_id for i in items] == ["m-unlock"]
+
+
+# --- recordings of the SD card -------------------------------------------------
+
+
+def record(day, hhmmss: str, seconds: int = 49) -> dict:
+    begin = datetime.strptime(f"{day.strftime('%Y-%m-%d')}T{hhmmss}", "%Y-%m-%dT%H:%M:%S")
+    return {
+        "channelType": "D",
+        "begin": begin.strftime("%Y-%m-%dT%H:%M:%S"),
+        "end": (begin + timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%S"),
+        "type": "TIMING",
+    }
+
+
+async def test_media_browser_lists_recordings_of_the_day(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    day = dt_util.now().date()
+    client.records = [record(day, "08:00:10"), record(day, "15:42:03")]
+    clips = await browse(hass, f"{entry.entry_id}/{SERIAL}/rec/{day.strftime('%Y%m%d')}")
+    assert [c.title for c in clips.children] == ["15:42:03  (49 s)", "08:00:10  (49 s)"]  # newest first
+    first = clips.children[0]
+    assert first.media_class == "video" and first.can_play and first.media_content_type == "video/mp4"
+    assert first.identifier.endswith(f"/rec/{day.strftime('%Y%m%d')}/{day.strftime('%Y%m%d')}T154203Z_{day.strftime('%Y%m%d')}T154252Z")
+    # asked for this door station, its camera part, the whole day
+    serial, channel, cam, start, stop, _size = client.record_calls[-1]
+    assert (serial, channel, cam) == (SERIAL, 1, "BE0000002")
+    assert start.endswith("T00:00:00") and stop.endswith("T23:59:59")
+
+
+async def test_recordings_use_the_picture_of_the_event_as_thumbnail(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    day = dt_util.now().date()
+    ring = ring_message("m-ring", 5)
+    ring_time = dt_util.now() - timedelta(seconds=5)
+    client.messages = [ring]
+    client.records = [record(day, ring_time.strftime("%H:%M:%S"))]
+    clips = await browse(hass, f"{entry.entry_id}/{SERIAL}/rec/{day.strftime('%Y%m%d')}")
+    if day == ring_time.date():  # near midnight the ring belongs to yesterday
+        assert clips.children[0].thumbnail == (
+            f"/api/{DOMAIN}/picture/{entry.entry_id}/{SERIAL}/{day.strftime('%Y%m%d')}/m-ring"
+        )
+
+
+async def test_recordings_come_in_pages(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    day = dt_util.now().date()
+    # 60 recordings, 50 per answer: the second request starts where the first ended
+    client.records = [record(day, f"{h:02d}:{m:02d}:00", 20) for h in range(10) for m in range(0, 60, 10)]
+    items = await entry.runtime_data.async_recordings_day(SERIAL, day)
+    assert len(items) == 60 and len(client.record_calls) == 2
+
+
+async def test_recordings_failure_gives_an_error(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    client.fail_records = True
+    with pytest.raises(HomeAssistantError):
+        await entry.runtime_data.async_recordings_day(SERIAL, dt_util.now().date() - timedelta(days=3))
+
+
+async def test_clip_is_resolved_and_a_finished_clip_is_served(
+    hass: HomeAssistant, client: FakeClient, hass_client
+) -> None:
+    from homeassistant.components.media_source import async_resolve_media
+
+    entry = await setup(hass, client)
+    await browse(hass)
+    hub = entry.runtime_data
+    day = dt_util.now().date().strftime("%Y%m%d")
+    clip = f"{day}T154203Z_{day}T154252Z"
+    played = await async_resolve_media(
+        hass, f"media-source://{DOMAIN}/{entry.entry_id}/{SERIAL}/rec/{day}/{clip}", None
+    )
+    assert played.mime_type == "video/mp4"
+    assert played.url == f"/api/{DOMAIN}/clip/{entry.entry_id}/{SERIAL}/{clip}"
+    begin, end = parse_clip_id(clip)
+    path = hub.clips.path_for(SERIAL, begin, end)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"MP4DATA")
+    http = await hass_client()
+    response = await http.get(played.url)
+    assert response.status == 200 and await response.read() == b"MP4DATA"
+    assert response.headers["Content-Type"] == "video/mp4"
+    # nonsense is refused
+    assert (await http.get(f"/api/{DOMAIN}/clip/{entry.entry_id}/{SERIAL}/nonsense")).status == 404
+    assert (await http.get(f"/api/{DOMAIN}/clip/{entry.entry_id}/XXX/{clip}")).status == 404
+
+
+async def test_a_clip_is_handed_out_while_it_arrives(hass: HomeAssistant, client: FakeClient, hass_client) -> None:
+    entry = await setup(hass, client)
+    await browse(hass)  # loads the media source, which registers the web view
+    hub = entry.runtime_data
+    day = dt_util.now().date().strftime("%Y%m%d")
+    clip = f"{day}T154203Z_{day}T154252Z"
+
+    def fetch(job, serial, begin, end):
+        import time as _time
+
+        job.state = "streaming"
+        job.part_path.parent.mkdir(parents=True, exist_ok=True)
+        with job.part_path.open("wb") as out:
+            for piece in (b"AAAA", b"BBBB", b"CCCC"):
+                out.write(piece)
+                out.flush()
+                _time.sleep(0.3)
+        job.state = "finalizing"
+        job.part_path.replace(job.final_path)
+        job.state = "done"
+
+    http = await hass_client()
+    with patch.object(hub.clips, "_fetch", fetch):
+        response = await http.get(f"/api/{DOMAIN}/clip/{entry.entry_id}/{SERIAL}/{clip}")
+        assert response.status == 200
+        assert await response.read() == b"AAAABBBBCCCC"
+        await hass.async_block_till_done(wait_background_tasks=True)
+    begin, end = parse_clip_id(clip)
+    assert hub.clips.ready_file(SERIAL, begin, end) is not None  # the next viewer gets the file
+
+
+async def test_a_clip_that_cannot_be_fetched_gives_an_error(hass: HomeAssistant, client: FakeClient, hass_client) -> None:
+    from custom_components.ezviz_instant_bell.clip_stream import ClipUnavailable
+
+    entry = await setup(hass, client)
+    await browse(hass)  # loads the media source, which registers the web view
+    hub = entry.runtime_data
+    day = dt_util.now().date().strftime("%Y%m%d")
+    clip = f"{day}T154203Z_{day}T154252Z"
+
+    def fetch(job, serial, begin, end):
+        raise ClipUnavailable("No video arrived")
+
+    http = await hass_client()
+    with patch.object(hub.clips, "_fetch", fetch):
+        response = await http.get(f"/api/{DOMAIN}/clip/{entry.entry_id}/{SERIAL}/{clip}")
+    assert response.status == 502 and "No video" in await response.text()
+    begin, end = parse_clip_id(clip)
+    assert hub.clips.ready_file(SERIAL, begin, end) is None
+    assert not list(hub.clips.root.glob("*/*.part.mp4"))
+
+
+async def test_old_clips_are_removed_when_the_folder_is_too_big(hass: HomeAssistant, client: FakeClient) -> None:
+    import os
+
+    entry = await setup(hass, client)
+    store = entry.runtime_data.clips
+    folder = store.root / "S"
+    folder.mkdir(parents=True, exist_ok=True)
+    for index in range(3):
+        path = folder / f"c{index}.mp4"
+        path.write_bytes(b"x" * 100)
+        os.utime(path, (1000 + index, 1000 + index))
+    with patch("custom_components.ezviz_instant_bell.clips.CLIP_CACHE_MAX_BYTES", 150):
+        store.prune()
+    assert sorted(p.name for p in folder.glob("*.mp4")) == ["c2.mp4"]
+
+
+async def test_clip_is_fetched_converted_and_kept(hass: HomeAssistant, client: FakeClient, tmp_path) -> None:
+    """The whole way with a stand-in for ffmpeg: video in, growing file, final file."""
+    entry = await setup(hass, client)
+    hub = entry.runtime_data
+    fake = tmp_path / "fake_ffmpeg"
+    fake.write_text(
+        "#!/bin/sh\n"
+        'for last; do :; done\n'
+        'case "$*" in *pipe:0*) cat > "$last";;\n'
+        '*) while [ $# -gt 0 ]; do [ "$1" = -i ] && src="$2"; shift; done; cp "$src" "$last";; esac\n'
+    )
+    fake.chmod(0o755)
+
+    class Playback:
+        closed = False
+
+        def close(self):
+            Playback.closed = True
+
+    begin, end = parse_clip_id("20261028T154203Z_20261028T154252Z")
+    with patch.object(hub.clips, "_ffmpeg", return_value=str(fake)), patch(
+        "custom_components.ezviz_instant_bell.clips.open_playback", return_value=Playback()
+    ) as opened, patch(
+        "custom_components.ezviz_instant_bell.clips.iter_media", return_value=iter([b"one-", b"two-", b"three"])
+    ):
+        job = hub.clips.job_for(SERIAL, begin, end)
+        assert hub.clips.job_for(SERIAL, begin, end) is job  # a second viewer joins the same job
+        await asyncio.wait_for(job.done.wait(), 10)
+    assert job.state == "done" and job.bytes_in == 13 and Playback.closed
+    assert opened.call_args.args[1:3] == (SERIAL, 1)
+    ready = hub.clips.ready_file(SERIAL, begin, end)
+    assert ready is not None and ready.read_bytes() == b"one-two-three"
+    assert not list(hub.clips.root.glob("*/*.part.mp4")) and not list(hub.clips.root.glob("*/*.tmp.mp4"))
+
+
+async def test_a_clip_without_video_is_not_kept(hass: HomeAssistant, client: FakeClient, tmp_path) -> None:
+    entry = await setup(hass, client)
+    hub = entry.runtime_data
+    fake = tmp_path / "fake_ffmpeg"
+    fake.write_text('#!/bin/sh\nfor last; do :; done\ncat > "$last"\n')
+    fake.chmod(0o755)
+
+    class Playback:
+        def close(self):
+            pass
+
+    begin, end = parse_clip_id("20261028T154203Z_20261028T154252Z")
+    with patch.object(hub.clips, "_ffmpeg", return_value=str(fake)), patch(
+        "custom_components.ezviz_instant_bell.clips.open_playback", return_value=Playback()
+    ), patch("custom_components.ezviz_instant_bell.clips.iter_media", return_value=iter([])):
+        job = hub.clips.job_for(SERIAL, begin, end)
+        await asyncio.wait_for(job.done.wait(), 10)
+    assert job.state == "failed" and job.error
+    assert hub.clips.ready_file(SERIAL, begin, end) is None
+    assert hub.clips.job_for(SERIAL, begin, end) is not job  # a new try is possible
