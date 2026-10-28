@@ -188,6 +188,12 @@
       },
       "unlock_door": {
         "name": "Unlock Door"
+      },
+      "open_door": {
+        "name": "Open door"
+      },
+      "open_gate": {
+        "name": "Open gate"
       }
     },
     "switch": {

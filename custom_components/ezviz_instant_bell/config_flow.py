@@ -27,6 +27,7 @@ from homeassistant.helpers.selector import (
 from . import ezviz
 from .const import (
     CONF_AGGRESSIVE_MPEGTS,
+    CONF_CREATE_BUTTONS,
     CONF_DEVICES,
     CONF_DIAGNOSTIC_DUMPS,
     CONF_ENCRYPTION_KEY,
@@ -351,6 +352,8 @@ class InstantBellOptionsFlow(OptionsFlow):
                 CONF_ENCRYPTION_KEY: str(user_input.get(CONF_ENCRYPTION_KEY) or "").strip(),
                 CONF_DIAGNOSTIC_DUMPS: bool(user_input.get(CONF_DIAGNOSTIC_DUMPS, False)),
             }
+            if self.config_entry.options.get(CONF_CREATE_BUTTONS):
+                data[CONF_CREATE_BUTTONS] = True  # keeps the 0.1.0 buttons
             return self.async_create_entry(data=data)
         opts = self.config_entry.options
         number = lambda low, high: NumberSelector(  # noqa: E731

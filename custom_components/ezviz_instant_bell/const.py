@@ -11,6 +11,8 @@ CONF_POLL_INTERVAL = "poll_interval"
 CONF_DOOR_LOCK_NO = "door_lock_no"
 CONF_GATE_LOCK_NO = "gate_lock_no"
 CONF_MONITOR_SERIALS = "monitor_serials"
+# Option of version 0.1.0: switched on the "Open door" / "Open gate" buttons.
+CONF_CREATE_BUTTONS = "create_buttons"
 
 DEFAULT_REGION = "apiieu.ezvizlife.com"
 REGIONS = {

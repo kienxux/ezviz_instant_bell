@@ -915,3 +915,41 @@ async def test_old_stream_settings_are_taken_over(hass: HomeAssistant, client: F
         "encryption_key": "K1",
         "monitor_serials": "BE0000001",
     }
+
+
+# --- the optional buttons of version 0.1.0 ------------------------------------
+
+
+async def test_old_open_buttons_come_back_with_their_entity_ids(hass: HomeAssistant, client: FakeClient) -> None:
+    """A phone widget on button.<name>_open_gate must keep working."""
+    await setup(hass, client, {"create_buttons": True})
+    reg = er.async_get(hass)
+    assert reg.async_get_entity_id("button", DOMAIN, f"{SERIAL}_open_gate") == "button.tor_open_gate"
+    assert reg.async_get_entity_id("button", DOMAIN, f"{SERIAL}_open_door") == "button.tor_open_door"
+    await hass.services.async_call("button", "press", {"entity_id": "button.tor_open_gate"}, blocking=True)
+    assert client.unlocks == [(SERIAL, "internal-user", 1)]
+    await hass.services.async_call("button", "press", {"entity_id": "button.tor_open_door"}, blocking=True)
+    assert client.unlocks[-1] == (SERIAL, "internal-user", 2)
+
+
+async def test_old_open_buttons_in_the_registry_are_kept(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = make_entry()
+    entry.add_to_hass(hass)
+    reg = er.async_get(hass)
+    reg.async_get_or_create(
+        "button", DOMAIN, f"{SERIAL}_open_gate", config_entry=entry, suggested_object_id="hof_klingel_open_gate"
+    )
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
+        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    assert reg.async_get_entity_id("button", DOMAIN, f"{SERIAL}_open_gate") == "button.hof_klingel_open_gate"
+    assert hass.states.get("button.hof_klingel_open_gate") is not None
+    assert reg.async_get_entity_id("button", DOMAIN, f"{SERIAL}_open_door") is None
+
+
+async def test_no_old_open_buttons_for_new_setups(hass: HomeAssistant, client: FakeClient) -> None:
+    await setup(hass, client)
+    reg = er.async_get(hass)
+    assert reg.async_get_entity_id("button", DOMAIN, f"{SERIAL}_open_gate") is None
