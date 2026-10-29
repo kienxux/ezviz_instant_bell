@@ -23,7 +23,7 @@ REGIONS = {
 
 DEFAULT_POLL_INTERVAL = 5  # seconds between checks of the cloud message list
 MIN_POLL_INTERVAL = 2
-MAX_POLL_INTERVAL = 60
+MAX_POLL_INTERVAL = 60  # a ring is announced up to this late; longer is not useful
 
 # Lock numbers seen on an HP7: 2 opens the door, 1 opens the gate.
 DEFAULT_DOOR_LOCK_NO = 2

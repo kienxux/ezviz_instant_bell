@@ -27,7 +27,11 @@ MAX_CLIP_SECONDS = 15 * 60  # a recording longer than this is not fetched in one
 
 @dataclass(frozen=True)
 class Recording:
-    """One recording on the SD card. Times are the door station's local clock."""
+    """One recording on the SD card.
+
+    The times are the door station's local clock as plain (naive) datetimes, not
+    UTC: that is what the list gives and what the video servers want back.
+    """
 
     begin: datetime
     end: datetime

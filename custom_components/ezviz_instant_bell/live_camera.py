@@ -350,7 +350,7 @@ def _extract_param_sets(payload: bytes) -> bytes:
     """
     spans = [(off, payload[hdr]) for off, hdr in _iter_nal_spans(payload)]
     start = None
-    for idx, (off, hdr) in enumerate(spans):
+    for off, hdr in spans:
         is_ps = hdr in (0x40, 0x42, 0x44, 0x67, 0x68)
         if is_ps and start is None:
             start = off
@@ -732,6 +732,11 @@ class StreamRelay:
     def detected_codec(self) -> Optional[str]:
         """Video codec sniffed off the live stream ("h264"/"hevc"), or None."""
         return self._detected_codec
+
+    @property
+    def has_lan_viewers(self) -> bool:
+        """True while someone watches through the local-network connection."""
+        return self._active_lan and self._active_clients > 0
 
     @property
     def active_source(self) -> str:
@@ -1618,7 +1623,6 @@ class StreamRelay:
                 pass
             return
 
-        loop = asyncio.get_event_loop()
         proc: Optional[asyncio.subprocess.Process] = None
         v_listener: Optional[socket.socket] = None
         a_listener: Optional[socket.socket] = None

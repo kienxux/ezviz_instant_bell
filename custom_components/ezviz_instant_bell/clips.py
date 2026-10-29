@@ -195,14 +195,20 @@ class ClipStore:
             return
         active = {j.part_path for j in self._jobs.values()}
         files = [p for p in self.root.glob("*/*.mp4") if p not in active]
-        sizes = {p: p.stat().st_size for p in files if p.exists()}
-        total = sum(sizes.values())
-        for path in sorted(sizes, key=lambda p: p.stat().st_mtime if p.exists() else 0):
+        known: dict[Path, tuple[float, int]] = {}  # file -> (modified, size)
+        for path in files:
+            try:  # a file can vanish at any time (another viewer, the user)
+                stat = path.stat()
+            except OSError:
+                continue
+            known[path] = (stat.st_mtime, stat.st_size)
+        total = sum(size for _mtime, size in known.values())
+        for path in sorted(known, key=lambda p: known[p][0]):
             if total <= CLIP_CACHE_MAX_BYTES:
                 break
             with suppress(OSError):
                 path.unlink()
-                total -= sizes[path]
+                total -= known[path][1]
 
     async def async_stop(self) -> None:
         for task in list(self._tasks):

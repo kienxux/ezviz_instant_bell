@@ -79,6 +79,7 @@ LIVE_OPTION_KEYS = (
 )
 
 # Region names of the earlier ezviz_hp7 integration and the hosts they meant.
+# Region names of the old integration -> EZVIZ API host. "us" and "sa" share a server.
 LEGACY_REGIONS = {
     "eu": "apiieu.ezvizlife.com",
     "us": "apiisa.ezvizlife.com",

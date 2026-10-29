@@ -48,10 +48,7 @@ class StatusCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         them competes with its streaming on its small processor. Back to the
         normal rate as soon as the last viewer leaves.
         """
-        watching = any(
-            getattr(relay, "_active_lan", False) and getattr(relay, "_active_clients", 0) > 0
-            for relay in self._hub.live_relays.values()
-        )
+        watching = any(relay.has_lan_viewers for relay in self._hub.live_relays.values())
         if watching == self._slowed_for_stream:
             return
         self._slowed_for_stream = watching

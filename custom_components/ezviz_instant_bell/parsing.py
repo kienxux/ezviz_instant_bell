@@ -34,7 +34,10 @@ MAX_EVENT_AGE = timedelta(seconds=120)
 # Two events of the same kind for the same device this close are one event.
 DUPLICATE_WINDOW = timedelta(seconds=10)
 
-# Positions in the comma separated ``ext`` string of a push message.
+# Positions in the comma separated ``ext`` string of a push message, as seen on
+# real messages: 1 = time, 2 = device serial, 4 = alert type code, 16 = picture
+# link, 17 = device name. The reader below tolerates a shorter string (a missing
+# field is None), so a change of EZVIZ's format loses a field, it does not crash.
 _EXT_TIME, _EXT_SERIAL, _EXT_CODE, _EXT_IMAGE, _EXT_NAME = 1, 2, 4, 16, 17
 
 
@@ -156,7 +159,9 @@ def same_device(a: str, b: str) -> bool:
     """True if two serials name the same doorbell.
 
     The HP7 appears as ``DOORBELL-MONITOR``; the bare doorbell part is enough
-    to match a push serial against a list serial.
+    to match a push serial against a list serial. Only the part before the
+    first dash is compared, so a bare serial matches the composite that starts
+    with it. This is meant: the cloud names the same device both ways.
     """
     a, b = a.strip().upper(), b.strip().upper()
     return a == b or a.split("-")[0] == b.split("-")[0]

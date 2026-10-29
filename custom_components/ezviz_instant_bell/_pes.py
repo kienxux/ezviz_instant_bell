@@ -21,7 +21,7 @@ system headers (0xBB) and padding (0xBE) are silently consumed.
 # (MIT, https://github.com/Bobsilvio/ezviz_hp7); see THIRD_PARTY_LICENSES.md.
 from __future__ import annotations
 
-from typing import Iterator, List, Tuple
+from typing import List, Tuple
 
 
 # stream_ids that carry an optional PES header (PTS/DTS/etc) before the
