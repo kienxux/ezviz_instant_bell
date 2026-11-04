@@ -52,7 +52,7 @@ class UnlockButton(ActionEntity, ButtonEntity):
         self._lock_no = lock_no
 
     async def async_press(self) -> None:
-        await self._hub.async_unlock(self._serial, self._lock_no)
+        await self._hub.async_unlock(self._serial, self._lock_no, self._context)
 
 
 class OpenButton(InstantBellEntity, ButtonEntity):
@@ -63,4 +63,4 @@ class OpenButton(InstantBellEntity, ButtonEntity):
         self._lock_no = lock_no
 
     async def async_press(self) -> None:
-        await self._hub.async_unlock(self._serial, self._lock_no)
+        await self._hub.async_unlock(self._serial, self._lock_no, self._context)

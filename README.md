@@ -68,7 +68,7 @@ Logging in registers one new terminal named `Hassio` in your EZVIZ account. EZVI
 | **Switches** | Doorbell chime and motion sound alert (door station and indoor monitor), do not disturb, privacy, armed, name-tag light |
 | **Sliders** | Chime volume (0 to 7) and ringtones for the doorbell and the motion alert, on the door station and on every indoor monitor |
 | **Camera** | `Live`: the live video (cloud or local network). `Last Snapshot`: the picture of the latest alarm |
-| **Events** | `ezviz_instant_bell_unlock` (and, for old automations, `ezviz_hp7_unlock`) with the way the lock was opened, the card id and the card holder's name |
+| **Events** | `ezviz_instant_bell_unlock` (and, for old automations, `ezviz_hp7_unlock`) with the way the lock was opened, the card id and the card holder's name; `ezviz_instant_bell_door_opened` when someone opens the door or gate from Home Assistant (with the user, and shown in the logbook); `ezviz_instant_bell_clip_saved` when a ring's video was saved |
 | **Media** | *Recordings (SD card)* and *Pictures of events* in the Media browser |
 | **Dashboard** | The visitor log card |
 | **Account** | `Terminals in use`, and a repair notice before EZVIZ's 10-terminal limit is reached |
@@ -115,6 +115,10 @@ Open **Media** in the sidebar, choose **EZVIZ HP7 / CP7 Video Intercom**, your d
 - One clip is fetched at a time per account. Video encryption must be off (as for the live view without a key).
 - `ffmpeg` must be available (it is part of Home Assistant OS and the Docker image).
 
+### Save the video of every ring
+
+Switch on **Save the video of every ring** in the options and the integration keeps the recording of each ring: after the ring it waits for the door station to finish recording, fetches the video like a played clip, and announces it with the event `ezviz_instant_bell_clip_saved` and the sensor **Last saved clip** (its attributes hold `media_content_id`, which a media player or an automation can play). It is off by default because it makes the door station send a video after every ring; it needs an SD card in the door station and video encryption off. Saved clips share the 500 MB of the clip folder.
+
 ## Pictures of events
 
 **Media > EZVIZ HP7 / CP7 Video Intercom > your door station > Pictures of events > a day** shows every event EZVIZ kept for that day with its picture: rings, door and gate openings, motion, for the last 14 days.
@@ -133,7 +137,7 @@ Open **Media** in the sidebar, choose **EZVIZ HP7 / CP7 Video Intercom**, your d
 
 ## Options
 
-Ring check interval (seconds), serial numbers of the indoor monitors (empty = automatic), the lock numbers for door (2) and gate (1) as seen on an HP7, and the live video settings (source, mode, codec, quality, port, listen address, key).
+Ring check interval (seconds), serial numbers of the indoor monitors (empty = automatic), the lock numbers for door (2) and gate (1) as seen on an HP7, whether to save the video of every ring, and the live video settings (source, mode, codec, quality, port, listen address, key). To change the login, region or chosen door stations, use **Reconfigure** in the three-dot menu of the integration.
 
 ## Troubleshooting
 
@@ -145,7 +149,7 @@ Ring check interval (seconds), serial numbers of the indoor monitors (empty = au
 
 - Your EZVIZ login is stored by Home Assistant like for any integration. Nothing is sent anywhere except to EZVIZ (and, for the local stream, to your own door station).
 - Pictures are kept only in memory (the latest one, and up to 100 from the history browser). Recordings you play are stored as MP4 files in the `.storage` folder, up to 500 MB.
-- The administrator-only actions are the ones that change video encryption or fetch its key. The door can be opened by every Home Assistant user who may press the button, so give guests a dashboard without it.
+- The administrator-only actions are the ones that change video encryption or fetch its key. The door can be opened by every Home Assistant user who may press the button, so give guests a dashboard without it. Every opening from Home Assistant is recorded with the user in the logbook (event `ezviz_instant_bell_door_opened`).
 - The ring blueprint uses a random ID per ring for its Open door button.
 
 ## Moving over from `ezviz_hp7`

@@ -1526,3 +1526,49 @@ async def test_reconfigure_with_a_wrong_password_stays_on_the_form(hass: HomeAss
         )
     assert result["step_id"] == "reconfigure" and result["errors"] == {"base": "invalid_auth"}
     assert entry.data["password"] != "bad"
+
+
+# --- who opened the door ----------------------------------------------------------------
+
+
+async def test_opening_from_home_assistant_is_announced_with_the_user(hass: HomeAssistant, client: FakeClient) -> None:
+    from homeassistant.core import Context
+
+    await setup(hass, client)
+    first = await hass.auth.async_create_user("First")
+    second = await hass.auth.async_create_user("Second")
+    seen = []
+    hass.bus.async_listen("ezviz_instant_bell_door_opened", lambda event: seen.append(event))
+    await hass.services.async_call(
+        "button", "press", {"entity_id": "button.ezviz_cpd5_be0000001_be0000002_unlock_door"},
+        blocking=True, context=Context(user_id=first.id),
+    )
+    await hass.services.async_call(DOMAIN, "unlock_gate", {}, blocking=True, context=Context(user_id=second.id))
+    await hass.async_block_till_done()
+    assert [(e.data["lock"], e.data["user_id"]) for e in seen] == [("door", first.id), ("gate", second.id)]
+    assert seen[0].context.user_id == first.id
+
+
+async def test_a_failed_opening_is_not_announced(hass: HomeAssistant, client: FakeClient) -> None:
+    await setup(hass, client)
+    seen = []
+    hass.bus.async_listen("ezviz_instant_bell_door_opened", lambda event: seen.append(event))
+    client.fail_unlock = True
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(DOMAIN, "unlock_door", {}, blocking=True)
+    await hass.async_block_till_done()
+    assert seen == []
+
+
+async def test_logbook_describes_the_opening(hass: HomeAssistant, client: FakeClient) -> None:
+    from homeassistant.components.logbook import async_log_entry  # noqa: F401  (the logbook is installed)
+    from homeassistant.core import Context, Event
+
+    from custom_components.ezviz_instant_bell.logbook import async_describe_events
+
+    described = {}
+    async_describe_events(hass, lambda domain, name, fn: described.update({(domain, name): fn}))
+    describe = described[(DOMAIN, "ezviz_instant_bell_door_opened")]
+    with_user = describe(Event("x", {"lock": "gate"}, context=Context(user_id="u")))
+    assert with_user["message"] == "opened the gate from Home Assistant"
+    assert "automation" in describe(Event("x", {"lock": "door"}))["message"]

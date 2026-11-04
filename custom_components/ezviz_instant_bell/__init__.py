@@ -61,7 +61,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         if len(matches) > 1 and not wanted:
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="serial_needed")
         hub, serial = matches[0]
-        await hub.async_unlock(serial, hub.door_lock_no if door else hub.gate_lock_no)
+        await hub.async_unlock(serial, hub.door_lock_no if door else hub.gate_lock_no, call.context)
 
     async def unlock_door(call: ServiceCall) -> None:
         await _unlock(call, True)

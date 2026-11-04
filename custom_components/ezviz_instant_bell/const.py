@@ -43,6 +43,8 @@ LEGACY_DOMAIN = "ezviz_hp7"
 PULSE_SECONDS = 3
 
 # Home Assistant events fired when the lock opens (both names carry the same data).
+# Fired when someone opens the door or gate from Home Assistant (button, action, card).
+EVENT_DOOR_OPENED = f"{DOMAIN}_door_opened"
 EVENT_UNLOCK = f"{DOMAIN}_unlock"
 EVENT_UNLOCK_LEGACY = f"{LEGACY_DOMAIN}_unlock"
 

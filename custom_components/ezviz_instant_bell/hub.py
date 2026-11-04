@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import Context, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
@@ -32,6 +32,7 @@ from .const import (
     CLIP_SAVE_POLL,
     DEFAULT_DOOR_LOCK_NO,
     EVENT_CLIP_SAVED,
+    EVENT_DOOR_OPENED,
     DEFAULT_GATE_LOCK_NO,
     DEFAULT_POLL_INTERVAL,
     DEFAULT_REGION,
@@ -512,8 +513,11 @@ class InstantBellHub:
 
         return await self.hass.async_add_executor_job(_read)
 
-    async def async_unlock(self, serial: str, lock_no: int) -> None:
-        """Open one specific lock. Never falls back to another lock."""
+    async def async_unlock(self, serial: str, lock_no: int, context: Context | None = None) -> None:
+        """Open one specific lock. Never falls back to another lock.
+
+        ``context`` says who asked; a successful opening is announced with it.
+        """
         key = (serial, lock_no)
         now = time.monotonic()
         if now - self._last_unlock.get(key, -UNLOCK_COOLDOWN) < UNLOCK_COOLDOWN:
@@ -528,3 +532,13 @@ class InstantBellHub:
                 translation_key="unlock_failed",
                 translation_placeholders={"error": str(err)},
             ) from err
+        self.hass.bus.async_fire(
+            EVENT_DOOR_OPENED,
+            {
+                "serial": serial,
+                "lock": "door" if lock_no == self.door_lock_no else "gate" if lock_no == self.gate_lock_no else f"lock {lock_no}",
+                "lock_no": lock_no,
+                "user_id": context.user_id if context else None,
+            },
+            context=context,
+        )
