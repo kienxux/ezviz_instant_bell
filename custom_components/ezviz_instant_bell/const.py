@@ -122,3 +122,7 @@ SIGNAL_CLIP = f"{DOMAIN}_clip_{{entry_id}}"
 CLIP_SAVE_FIRST_WAIT = 20.0  # seconds after a ring before the SD-card list is looked at
 CLIP_SAVE_POLL = 15.0
 CLIP_SAVE_GIVE_UP = 240.0  # the recording of a ring is looked for this long
+
+# -- working without the EZVIZ cloud --------------------------------------------
+CLOUD_RETRY_SECONDS = 300  # while the cloud is unreachable, try a new login this often
+ISSUE_CLOUD_OFFLINE = "cloud_offline"

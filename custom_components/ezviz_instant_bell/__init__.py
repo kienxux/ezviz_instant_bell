@@ -166,7 +166,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: InstantBellConfigEntry) 
 
     coordinator = StatusCoordinator(hass, entry, hub)
     hub.coordinator = coordinator
-    await coordinator.async_config_entry_first_refresh()
+    if hub.cloud_online:
+        await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = hub
 
     # Entities of the earlier ezviz_hp7 integration move over before our own

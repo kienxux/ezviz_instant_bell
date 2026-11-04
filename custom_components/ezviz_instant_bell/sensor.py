@@ -37,7 +37,8 @@ async def async_setup_entry(
 ) -> None:
     hub = entry.runtime_data
     coordinator = TerminalCoordinator(hass, entry, hub)
-    await coordinator.async_config_entry_first_refresh()
+    if hub.cloud_online:
+        await coordinator.async_config_entry_first_refresh()
     entities: list[SensorEntity] = [TerminalCountSensor(coordinator, entry)]
 
     status = hub.coordinator

@@ -41,8 +41,13 @@ class StreamSupport:
         get_client: Callable[[], Any],
         region_host: str,
         call_lock: threading.Lock | None = None,
+        on_learned: Callable[[], None] | None = None,
     ) -> None:
         self._get_client = get_client
+        # What the local stream needs, kept on disk by the hub so that the
+        # local video works while the EZVIZ cloud is down: {bare serial: {"lan_key", "ip"}}.
+        self.remembered: dict[str, dict[str, str]] = {}
+        self._on_learned = on_learned
         self._host = region_host
         self._lock = call_lock
         self._lan_aes_cache: dict[str, tuple[bytes, float]] = {}
@@ -50,6 +55,26 @@ class StreamSupport:
         self._cam_key_cache: dict[str, str] = {}
         # Serials for which the cloud asked for a one-time code (20002).
         self.key_needs_otp: set[str] = set()
+
+    # -- what is kept for working without the cloud ---------------------
+
+    def load_remembered(self, data: Any) -> None:
+        """Take what was stored on disk (call before the first stream)."""
+        for bare, values in (data or {}).items() if isinstance(data, dict) else ():
+            if not isinstance(values, dict):
+                continue
+            kept = {k: str(v) for k, v in values.items() if k in ("lan_key", "ip") and v}
+            if kept:
+                self.remembered[str(bare)] = kept
+                if "ip" in kept:
+                    self._lan_ip_cache.setdefault(str(bare), kept["ip"])
+
+    def _learn(self, bare: str, field: str, value: str) -> None:
+        if self.remembered.get(bare, {}).get(field) == value:
+            return
+        self.remembered[bare] = {**self.remembered.get(bare, {}), field: value}  # one assignment: safe to read from the loop
+        if self._on_learned is not None:
+            self._on_learned()
 
     # -- small helpers ----------------------------------------------------
 
@@ -97,14 +122,30 @@ class StreamSupport:
             _LOGGER.debug("EZVIZ p2p register failed (best effort): %s", exc)
 
     def fetch_lan_aes_key(self, serial: str, force: bool = False) -> bytes:
-        """The 16-byte AES-128 LAN control key of the device (cached for an hour)."""
-        from pyezvizapi.cas import EzvizCAS
+        """The 16-byte AES-128 LAN control key of the device (cached for an hour).
 
+        When the cloud cannot be asked, the key stored on disk is used.
+        """
         bare = bare_serial(serial)
         if not force:
             cached = self._lan_aes_cache.get(bare)
             if cached and (time.monotonic() - cached[1]) < LAN_AES_KEY_TTL:
                 return cached[0]
+        try:
+            key_bytes = self._lan_key_from_cloud(bare)
+        except Exception as exc:  # noqa: BLE001 - whatever failed, the stored key may still be good
+            stored = self.remembered.get(bare, {}).get("lan_key", "")
+            if len(stored) != 16:
+                raise
+            _LOGGER.info("LAN key of %s not fetched (%s), using the stored one", bare, exc)
+            return stored.encode("ascii")
+        self._lan_aes_cache[bare] = (key_bytes, time.monotonic())
+        self._learn(bare, "lan_key", key_bytes.decode("ascii"))
+        return key_bytes
+
+    def _lan_key_from_cloud(self, bare: str) -> bytes:
+        from pyezvizapi.cas import EzvizCAS
+
         client = self.client
         if client is None:
             raise RuntimeError("EZVIZ client not initialised for LAN key fetch")
@@ -130,9 +171,7 @@ class StreamSupport:
                     "EZVIZ app (device settings); the LAN stream needs it disabled"
                 )
             raise RuntimeError(f"invalid LAN AES key from CAS (Result={result}, key={key_str!r}){hint}")
-        key_bytes = key_str.encode("ascii")
-        self._lan_aes_cache[bare] = (key_bytes, time.monotonic())
-        return key_bytes
+        return key_str.encode("ascii")
 
     def invalidate_lan_aes_key(self, serial: str | None = None) -> None:
         """Forget the cached LAN key(s); called when the device refuses the handshake."""
@@ -158,6 +197,7 @@ class StreamSupport:
             host = getattr(endpoint, "host", None)
             if host:
                 self._lan_ip_cache[bare] = str(host)
+                self._learn(bare, "ip", str(host))
                 return str(host)
             raise RuntimeError("no host in CONNECTION data")
         except Exception as exc:  # noqa: BLE001

@@ -135,6 +135,15 @@ Switch on **Save the video of every ring** in the options and the integration ke
 - **Relay.** The relay listens on `127.0.0.1` only. A fixed port and `0.0.0.0` are for go2rtc or Frigate on another machine; that socket has no password, so use it only on a network you trust.
 - While someone watches the local stream, the status is read a quarter as often, because the door station's processor is small. A ring or unlock wakes the stream up, so the first picture is quick.
 
+## When the EZVIZ cloud is down
+
+Most of this integration works through the EZVIZ cloud, like the EZVIZ app does. What it needs to show the **local live video** is kept on your Home Assistant, so that part keeps working without the cloud:
+
+- After the integration has run once with the cloud, it stores the door station's local key and address, its model and its indoor monitors in `<config>/.storage/ezviz_instant_bell.local.<entry>`.
+- If EZVIZ cannot be reached when Home Assistant starts, the integration starts anyway with the same entities. The **Live** camera plays with the stored key when its source is `local` or `auto`; the other entities show as unavailable, and a repair notice says why. A new login is tried every 5 minutes, and everything starts again by itself when EZVIZ answers.
+- What still needs the cloud: rings, unlocking the door, settings, recordings and pictures. Unlocking says so instead of failing silently. For a door that must open even without internet, wire a relay (for example a Shelly) in parallel to the lock's own button.
+- If the door station changes its local key (it may after a reboot), the stored key no longer fits until the cloud answers once.
+
 ## Options
 
 Ring check interval (seconds), serial numbers of the indoor monitors (empty = automatic), the lock numbers for door (2) and gate (1) as seen on an HP7, whether to save the video of every ring, and the live video settings (source, mode, codec, quality, port, listen address, key). To change the login, region or chosen door stations, use **Reconfigure** in the three-dot menu of the integration.
@@ -149,6 +158,7 @@ Ring check interval (seconds), serial numbers of the indoor monitors (empty = au
 
 - Your EZVIZ login is stored by Home Assistant like for any integration. Nothing is sent anywhere except to EZVIZ (and, for the local stream, to your own door station).
 - Pictures are kept only in memory (the latest one, and up to 100 from the history browser). Recordings you play are stored as MP4 files in the `.storage` folder, up to 500 MB.
+- For the live video without the cloud, the door station's local key and address are stored in the `.storage` folder, next to the EZVIZ login that Home Assistant keeps there anyway.
 - The administrator-only actions are the ones that change video encryption or fetch its key. The door can be opened by every Home Assistant user who may press the button, so give guests a dashboard without it. Every opening from Home Assistant is recorded with the user in the logbook (event `ezviz_instant_bell_door_opened`).
 - The ring blueprint uses a random ID per ring for its Open door button.
 

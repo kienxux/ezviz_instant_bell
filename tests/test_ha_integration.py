@@ -1602,3 +1602,122 @@ async def test_two_rings_of_one_visit_announce_the_recording_once(hass: HomeAssi
         await hass.async_block_till_done(wait_background_tasks=True)
     assert len(rings) == 2  # both rings reached the hub (25 s apart, outside the duplicate window)
     assert len(saved) == 1
+
+
+# --- working without the EZVIZ cloud -------------------------------------------------------
+
+LOCAL_STORE = f"{DOMAIN}.local.offline-entry"
+
+
+def offline_entry(options: dict | None = None) -> MockConfigEntry:
+    entry = make_entry(options)
+    return MockConfigEntry(
+        domain=DOMAIN, entry_id="offline-entry", unique_id=entry.unique_id, data=dict(entry.data),
+        options=dict(entry.options),
+    )
+
+
+async def setup_without_cloud(hass: HomeAssistant, options: dict | None = None) -> MockConfigEntry:
+    entry = offline_entry(options)
+    entry.add_to_hass(hass)
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", side_effect=ezviz.CannotConnect("no internet")):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    return entry
+
+
+def stored_local_data() -> dict:
+    return {
+        "version": 1,
+        "minor_version": 1,
+        "key": LOCAL_STORE,
+        "data": {
+            "doors": {"BE0000001": {"lan_key": "0123456789abcdef", "ip": "192.168.1.50"}},
+            "models": {SERIAL: "CPD5"},
+            "monitors": {SERIAL: [MONITOR]},
+        },
+    }
+
+
+async def test_without_cloud_and_nothing_stored_setup_is_retried(hass: HomeAssistant) -> None:
+    entry = await setup_without_cloud(hass)
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+
+
+async def test_what_the_local_video_needs_is_stored(hass: HomeAssistant, client: FakeClient, hass_storage) -> None:
+    entry = await setup(hass, client)
+    support = entry.runtime_data.stream
+
+    class FakeCas:
+        def __init__(self, token):
+            pass
+
+        def cas_get_encryption(self, serial):
+            return {"Response": {"Session": {"@Key": "0123456789abcdef"}}}
+
+    class Endpoint:
+        host = "192.168.1.50"
+
+    with patch("pyezvizapi.cas.EzvizCAS", FakeCas), patch("requests.post"), patch(
+        "pyezvizapi.local_stream._local_sdk_endpoint_from_client", return_value=Endpoint()
+    ):
+        await hass.async_add_executor_job(support.fetch_lan_aes_key, SERIAL)
+        await hass.async_add_executor_job(support.get_local_ip, SERIAL)
+    await hass.async_block_till_done()
+    from pytest_homeassistant_custom_component.common import flush_store
+
+    await flush_store(entry.runtime_data._local_store)  # the store writes a few seconds later; do it now
+    stored = hass_storage[f"{DOMAIN}.local.{entry.entry_id}"]["data"]
+    assert stored["doors"] == {"BE0000001": {"lan_key": "0123456789abcdef", "ip": "192.168.1.50"}}
+    assert stored["models"] == {SERIAL: "CPD5"} and stored["monitors"] == {SERIAL: [MONITOR]}
+
+
+async def test_starts_without_cloud_with_what_is_stored(hass: HomeAssistant, hass_storage) -> None:
+    hass_storage[LOCAL_STORE] = stored_local_data()
+    entry = await setup_without_cloud(hass)
+    assert entry.state is ConfigEntryState.LOADED
+    hub = entry.runtime_data
+    assert hub.cloud_online is False and hub.client is None
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "cloud_offline_offline-entry") is not None
+    # the local video has its key and address without asking the cloud
+    assert await hass.async_add_executor_job(hub.stream.fetch_lan_aes_key, SERIAL) == b"0123456789abcdef"
+    assert await hass.async_add_executor_job(hub.stream.get_local_ip, SERIAL) == "192.168.1.50"
+    # the same entities as with the cloud: live camera, monitor controls, device named after the stored model
+    reg = er.async_get(hass)
+    assert reg.async_get_entity_id("camera", DOMAIN, f"{LEGACY_DOMAIN}_{SERIAL}_live") is not None
+    assert reg.async_get_entity_id("switch", DOMAIN, f"{LEGACY_DOMAIN}_{MONITOR}_chime_sound_monitor") is not None
+    assert device_of(dr.async_get(hass), {(DOMAIN, SERIAL)}).model == "CPD5"
+    # status entities wait for the cloud
+    assert hass.states.get(legacy_entity(hass, "switch", "privacy")).state == "unavailable"
+
+
+async def test_everything_starts_again_when_the_cloud_answers(hass: HomeAssistant, client: FakeClient, hass_storage) -> None:
+    hass_storage[LOCAL_STORE] = stored_local_data()
+    entry = await setup_without_cloud(hass)
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
+        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
+    ):
+        await tick(hass, 301)
+        await hass.async_block_till_done(wait_background_tasks=True)
+        assert entry.state is ConfigEntryState.LOADED
+        assert entry.runtime_data.cloud_online is True
+        assert hass.states.get(legacy_entity(hass, "switch", "privacy")).state == "off"
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "cloud_offline_offline-entry") is None
+
+
+async def test_a_refused_password_while_offline_asks_for_a_new_login(hass: HomeAssistant, hass_storage) -> None:
+    hass_storage[LOCAL_STORE] = stored_local_data()
+    entry = await setup_without_cloud(hass)
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", side_effect=ezviz.InvalidAuth("Incorrect Password.")):
+        await tick(hass, 301)
+        await hass.async_block_till_done()
+    assert any(flow["context"]["source"] == "reauth" for flow in hass.config_entries.flow.async_progress_by_handler(DOMAIN))
+    assert entry.runtime_data.cloud_online is False
+
+
+async def test_opening_while_offline_says_why_it_cannot(hass: HomeAssistant, hass_storage) -> None:
+    hass_storage[LOCAL_STORE] = stored_local_data()
+    await setup_without_cloud(hass)
+    with pytest.raises(HomeAssistantError) as err:
+        await hass.services.async_call(DOMAIN, "unlock_door", {}, blocking=True)
+    assert err.value.translation_key == "cloud_unreachable"

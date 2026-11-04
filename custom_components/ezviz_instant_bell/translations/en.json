@@ -303,6 +303,9 @@
     },
     "recordings_failed": {
       "message": "Could not read the recordings of the SD card from EZVIZ: {error}"
+    },
+    "cloud_unreachable": {
+      "message": "EZVIZ cannot be reached right now, so this needs to wait. The local live video still works."
     }
   },
   "issues": {
@@ -342,6 +345,10 @@
           "no_device": "That doorbell is no longer set up in Home Assistant."
         }
       }
+    },
+    "cloud_offline": {
+      "title": "EZVIZ cannot be reached ({title})",
+      "description": "EZVIZ did not answer when Home Assistant started, so this integration runs with the local connection only: the local live video works with the stored key, while rings, unlocking, settings, recordings and pictures wait for the cloud. A new login is tried every 5 minutes, and everything starts again by itself when EZVIZ answers. If this stays, check the internet connection of Home Assistant."
     }
   },
   "services": {

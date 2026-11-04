@@ -14,8 +14,10 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Context, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady, HomeAssistantError
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -30,6 +32,7 @@ from .const import (
     CLIP_SAVE_FIRST_WAIT,
     CLIP_SAVE_GIVE_UP,
     CLIP_SAVE_POLL,
+    CLOUD_RETRY_SECONDS,
     DEFAULT_DOOR_LOCK_NO,
     EVENT_CLIP_SAVED,
     EVENT_DOOR_OPENED,
@@ -42,6 +45,7 @@ from .const import (
     HISTORY_PAST_TTL,
     HISTORY_PICTURE_CACHE,
     HISTORY_TODAY_TTL,
+    ISSUE_CLOUD_OFFLINE,
     PICTURE_ATTEMPTS,
     PICTURE_RETRY_DELAY,
     RECORDING_LIST_TTL_PAST,
@@ -108,7 +112,14 @@ class InstantBellHub:
             lambda: self._client,
             entry.data.get(CONF_REGION, DEFAULT_REGION),
             self._call_lock,
+            on_learned=self._learned_from_thread,
         )
+        # Kept on disk so that the integration starts without the cloud: the LAN
+        # key and address (via ``stream``), the monitors and the model of each door station.
+        self._local_store: Store[dict[str, Any]] = Store(hass, 1, f"{DOMAIN}.local.{entry.entry_id}")
+        self._models: dict[str, str] = {}
+        self.cloud_online = True
+        self._unsub_cloud_retry: Any = None
         self._tracker = NewMessageTracker()
         self._dedupe = EventDeduper()
         self._unsub_poll: Any = None
@@ -126,13 +137,28 @@ class InstantBellHub:
     # ------------------------------------------------------------------
 
     async def async_start(self) -> None:
-        """Log in, start push and polling."""
+        """Log in, start push and polling.
+
+        If the cloud cannot be reached but this entry has run before, start
+        anyway with what is stored (the local live video works) and keep
+        trying to log in; the entry reloads once the cloud answers.
+        """
+        stored = await self._local_store.async_load() or {}
+        self.stream.load_remembered(stored.get("doors"))
+        self._models = {str(k): str(v) for k, v in (stored.get("models") or {}).items()}
         storage = Path(self.hass.config.path(".storage"))
         code = await self.hass.async_add_executor_job(resolve_feature_code, storage)
-        await self.hass.async_add_executor_job(self._login, code)
+        try:
+            await self.hass.async_add_executor_job(self._login, code)
+        except ConfigEntryNotReady as err:
+            if not self.stream.remembered:
+                raise  # nothing stored yet: nothing useful can run
+            self._start_without_cloud(err, stored.get("monitors"))
+            return
 
         await self.hass.async_add_executor_job(self._start_push)
         await self._async_find_monitors()
+        self._save_local()
 
         interval = self.entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
         await self._async_poll(None)  # first list only remembers what is there
@@ -143,6 +169,9 @@ class InstantBellHub:
     async def async_stop(self) -> None:
         """Stop push and polling."""
         self._stopping = True
+        if self._unsub_cloud_retry:
+            self._unsub_cloud_retry()
+            self._unsub_cloud_retry = None
         await self.clips.async_stop()
         relays = list(self.live_relays.values())
         self.live_relays.clear()
@@ -157,6 +186,77 @@ class InstantBellHub:
         mqtt, self._mqtt = self._mqtt, None
         if mqtt is not None:
             await self.hass.async_add_executor_job(self._stop_push, mqtt)
+
+    # ------------------------------------------------------------------
+    # Without the cloud
+    # ------------------------------------------------------------------
+
+    def _start_without_cloud(self, err: Exception, monitors: Any) -> None:
+        self.cloud_online = False
+        if isinstance(monitors, dict):
+            self.monitors = {s: [str(m) for m in monitors.get(s, [])] for s in self.serials}
+        _LOGGER.warning(
+            "EZVIZ cannot be reached (%s). Starting with the local connection only: the local live video "
+            "works, rings, unlocking and settings come back when EZVIZ answers again",
+            err,
+        )
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            f"{ISSUE_CLOUD_OFFLINE}_{self.entry.entry_id}",
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=ISSUE_CLOUD_OFFLINE,
+            translation_placeholders={"title": self.entry.title},
+        )
+        self._unsub_cloud_retry = async_track_time_interval(
+            self.hass, self._async_retry_cloud, timedelta(seconds=CLOUD_RETRY_SECONDS)
+        )
+
+    async def _async_retry_cloud(self, _now: Any) -> None:
+        if self._stopping or self.cloud_online:
+            return
+        storage = Path(self.hass.config.path(".storage"))
+        try:
+            code = await self.hass.async_add_executor_job(resolve_feature_code, storage)
+            await self.hass.async_add_executor_job(self._login, code)
+        except ConfigEntryAuthFailed:
+            self.entry.async_start_reauth(self.hass)
+            return
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("EZVIZ still not reachable: %s", err)
+            return
+        _LOGGER.info("EZVIZ answers again; reloading to start everything")
+        self.cloud_online = True
+        if self._unsub_cloud_retry:
+            self._unsub_cloud_retry()
+            self._unsub_cloud_retry = None
+        ir.async_delete_issue(self.hass, DOMAIN, f"{ISSUE_CLOUD_OFFLINE}_{self.entry.entry_id}")
+        self.hass.config_entries.async_schedule_reload(self.entry.entry_id)
+
+    def remembered_model(self, serial: str) -> str | None:
+        return self._models.get(serial)
+
+    def remember_models(self, models: dict[str, str]) -> None:
+        """Called with the models of a good status read; stored when they changed."""
+        if all(self._models.get(s) == m for s, m in models.items()):
+            return
+        self._models.update(models)
+        self._save_local()
+
+    def _learned_from_thread(self) -> None:
+        self.hass.loop.call_soon_threadsafe(self._save_local)
+
+    @callback
+    def _save_local(self) -> None:
+        def data() -> dict[str, Any]:
+            return {
+                "doors": {k: dict(v) for k, v in list(self.stream.remembered.items())},
+                "models": dict(self._models),
+                "monitors": {k: list(v) for k, v in self.monitors.items()},
+            }
+
+        self._local_store.async_delay_save(data, 5)
 
     async def _async_find_monitors(self) -> None:
         """Work out which indoor monitors belong to the chosen door stations.
@@ -196,8 +296,13 @@ class InstantBellHub:
     def gate_lock_no(self) -> int:
         return int(self.entry.options.get(CONF_GATE_LOCK_NO, DEFAULT_GATE_LOCK_NO))
 
+    def _require_cloud(self) -> None:
+        if self._client is None:
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="cloud_unreachable")
+
     async def async_call(self, func: Any, *args: Any, **kwargs: Any) -> Any:
         """Run a blocking call on the shared session, one at a time."""
+        self._require_cloud()
 
         def _run() -> Any:
             with self._call_lock:
@@ -273,7 +378,7 @@ class InstantBellHub:
         self.hass.loop.call_soon_threadsafe(self._handle_event, event)
 
     async def _async_poll(self, _now: Any) -> None:
-        if self._polling or self._stopping:
+        if self._polling or self._stopping or self._client is None:
             return
         self._polling = True
         try:
@@ -520,6 +625,7 @@ class InstantBellHub:
 
         ``context`` says who asked; a successful opening is announced with it.
         """
+        self._require_cloud()
         key = (serial, lock_no)
         now = time.monotonic()
         if now - self._last_unlock.get(key, -UNLOCK_COOLDOWN) < UNLOCK_COOLDOWN:

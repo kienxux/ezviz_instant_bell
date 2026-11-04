@@ -2,6 +2,11 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## Unreleased
+
+- Starts without the EZVIZ cloud: the local live video works with the stored local key and address; a repair notice explains it, and everything starts again when EZVIZ answers
+- Unlocking or changing a setting while EZVIZ cannot be reached says so clearly
+
 ## 0.7.0
 
 - Option to save the video of every ring; event `ezviz_instant_bell_clip_saved` and sensor *Last saved clip*

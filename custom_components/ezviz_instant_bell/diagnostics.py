@@ -59,6 +59,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: Instant
             "options": async_redact_data(dict(entry.options), TO_REDACT),
         },
         "push_connected": hub.push_connected,
+        "cloud_online": hub.cloud_online,
+        "stored_for_local_use": {f"door_{n}": sorted(hub.stream.remembered.get(s.split("-")[0].upper(), {})) for n, s in enumerate(hub.serials, start=1)},
         "last_update_ok": coordinator.last_update_success if coordinator is not None else None,
         "doors": doors,
     }

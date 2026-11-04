@@ -1299,7 +1299,7 @@ class StreamRelay:
             self._last_attempt = loop.time()
             try:
                 ezviz_client = self._api.client
-                if ezviz_client is None:
+                if ezviz_client is None and self._stream_source == "cloud":
                     raise RuntimeError("EZVIZ session not available")
                 vtm = await self._open_source(loop, ezviz_client)
                 info = await loop.run_in_executor(None, vtm.start)

@@ -70,6 +70,9 @@ class StatusCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
     async def _async_update_data(self) -> dict[str, dict[str, Any]]:
         self._apply_stream_aware_interval()
+        if not self._hub.cloud_online:
+            # Started without the cloud: the hub retries the login and reloads; no need to ask here.
+            raise UpdateFailed("EZVIZ cannot be reached; only the local connection works")
         failure: str | None = None
         data: dict[str, dict[str, Any]] = {}
         try:
@@ -97,6 +100,7 @@ class StatusCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             raise UpdateFailed(f"EZVIZ status failed: {failure}")
 
         self._fail_streak = 0
+        self._hub.remember_models({s: str(v["model"]) for s, v in data.items() if v.get("model")})
         for serial, status in data.items():
             await self._add_alarm_detail(serial, status)
         return data

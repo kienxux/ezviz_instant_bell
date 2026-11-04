@@ -303,6 +303,9 @@
     },
     "recordings_failed": {
       "message": "Die Aufnahmen der SD-Karte konnten nicht von EZVIZ gelesen werden: {error}"
+    },
+    "cloud_unreachable": {
+      "message": "EZVIZ ist gerade nicht erreichbar, daher muss das warten. Das lokale Live-Video funktioniert weiterhin."
     }
   },
   "issues": {
@@ -342,6 +345,10 @@
           "no_device": "Diese Türklingel ist in Home Assistant nicht mehr eingerichtet."
         }
       }
+    },
+    "cloud_offline": {
+      "title": "EZVIZ nicht erreichbar ({title})",
+      "description": "EZVIZ hat beim Start von Home Assistant nicht geantwortet, daher läuft diese Integration nur mit der lokalen Verbindung: Das lokale Live-Video funktioniert mit dem gespeicherten Schlüssel, Klingeln, Öffnen, Einstellungen, Aufnahmen und Bilder warten auf die Cloud. Alle 5 Minuten wird eine neue Anmeldung versucht, und sobald EZVIZ antwortet, startet alles von selbst wieder. Bleibt dieser Hinweis, prüfe die Internetverbindung von Home Assistant."
     }
   },
   "services": {

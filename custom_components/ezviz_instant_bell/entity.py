@@ -18,7 +18,8 @@ def model_of(hub: InstantBellHub, serial: str) -> str:
     """Short model label of a door station (``HP7``, ``CPD5`` ...)."""
     coordinator = getattr(hub, "coordinator", None)
     data = (coordinator.data or {}) if coordinator is not None else {}
-    return str((data.get(serial) or {}).get("model") or DEFAULT_MODEL)
+    known = (data.get(serial) or {}).get("model") or hub.remembered_model(serial)
+    return str(known or DEFAULT_MODEL)
 
 
 def door_device_info(hub: InstantBellHub, serial: str) -> DeviceInfo:
