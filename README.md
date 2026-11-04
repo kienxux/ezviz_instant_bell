@@ -128,6 +128,10 @@ Ring check interval (seconds), serial numbers of the indoor monitors (empty = au
 
 Your EZVIZ login is stored by Home Assistant like other integrations. Pictures are kept only in memory (the latest one, and up to 100 from the history browser). Recordings you play are stored as MP4 files in the `.storage` folder, up to 500 MB. Nothing is sent anywhere except to EZVIZ.
 
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for what is planned and the [open issues](https://github.com/kienxux/ezviz_instant_bell/issues) to vote or add ideas.
+
 ## Credits and licence
 
 MIT licence. Built on [pyezvizapi](https://github.com/RenierM26/pyEzvizApi) (Apache-2.0), installed as a normal dependency. The way recordings of the SD card are asked from the EZVIZ servers (playback address, client type, stream type) was found by [pyEzvizApi pull request #266](https://github.com/RenierM26/pyEzvizApi/pull/266); it is written here independently from that description and confirmed on a real door station.

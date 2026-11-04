@@ -1,0 +1,21 @@
+name: Bug report
+description: Something does not work
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes: {label: Integration version, placeholder: "0.6.0"}
+    validations: {required: true}
+  - type: input
+    id: model
+    attributes: {label: Device model, placeholder: "HP7, CP7, CP5 ..."}
+  - type: textarea
+    id: what
+    attributes: {label: What happened, description: "And what you expected."}
+    validations: {required: true}
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log lines
+      description: "Debug log of custom_components.ezviz_instant_bell. Remove passwords, keys, serial numbers and addresses before pasting."
+      render: text
