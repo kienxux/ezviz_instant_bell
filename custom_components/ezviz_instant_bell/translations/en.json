@@ -34,6 +34,14 @@
         "data": {
           "password": "Password"
         }
+      },
+      "reconfigure": {
+        "title": "Change the EZVIZ login or doorbells",
+        "description": "Account: {username}. Leave the password empty to keep the current one. The next step lets you choose the doorbells again.",
+        "data": {
+          "password": "Password",
+          "region": "Region"
+        }
       }
     },
     "error": {
@@ -45,7 +53,8 @@
       "already_configured": "This account is already set up.",
       "no_devices": "No devices were found on this account.",
       "cannot_connect": "EZVIZ could not be reached.",
-      "reauth_successful": "Login updated."
+      "reauth_successful": "Login updated.",
+      "reconfigure_successful": "The settings were updated."
     }
   },
   "options": {

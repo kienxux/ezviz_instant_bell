@@ -1489,3 +1489,40 @@ async def test_a_ring_without_a_recording_gives_up_quietly(hass: HomeAssistant, 
         await poll_once(hass)
         await hass.async_block_till_done(wait_background_tasks=True)
     assert entry.runtime_data.last_clip == {}
+
+
+# --- reconfigure ----------------------------------------------------------------------
+
+
+async def test_reconfigure_changes_region_and_keeps_the_password(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    old_password = entry.data["password"]
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
+        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": "reconfigure", "entry_id": entry.entry_id}
+        )
+        assert result["type"] == "form" and result["step_id"] == "reconfigure"
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"region": "apiius.ezvizlife.com"})
+        assert result["step_id"] == "devices"
+        key = next(k for k in result["data_schema"].schema if k == "devices")
+        assert key.default() == [SERIAL]  # what is set up now is preselected
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"devices": [SERIAL]})
+        await hass.async_block_till_done()
+    assert result["type"] == "abort" and result["reason"] == "reconfigure_successful"
+    assert entry.data["region"] == "apiius.ezvizlife.com" and entry.data["password"] == old_password
+    assert entry.data["devices"] == [SERIAL] and entry.data["username"] == "user@example.com"
+
+
+async def test_reconfigure_with_a_wrong_password_stays_on_the_form(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "reconfigure", "entry_id": entry.entry_id}
+    )
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", side_effect=ezviz.InvalidAuth("Incorrect Password.")):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"password": "bad", "region": "apiieu.ezvizlife.com"}
+        )
+    assert result["step_id"] == "reconfigure" and result["errors"] == {"base": "invalid_auth"}
+    assert entry.data["password"] != "bad"

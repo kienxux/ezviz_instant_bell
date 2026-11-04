@@ -9,7 +9,7 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.config_entries import SOURCE_RECONFIGURE, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
 from homeassistant.helpers.selector import (
     NumberSelector,
@@ -249,6 +249,16 @@ class InstantBellConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_devices(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             chosen = user_input[CONF_DEVICES]
+            if self.source == SOURCE_RECONFIGURE:
+                return self.async_update_reload_and_abort(
+                    self._get_reconfigure_entry(),
+                    data_updates={
+                        "password": self._password,
+                        CONF_REGION: self._region,
+                        CONF_DEVICES: chosen,
+                        CONF_NAMES: {s: self._devices[s]["name"] for s in chosen},
+                    },
+                )
             return self.async_create_entry(
                 title=self._username,
                 data={
@@ -282,6 +292,49 @@ class InstantBellConfigFlow(ConfigFlow, domain=DOMAIN):
                     )
                 }
             ),
+        )
+
+    # -- reconfigure --------------------------------------------------
+
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Change the region, the password or the chosen doorbells of an account that is set up."""
+        entry = self._get_reconfigure_entry()
+        self._username = entry.data["username"]
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            self._password = str(user_input.get("password") or "") or entry.data["password"]
+            self._region = user_input[CONF_REGION]
+            self._preselect = list(entry.data.get(CONF_DEVICES, []))
+            self._client = None
+            try:
+                await self._async_login()
+            except ezviz.NeedsCode as err:
+                self._client = err.client
+                return await self.async_step_code()
+            except ezviz.InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except ezviz.CannotConnect:
+                errors["base"] = "cannot_connect"
+            else:
+                return await self._async_after_login()
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional("password"): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.PASSWORD, autocomplete="current-password")
+                    ),
+                    vol.Required(CONF_REGION, default=entry.data.get(CONF_REGION, DEFAULT_REGION)): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[SelectOptionDict(value=k, label=v) for k, v in REGIONS.items()],
+                            custom_value=True,
+                            mode=SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            ),
+            description_placeholders={"username": self._username},
+            errors=errors,
         )
 
     # -- reauth -------------------------------------------------------
