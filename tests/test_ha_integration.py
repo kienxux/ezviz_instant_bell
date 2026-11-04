@@ -220,6 +220,13 @@ def client():
     return FakeClient()
 
 
+def device_of(registry, identifiers):
+    """The device with these identifiers (``async_get_device`` is refused by newer Home Assistant)."""
+    if hasattr(registry, "async_get_devices"):
+        return registry.async_get_devices(identifiers=identifiers)[0]
+    return registry.async_get_device(identifiers=identifiers)
+
+
 async def setup(hass: HomeAssistant, client: FakeClient, options: dict | None = None) -> MockConfigEntry:
     entry = make_entry(options)
     entry.add_to_hass(hass)
@@ -300,9 +307,9 @@ async def test_sensor_values_and_names(hass: HomeAssistant, client: FakeClient) 
     assert hass.states.get(legacy_entity(hass, "switch", "privacy")).state == "off"
     # device named the way the earlier integration named it
     reg = dr.async_get(hass)
-    device = reg.async_get_devices(identifiers={(DOMAIN, SERIAL)})[0]
+    device = device_of(reg, {(DOMAIN, SERIAL)})
     assert device.name == "EZVIZ CPD5 (BE0000001-BE0000002)"
-    assert reg.async_get_devices(identifiers={(DOMAIN, MONITOR)})[0].name == "EZVIZ CPD5 Monitor (BE0000001)"
+    assert device_of(reg, {(DOMAIN, MONITOR)}).name == "EZVIZ CPD5 Monitor (BE0000001)"
 
 
 async def test_monitor_chime_values(hass: HomeAssistant, client: FakeClient) -> None:
@@ -608,7 +615,7 @@ async def test_old_entities_keep_their_entity_ids(hass: HomeAssistant, client: F
     assert hass.states.get("camera.front_door_live") is not None
     # the device keeps its ID and the name the user gave it
     devices = dr.async_get(hass)
-    device = devices.async_get_devices(identifiers={(DOMAIN, SERIAL)})[0]
+    device = device_of(devices, {(DOMAIN, SERIAL)})
     assert device.id == door.id and device.name_by_user == "Front door"
     assert any(e.platform == DOMAIN for e in er.async_entries_for_device(reg, device.id))
     # and the moved button works
