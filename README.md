@@ -85,6 +85,26 @@ Open **Media** in the Home Assistant sidebar and choose **EZVIZ Video Intercom**
 - Pictures are fetched on demand and the last 100 are kept in memory; nothing is written to disk.
 - The first view of a day takes a moment (up to 4 requests of 50 entries); the list is then kept for a minute (today) or 15 minutes (older days).
 
+## Visitor log card
+
+A dashboard card that lists the rings, unlocks and other events of the last days, newest first, each with its
+picture and, when the door station recorded it, the video from the SD card. Tap a row to see the picture or play
+the video. The chips filter by kind. The integration adds the card by itself (reload the browser once after
+updating); add it with *Edit dashboard > Add card > EZVIZ visitor log*, or in YAML:
+
+```yaml
+type: custom:ezviz-visitor-log-card
+title: Front door          # optional
+serial: BE0000001-BE0000002  # optional; all door stations when left out
+days: 2                    # 1 to 7, default 1
+show_unlock: true          # adds an "Open door" button (asks to confirm), default false
+unlock: door               # door or gate, default door
+event_entity: event.front_door_doorbell   # optional: reload the moment a ring arrives
+```
+
+`show_unlock` needs `serial` when you have more than one door station. The list refreshes every minute.
+The pictures and videos are served through signed links that expire after ten minutes.
+
 ## Notification automation
 
 Import the blueprint, then create an automation from it:

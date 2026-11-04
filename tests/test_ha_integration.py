@@ -1337,3 +1337,50 @@ async def test_blueprint_sends_the_notification_on_the_first_ring(
         assert data["data"]["image"].startswith("/api/image_proxy/")
     finally:
         target.unlink(missing_ok=True)
+
+
+# --- visitor log card ----------------------------------------------------------
+
+
+async def test_visitor_log_lists_events_with_picture_and_clip(hass: HomeAssistant, client: FakeClient, hass_ws_client) -> None:
+    entry = await setup(hass, client)
+    day = dt_util.now().date()
+    ring_time = dt_util.now() - timedelta(seconds=5)
+    client.messages = [ring_message("m-ring", 5)]
+    client.records = [record(day, ring_time.strftime("%H:%M:%S"))]
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": f"{DOMAIN}/visitor_log", "days": 1})
+    answer = (await ws.receive_json())["result"]
+    assert answer["doors"] == [{"serial": SERIAL, "name": "Tor"}] and answer["partial"] is False
+    ring = next(i for i in answer["items"] if i["id"] == "m-ring")
+    assert ring["kind"] == "ring" and ring["serial"] == SERIAL
+    assert ring["picture"].startswith(f"/api/{DOMAIN}/picture/{entry.entry_id}/{SERIAL}/") and "authSig=" in ring["picture"]
+    if day == ring_time.date():  # near midnight the ring belongs to yesterday
+        assert ring["clip"].startswith(f"/api/{DOMAIN}/clip/{entry.entry_id}/{SERIAL}/") and "authSig=" in ring["clip"]
+        assert ring["clip_seconds"] == 49
+
+
+async def test_visitor_log_works_without_the_sd_card_list(hass: HomeAssistant, client: FakeClient, hass_ws_client) -> None:
+    await setup(hass, client)
+    client.messages = [ring_message("m-ring", 5)]
+    client.fail_records = True
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": f"{DOMAIN}/visitor_log"})
+    items = (await ws.receive_json())["result"]["items"]
+    assert [i["id"] for i in items] == ["m-ring"] and items[0]["clip"] is None
+
+
+async def test_visitor_log_refuses_an_unknown_door_and_bad_days(hass: HomeAssistant, client: FakeClient, hass_ws_client) -> None:
+    await setup(hass, client)
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": f"{DOMAIN}/visitor_log", "serial": "NOPE"})
+    assert (await ws.receive_json())["error"]["code"] == "not_found"
+    await ws.send_json({"id": 2, "type": f"{DOMAIN}/visitor_log", "days": 99})
+    assert (await ws.receive_json())["success"] is False
+
+
+async def test_the_card_script_is_served(hass: HomeAssistant, client: FakeClient, hass_client) -> None:
+    await setup(hass, client)
+    http = await hass_client()
+    response = await http.get(f"/{DOMAIN}_static/ezviz-visitor-log-card.js")
+    assert response.status == 200 and "ezviz-visitor-log-card" in await response.text()

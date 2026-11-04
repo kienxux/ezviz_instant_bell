@@ -3,6 +3,7 @@
   "name": "EZVIZ Video Intercom",
   "after_dependencies": [
     "ffmpeg",
+    "frontend",
     "media_source",
     "stream"
   ],
@@ -12,7 +13,8 @@
   "config_flow": true,
   "dependencies": [
     "http",
-    "repairs"
+    "repairs",
+    "websocket_api"
   ],
   "documentation": "https://github.com/kienxux/ezviz_instant_bell",
   "integration_type": "hub",

@@ -12,6 +12,7 @@ import asyncio
 import logging
 import re
 import subprocess
+import threading
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -138,6 +139,17 @@ class ClipStore:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
         )
+        # Read stderr while ffmpeg runs: a full pipe would block ffmpeg, and with it our stdin writes.
+        err_tail = bytearray()
+
+        def _drain_stderr() -> None:
+            assert proc.stderr is not None  # noqa: S101
+            for line in proc.stderr:
+                err_tail.extend(line)
+                del err_tail[:-400]
+
+        drain = threading.Thread(target=_drain_stderr, daemon=True)
+        drain.start()
         failure: Exception | None = None
         try:
             job.state = "streaming"
@@ -157,8 +169,9 @@ class ClipStore:
                 proc.wait(timeout=FFMPEG_TIMEOUT)
             except subprocess.TimeoutExpired:
                 proc.kill()
+            drain.join(timeout=5)
         if not job.bytes_in or not job.part_path.is_file() or job.part_path.stat().st_size == 0:
-            err_text = proc.stderr.read().decode(errors="replace").strip()[-200:] if proc.stderr else ""
+            err_text = bytes(err_tail).decode(errors="replace").strip()[-200:]
             raise ClipUnavailable(str(failure) if failure else (err_text or "No video arrived"))
         if failure:
             _LOGGER.debug("Clip %s is incomplete: %s", job.final_path.name, failure)

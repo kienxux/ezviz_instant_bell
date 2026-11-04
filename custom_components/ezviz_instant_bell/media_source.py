@@ -38,6 +38,7 @@ from .recordings import Recording, parse_clip_id
 PICTURE_PATH = "/api/" + DOMAIN + "/picture/{entry_id}/{serial}/{day}/{message_id}"
 CLIP_PATH = "/api/" + DOMAIN + "/clip/{entry_id}/{serial}/{clip}"
 CLIP_START_WAIT = 45.0  # seconds the first viewer waits for the first video to arrive
+_VIEWS_KEY = f"{DOMAIN}_views_registered"
 RECORDINGS = "rec"
 PICTURES = "pic"
 
@@ -48,9 +49,17 @@ def _hub_for(hass: HomeAssistant, entry_id: str) -> InstantBellHub | None:
     return hub if isinstance(hub, InstantBellHub) else None
 
 
-async def async_get_media_source(hass: HomeAssistant) -> InstantBellMediaSource:
+def register_views(hass: HomeAssistant) -> None:
+    """Add the picture and clip views once (the media browser and the visitor log both need them)."""
+    if hass.data.get(_VIEWS_KEY):
+        return
+    hass.data[_VIEWS_KEY] = True
     hass.http.register_view(EventPictureView())
     hass.http.register_view(ClipView())
+
+
+async def async_get_media_source(hass: HomeAssistant) -> InstantBellMediaSource:
+    register_views(hass)
     return InstantBellMediaSource(hass)
 
 

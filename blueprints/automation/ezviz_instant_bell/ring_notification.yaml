@@ -63,7 +63,9 @@ variables:
   notify_input: !input notify_service
   # Older automations hold a single text; newer ones a list.
   notify_services: "{{ notify_input if notify_input is not string else [notify_input] }}"
-  action_id: "EZVIZ_OPEN_{{ trigger.to_state.last_changed.timestamp() | int }}"
+  # Random per run: a guessable ID would let anyone who can fire events open the door.
+  # (Three draws: the template sandbox refuses a range above 100000.)
+  action_id: "EZVIZ_OPEN_{{ range(100000) | random }}{{ range(100000) | random }}{{ range(100000) | random }}"
 
 triggers:
   - trigger: state

@@ -12,8 +12,10 @@ from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv, issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
 
+from .api import async_setup_card
 from .const import CONF_ENCRYPTION_KEY, DOMAIN
 from .coordinator import StatusCoordinator
 from .hub import InstantBellHub
@@ -126,7 +128,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     hass.services.async_register(DOMAIN, "unlock_door", unlock_door, SERVICE_SCHEMA)
     hass.services.async_register(DOMAIN, "unlock_gate", unlock_gate, SERVICE_SCHEMA)
-    hass.services.async_register(
+    async_register_admin_service(
+        hass,
         DOMAIN,
         "set_video_encryption",
         set_video_encryption,
@@ -138,9 +141,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             }
         ),
     )
-    hass.services.async_register(
-        DOMAIN, "fetch_encryption_key", fetch_encryption_key, vol.Schema({vol.Optional("code"): cv.string})
+    async_register_admin_service(
+        hass, DOMAIN, "fetch_encryption_key", fetch_encryption_key, vol.Schema({vol.Optional("code"): cv.string})
     )
+    await async_setup_card(hass)
     return True
 
 

@@ -452,6 +452,7 @@ class InstantBellHub:
         try:
             await self.hass.async_add_executor_job(self._do_unlock, serial, lock_no)
         except Exception as err:  # noqa: BLE001
+            self._last_unlock.pop(key, None)  # a failed press must not block the retry
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="unlock_failed",
