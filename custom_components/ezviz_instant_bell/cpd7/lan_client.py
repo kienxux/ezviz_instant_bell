@@ -8,6 +8,7 @@ are documented in docs/cpd7-stream-recipe/02-PROTOCOL.md.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import logging
 import re
 import socket
@@ -33,6 +34,9 @@ CMD_PLAY = 0x3105  # play           (port 9020)
 
 HEADER_LEN = 32
 MD5_TRAILER_LEN = 32
+# Control answers are a few hundred bytes of XML. A length far beyond that is
+# a broken or hostile device, not something to allocate memory for.
+MAX_BODY_LEN = 64 * 1024
 
 MAGIC = b"\x9e\xba\xac\xe9"
 AES_IV = b"01234567" + b"\x00" * 8
@@ -85,23 +89,38 @@ def _parse_response(wire: bytes, key: bytes) -> tuple[dict, bytes]:
     return {"seq": seq, "cmd": cmd, "body_len": body_len}, plain
 
 
+def _recv_exact(sock: socket.socket, count: int, what: str) -> bytes:
+    data = bytearray()
+    while len(data) < count:
+        chunk = sock.recv(count - len(data))
+        if not chunk:
+            raise ConnectionError(f"peer closed during {what}")
+        data.extend(chunk)
+    return bytes(data)
+
+
 def _recv_response(sock: socket.socket, timeout: float = 5.0) -> bytes:
     sock.settimeout(timeout)
-    header = b""
-    while len(header) < HEADER_LEN:
-        chunk = sock.recv(HEADER_LEN - len(header))
-        if not chunk:
-            raise ConnectionError("peer closed during header")
-        header += chunk
+    header = _recv_exact(sock, HEADER_LEN, "header")
     body_len = struct.unpack(">I", header[24:28])[0]
-    rest_total = body_len + MD5_TRAILER_LEN
-    rest = b""
-    while len(rest) < rest_total:
-        chunk = sock.recv(rest_total - len(rest))
-        if not chunk:
-            raise ConnectionError("peer closed during body")
-        rest += chunk
+    if body_len > MAX_BODY_LEN:
+        raise ConnectionError(f"answer of {body_len} bytes is too long")
+    rest = _recv_exact(sock, body_len + MD5_TRAILER_LEN, "body")
+    body, trailer = rest[:body_len], rest[body_len:]
+    if trailer != hashlib.md5(body).hexdigest().encode("ascii"):  # noqa: S324 - a checksum of the device's own format
+        # Only noted: the exact rule for answers has not been checked on every model.
+        _LOGGER.debug("CPD7 answer trailer does not match the md5 of the body")
     return header + rest
+
+
+def check_lan_host(host: str) -> None:
+    """Refuse anything that is not a local address: the host comes from cloud data."""
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError as err:
+        raise ConnectionError(f"{host!r} is not an IP address") from err
+    if address.is_global or address.is_multicast or address.is_unspecified:
+        raise ConnectionError(f"{host} is not a local network address")
 
 
 def _discover_local_ip(host: str) -> str:
@@ -252,6 +271,7 @@ class Cpd7LanClient:
         if self._play_sock is not None:
             raise RuntimeError("already started")
 
+        check_lan_host(self._host)
         self._ecdh_priv, self._ecdh_pub_b64 = generate_ecdh_keypair()
         my_ip = _discover_local_ip(self._host)
         _LOGGER.debug("CPD7 LAN start host=%s my_ip=%s", self._host, my_ip)
