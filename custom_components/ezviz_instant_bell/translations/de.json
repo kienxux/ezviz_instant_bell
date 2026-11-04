@@ -1,0 +1,401 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bei EZVIZ anmelden",
+        "description": "Verwende das Konto, dem die Türklingel gehört. Mit der ersten Anmeldung wird dieses Home Assistant als ein EZVIZ-Terminal registriert.",
+        "data": {
+          "username": "E-Mail oder Telefonnummer",
+          "password": "Passwort",
+          "region": "Region"
+        },
+        "menu_options": {
+          "legacy": "Anmeldung meiner bestehenden EZVIZ-HP7-Einrichtung übernehmen",
+          "manual": "EZVIZ-Anmeldedaten erneut eingeben"
+        }
+      },
+      "code": {
+        "title": "Bestätigungscode",
+        "description": "EZVIZ hat dir einen Bestätigungscode geschickt. Gib ihn hier ein.",
+        "data": {
+          "code": "Bestätigungscode"
+        }
+      },
+      "devices": {
+        "title": "Türklingel auswählen",
+        "description": "Wähle die Türstation. Bei einem HP7 oder CP7 ist das der mit BDoorBell markierte Eintrag. Der Innenmonitor wird automatisch gefunden.",
+        "data": {
+          "devices": "Türklingeln"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Erneut anmelden",
+        "description": "Die Anmeldung für {username} funktioniert nicht mehr. Gib das aktuelle Passwort ein.",
+        "data": {
+          "password": "Passwort"
+        }
+      },
+      "reconfigure": {
+        "title": "EZVIZ-Anmeldung oder Türklingeln ändern",
+        "description": "Konto: {username}. Lass das Passwort leer, um das bisherige zu behalten. Im nächsten Schritt wählst du die Türklingeln erneut aus.",
+        "data": {
+          "password": "Passwort",
+          "region": "Region"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Das Konto oder das Passwort wurde nicht akzeptiert.",
+      "invalid_code": "Der Bestätigungscode wurde nicht akzeptiert.",
+      "cannot_connect": "EZVIZ ist nicht erreichbar."
+    },
+    "abort": {
+      "already_configured": "Dieses Konto ist bereits eingerichtet.",
+      "no_devices": "Auf diesem Konto wurden keine Geräte gefunden.",
+      "cannot_connect": "EZVIZ ist nicht erreichbar.",
+      "reauth_successful": "Anmeldung aktualisiert.",
+      "reconfigure_successful": "Die Einstellungen wurden aktualisiert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Optionen",
+        "data": {
+          "poll_interval": "Prüfintervall für Klingeln (Sekunden)",
+          "door_lock_no": "Schlossnummer der Tür",
+          "gate_lock_no": "Schlossnummer des Tors",
+          "monitor_serials": "Seriennummern der Innenmonitore",
+          "relay_port": "Fester TCP-Port für das Live-Relay (0 = zufällig, 8554 empfohlen für go2rtc / mediamtx)",
+          "relay_bind": "Listen-Adresse des Relays (127.0.0.1 = nur lokal, sicherer Standard; 0.0.0.0 gibt den UNGESCHÜTZTEN Rohstream für andere Rechner frei, z. B. Frigate – nur in vertrauenswürdigen Netzen, braucht einen festen Port)",
+          "aggressive_mpegts": "Aggressive MPEG-TS-Kompatibilität (aktivieren, wenn im Log 'Immediate exit requested' steht; standardmäßig besser aus)",
+          "video_codec": "Video-Codec (auto = erkennen; hevc wandelt H.265 für WebRTC in H.264 um; hevc_copy reicht H.265 unverändert durch, für schwache Rechner / Frigate / Safari)",
+          "stream_source": "Stream-Quelle (cloud = EZVIZ-VTM-Relay; local = direkt im LAN, umgeht die Cloud und behebt 'kein Live-Bild' bei Firmware, die nicht in die Cloud sendet – HA muss im selben Netz wie die Türklingel sein; auto = erst lokal, dann Cloud)",
+          "stream_mode": "Live-Ansicht (auto = Standard: erkennt den Codec und wählt selbst – H.264 → webrtc, HEVC → mjpeg; webrtc = HA-Stream/go2rtc, mit Ton und geringer Verzögerung, zeigt aber kein HEVC ohne Umwandlung; mjpeg = ffmpeg pro Zuschauer nach Motion-JPEG, codec-unabhängig und robust, aber ohne Ton)",
+          "stream_quality": "LAN-Stream-Qualität (main = volle Auflösung; sub = niedrig aufgelöster Nebenstream des Geräts, viel leichter zu dekodieren – nutze ihn, wenn das Bild bei schwachen Rechnern wie einem Raspberry Pi immer weiter hinterherhinkt. Gilt nur für die Quelle 'local')",
+          "encryption_key": "Verschlüsselungsschlüssel (meist der 6-stellige Verifizierungscode vom Gerät). Nur nötig, wenn die Türklingel das Video verschlüsselt und die Cloud den Schlüssel nicht herausgibt: Damit wird der Stream entschlüsselt, ohne die Verschlüsselung abzuschalten.",
+          "diagnostic_dumps": "Diagnose-Dumps (schreibt zwei .bin-Dateien nach /config mit dem Anfang des Streams, für die Fehleranalyse bei Videoproblemen. Ausgeschaltet lassen: im Normalbetrieb nutzlos)",
+          "save_clips": "Video jeder Klingel speichern (holt nach dem Klingeln die Aufnahme von der SD-Karte und behält sie)"
+        },
+        "data_description": {
+          "poll_interval": "Wie oft EZVIZ nach neuen Klingeln gefragt wird. Kürzer bedeutet eine schnellere Benachrichtigung.",
+          "door_lock_no": "Bei einem HP7 / CP7 normalerweise 2.",
+          "gate_lock_no": "Bei einem HP7 / CP7 normalerweise 1.",
+          "monitor_serials": "Leer lassen, um den Monitor automatisch zu finden. Sonst die Seriennummern durch Kommas getrennt angeben (bei mehreren Monitoren im Haus).",
+          "save_clips": "Standardmäßig aus. Ein gespeichertes Video wird durch das Ereignis ezviz_instant_bell_clip_saved und den Sensor 'Zuletzt gespeichertes Video' gemeldet. Braucht eine SD-Karte in der Türstation und ausgeschaltete Videoverschlüsselung; die Videos zählen zu den 500 MB des Video-Ordners."
+        },
+        "description": "Optionen für das Live-Video gelten nach dem Neuladen der Integration."
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "name": {
+        "name": "Gerätename"
+      },
+      "version": {
+        "name": "Firmware"
+      },
+      "status": {
+        "name": "Status",
+        "state": {
+          "online": "online",
+          "offline": "offline"
+        }
+      },
+      "signal": {
+        "name": "WLAN-Signal"
+      },
+      "ssid": {
+        "name": "WLAN-Name"
+      },
+      "local_ip": {
+        "name": "Lokale IP"
+      },
+      "wan_ip": {
+        "name": "WAN-IP"
+      },
+      "motion": {
+        "name": "Bewegung",
+        "state": {
+          "detected": "erkannt",
+          "none": "keine"
+        }
+      },
+      "last_alarm_time": {
+        "name": "Letzter Alarm"
+      },
+      "alarm_name": {
+        "name": "Alarmart"
+      },
+      "seconds_last_trigger": {
+        "name": "Sekunden seit letzter Bewegung"
+      },
+      "upgrade_available": {
+        "name": "Update verfügbar",
+        "state": {
+          "yes": "ja",
+          "no": "nein"
+        }
+      },
+      "mic_volume": {
+        "name": "Mikrofonlautstärke"
+      },
+      "terminals": {
+        "name": "Terminals in Benutzung",
+        "unit_of_measurement": "Terminals"
+      },
+      "last_clip": {
+        "name": "Zuletzt gespeichertes Video"
+      }
+    },
+    "binary_sensor": {
+      "motion_trigger": {
+        "name": "Bewegungserkennung"
+      },
+      "smart_detection_alarm": {
+        "name": "Smart-Erkennungsalarm"
+      },
+      "intelligent_detection_alarm": {
+        "name": "Intelligente Erkennung"
+      },
+      "doorbell_ringing": {
+        "name": "Türklingel läutet"
+      },
+      "gate_open": {
+        "name": "Tor offen"
+      },
+      "unlock_lock": {
+        "name": "Schloss entriegelt"
+      },
+      "unlock_rfid": {
+        "name": "Entriegelung per RFID"
+      },
+      "unlock_face": {
+        "name": "Entriegelung per Gesicht"
+      },
+      "unlock_palm": {
+        "name": "Entriegelung per Handfläche"
+      },
+      "unlock_code": {
+        "name": "Entriegelung per Code"
+      },
+      "unlock_app": {
+        "name": "Entriegelung per App"
+      },
+      "feature_mute": {
+        "name": "Stumm"
+      },
+      "feature_loitering": {
+        "name": "Erkennung von Herumlungern"
+      },
+      "feature_stranger_detection": {
+        "name": "Erkennung Fremder"
+      },
+      "feature_human_detection": {
+        "name": "Personenerkennung"
+      }
+    },
+    "button": {
+      "unlock_gate": {
+        "name": "Tor öffnen"
+      },
+      "unlock_door": {
+        "name": "Tür öffnen"
+      },
+      "open_door": {
+        "name": "Tür öffnen"
+      },
+      "open_gate": {
+        "name": "Tor öffnen"
+      }
+    },
+    "switch": {
+      "chime_sound": {
+        "name": "Türklingelton"
+      },
+      "chime_sound_monitor": {
+        "name": "Innenmonitor-Klingelton"
+      },
+      "dnd": {
+        "name": "Nicht stören"
+      },
+      "privacy": {
+        "name": "Privatsphäre"
+      },
+      "defence": {
+        "name": "Scharf geschaltet"
+      },
+      "label_light": {
+        "name": "Namensschild-Beleuchtung"
+      },
+      "chime_pir": {
+        "name": "Bewegungs-Signalton"
+      },
+      "chime_pir_monitor": {
+        "name": "Monitor-Bewegungs-Signalton"
+      }
+    },
+    "number": {
+      "chime_volume": {
+        "name": "Klingellautstärke"
+      },
+      "chime_volume_monitor": {
+        "name": "Monitorlautstärke"
+      },
+      "chime_ringtone": {
+        "name": "Klingelton"
+      },
+      "chime_pir_ringtone": {
+        "name": "Bewegungs-Klingelton"
+      },
+      "chime_ringtone_monitor": {
+        "name": "Monitor-Klingelton"
+      },
+      "chime_pir_ringtone_monitor": {
+        "name": "Monitor-Bewegungs-Klingelton"
+      }
+    },
+    "camera": {
+      "last_snapshot": {
+        "name": "Letzter Schnappschuss"
+      },
+      "live": {
+        "name": "Live"
+      }
+    },
+    "event": {
+      "bell": {
+        "name": "Türklingel",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "Klingel",
+              "door_unlock": "Tür geöffnet",
+              "gate_open": "Tor geöffnet",
+              "other": "Sonstiges"
+            }
+          }
+        }
+      }
+    },
+    "image": {
+      "last_picture": {
+        "name": "Letztes Bild"
+      }
+    }
+  },
+  "exceptions": {
+    "unlock_failed": {
+      "message": "Das Schloss konnte nicht geöffnet werden: {error}"
+    },
+    "setting_failed": {
+      "message": "Die Einstellung konnte nicht geändert werden: {error}"
+    },
+    "no_such_doorbell": {
+      "message": "Es ist keine Türklingel mit dieser Seriennummer eingerichtet."
+    },
+    "serial_needed": {
+      "message": "Es sind mehrere Türklingeln eingerichtet: Gib die Seriennummer an."
+    },
+    "history_failed": {
+      "message": "Die Ereignisliste konnte nicht von EZVIZ gelesen werden: {error}"
+    },
+    "recordings_failed": {
+      "message": "Die Aufnahmen der SD-Karte konnten nicht von EZVIZ gelesen werden: {error}"
+    }
+  },
+  "issues": {
+    "terminals_almost_full": {
+      "title": "EZVIZ-Terminalplätze fast belegt",
+      "description": "Auf diesem EZVIZ-Konto sind {count} von {limit} Terminals registriert. Sind alle belegt, schlagen neue Anmeldungen fehl. Öffne die EZVIZ-App, gehe zu den angemeldeten Geräten deines Kontos und entferne die, die du nicht mehr benutzt."
+    },
+    "legacy_running": {
+      "title": "Die alte EZVIZ-HP7-Integration läuft noch",
+      "description": "Die Entitäten der früheren Integration ezviz_hp7 konnten nicht übernommen werden, weil diese noch läuft. Schalte sie aus (Einstellungen > Geräte & Dienste > EZVIZ HP7 > Drei-Punkte-Menü > Deaktivieren) oder entferne sie in HACS und starte neu, lade dann diese Integration neu. Deine Entitäts-IDs, Dashboards und Handy-Widgets bleiben dabei erhalten."
+    },
+    "hevc_webrtc": {
+      "title": "HEVC-Live-Ansicht im WebRTC-Modus",
+      "description": "Die Türklingel {serial} sendet HEVC/H.265, der Stream-Modus steht aber auf WebRTC. Browser können HEVC über WebRTC nicht anzeigen, und go2rtc müsste umwandeln, was auf schwachen Rechnern scheitert (graues Bild oder 'Verbindung abgelehnt').\n\nÖffne die Konfiguration der Integration, stelle den Stream-Modus auf 'mjpeg' (codec-unabhängig, ohne go2rtc) und lade neu. Um WebRTC zu behalten, stelle alternativ den Video-Codec auf 'hevc', damit in H.264 umgewandelt wird."
+    },
+    "stream_encrypted": {
+      "title": "Das Gerät verschlüsselt den Videostream",
+      "description": "Die Türklingel {serial} verschlüsselt den Videostream (Bild-/Videoverschlüsselung ist an). Der Container bleibt lesbar, die Nutzdaten sind aber verschlüsselt, daher kann ffmpeg nicht dekodieren und das Live-Bild bleibt schwarz.\n\nÖffne die EZVIZ-App → das Gerät → Einstellungen → **Bild-/Videoverschlüsselung** und schalte sie aus (dafür wird der 6-stellige Gerätecode verlangt). Hinweis: Ein Firmware- oder App-Update kann sie unbemerkt wieder einschalten."
+    },
+    "encryption_otp": {
+      "title": "Verschlüsselungscode für {serial} nötig",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Gib den Code ein, den EZVIZ dir geschickt hat",
+            "description": "Die Türklingel {serial} verschlüsselt ihr Video, und EZVIZ hat soeben einen 4-stelligen Sicherheitscode (Betreff \"[Device Encryption] Security Code\") an die Adresse deines Kontos geschickt. Der Code schaltet den Stream frei und läuft nach etwa 30 Minuten ab.\n\nGib ihn unten ein. Verwende **nicht** den 6-stelligen Code vom Typenschild des Geräts – diese Firmware lehnt ihn ab. Ein leeres Feld fordert bei EZVIZ einen neuen Code an.",
+            "data": {
+              "code": "Sicherheitscode aus der E-Mail"
+            }
+          }
+        },
+        "error": {
+          "invalid_code": "EZVIZ hat diesen Code nicht akzeptiert. Er ist wahrscheinlich abgelaufen – sende ein leeres Feld, um einen neuen zu erhalten.",
+          "resent": "Ein neuer Code wurde gesendet. Sieh in deinen E-Mails nach und gib ihn hier ein."
+        },
+        "abort": {
+          "no_device": "Diese Türklingel ist in Home Assistant nicht mehr eingerichtet."
+        }
+      }
+    }
+  },
+  "services": {
+    "unlock_door": {
+      "name": "Tür öffnen",
+      "description": "Öffnet die Tür.",
+      "fields": {
+        "serial": {
+          "name": "Seriennummer",
+          "description": "Seriennummer der Türklingel. Optional, wenn nur eine eingerichtet ist."
+        }
+      }
+    },
+    "unlock_gate": {
+      "name": "Tor öffnen",
+      "description": "Öffnet das Tor.",
+      "fields": {
+        "serial": {
+          "name": "Seriennummer",
+          "description": "Seriennummer der Türklingel. Optional, wenn nur eine eingerichtet ist."
+        }
+      }
+    },
+    "set_video_encryption": {
+      "name": "Videoverschlüsselung einstellen",
+      "description": "Schaltet die Bild-/Videoverschlüsselung der Türklingel ein oder aus. Die Verschlüsselung blockiert den lokalen Live-Stream. Das ändert eine Sicherheitseinstellung des Geräts.",
+      "fields": {
+        "serial": {
+          "name": "Seriennummer",
+          "description": "Seriennummer der Türklingel. Optional, wenn nur eine eingerichtet ist."
+        },
+        "enable": {
+          "name": "Verschlüsselung an",
+          "description": "An, um die Verschlüsselung zu aktivieren, aus, um sie zu deaktivieren."
+        },
+        "verification_code": {
+          "name": "Bestätigungscode",
+          "description": "Der 6-stellige Code auf dem Typenschild des Geräts oder der kurze Code, den EZVIZ bei neuerer Firmware per E-Mail schickt."
+        }
+      }
+    },
+    "fetch_encryption_key": {
+      "name": "Verschlüsselungsschlüssel abrufen",
+      "description": "Holt den Schlüssel, der das Video einer verschlüsselten Türklingel entschlüsselt. Einmal ohne Code aufrufen (EZVIZ schickt einen Einmalcode per E-Mail), dann erneut mit dem Code.",
+      "fields": {
+        "serial": {
+          "name": "Türstation",
+          "description": "Seriennummer der Türstation. Nötig, wenn das Konto mehrere hat."
+        },
+        "code": {
+          "name": "Code",
+          "description": "Der 4-stellige Code aus der E-Mail. Leer lassen, um einen senden zu lassen."
+        }
+      }
+    }
+  }
+}
