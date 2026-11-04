@@ -26,6 +26,10 @@ set_video_encryption:
         text:
 fetch_encryption_key:
   fields:
+    serial:
+      required: false
+      selector:
+        text:
     code:
       required: false
       selector:

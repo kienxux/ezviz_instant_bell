@@ -20,7 +20,8 @@ from homeassistant import data_entry_flow
 from homeassistant.components.repairs import RepairsFlow
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_ENCRYPTION_KEY, DOMAIN
+from .const import DOMAIN
+from .keys import with_keys
 from .hub import InstantBellHub
 
 _LOGGER = logging.getLogger(__name__)
@@ -60,7 +61,9 @@ class EncryptionOtpRepairFlow(RepairsFlow):
                     _LOGGER.warning("Key exchange failed for %s: %s", self._serial, exc)
                     key = None
                 if key:
-                    self.hass.config_entries.async_update_entry(entry, options={**entry.options, CONF_ENCRYPTION_KEY: key})
+                    self.hass.config_entries.async_update_entry(
+                        entry, options=with_keys(entry.options, {self._serial: key}, len(hub.serials))
+                    )
                     _LOGGER.warning("Stored the camera key for %s; the entry reloads and decrypts the stream.", self._serial)
                     return self.async_create_entry(title="", data={})
                 errors["code"] = "invalid_code"

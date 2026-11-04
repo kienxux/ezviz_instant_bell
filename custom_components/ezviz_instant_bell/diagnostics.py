@@ -15,9 +15,10 @@ from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
 
 from . import InstantBellConfigEntry
-from .const import CONF_ENCRYPTION_KEY, CONF_MONITOR_SERIALS
+from .const import CONF_MONITOR_SERIALS
+from .keys import CONF_KEY, CONF_KEYS
 
-TO_REDACT = {"username", "password", CONF_ENCRYPTION_KEY, CONF_MONITOR_SERIALS, "names", "devices"}
+TO_REDACT = {"username", "password", CONF_KEY, CONF_KEYS, CONF_MONITOR_SERIALS, "names", "devices"}
 
 # Status values that say nothing about the people or the network.
 SAFE_STATUS = {

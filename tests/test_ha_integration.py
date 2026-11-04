@@ -300,9 +300,9 @@ async def test_sensor_values_and_names(hass: HomeAssistant, client: FakeClient) 
     assert hass.states.get(legacy_entity(hass, "switch", "privacy")).state == "off"
     # device named the way the earlier integration named it
     reg = dr.async_get(hass)
-    device = reg.async_get_device(identifiers={(DOMAIN, SERIAL)})
+    device = reg.async_get_devices(identifiers={(DOMAIN, SERIAL)})[0]
     assert device.name == "EZVIZ CPD5 (BE0000001-BE0000002)"
-    assert reg.async_get_device(identifiers={(DOMAIN, MONITOR)}).name == "EZVIZ CPD5 Monitor (BE0000001)"
+    assert reg.async_get_devices(identifiers={(DOMAIN, MONITOR)})[0].name == "EZVIZ CPD5 Monitor (BE0000001)"
 
 
 async def test_monitor_chime_values(hass: HomeAssistant, client: FakeClient) -> None:
@@ -608,9 +608,9 @@ async def test_old_entities_keep_their_entity_ids(hass: HomeAssistant, client: F
     assert hass.states.get("camera.front_door_live") is not None
     # the device keeps its ID and the name the user gave it
     devices = dr.async_get(hass)
-    device = devices.async_get_device(identifiers={(DOMAIN, SERIAL)})
+    device = devices.async_get_devices(identifiers={(DOMAIN, SERIAL)})[0]
     assert device.id == door.id and device.name_by_user == "Front door"
-    assert entry.entry_id in device.config_entries
+    assert any(e.platform == DOMAIN for e in er.async_entries_for_device(reg, device.id))
     # and the moved button works
     await hass.services.async_call("button", "press", {"entity_id": "button.front_door_unlock_door"}, blocking=True)
     assert client.unlocks == [(SERIAL, "internal-user", 2)]
@@ -840,13 +840,15 @@ async def test_encryption_repair_flow(hass: HomeAssistant, client: FakeClient) -
     flow.hass = hass
     result = await flow.async_step_init()
     assert result["type"] == "form" and result["step_id"] == "confirm"
-    result = await flow.async_step_confirm({"code": "1234"})
-    assert result["type"] == "create_entry"
-    assert entry.options["encryption_key"] == "KEY123"
-    # a wrong code is refused
+    # a wrong code is refused (first: storing a key reloads the entry)
     client.cam_key_answers = [RuntimeError("bad"), RuntimeError("bad")]
     result = await flow.async_step_confirm({"code": "0000"})
     assert result["type"] == "form" and result["errors"] == {"code": "invalid_code"}
+    client.cam_key_answers = ["KEY123"]
+    result = await flow.async_step_confirm({"code": "1234"})
+    assert result["type"] == "create_entry"
+    assert entry.options["encryption_key"] == "KEY123"
+    assert entry.options["encryption_keys"] == {"BE0000001": "KEY123"}
 
 
 async def test_set_video_encryption_service(hass: HomeAssistant, client: FakeClient) -> None:

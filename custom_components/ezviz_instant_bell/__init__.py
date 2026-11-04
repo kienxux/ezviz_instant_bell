@@ -16,7 +16,8 @@ from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
 
 from .api import async_setup_card
-from .const import CONF_ENCRYPTION_KEY, DOMAIN
+from .const import DOMAIN
+from .keys import with_keys
 from .coordinator import StatusCoordinator
 from .hub import InstantBellHub
 from .migration import async_migrate_legacy
@@ -98,14 +99,21 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         raise ServiceValidationError(translation_domain=DOMAIN, translation_key="no_such_doorbell")
 
     async def fetch_encryption_key(call: ServiceCall) -> None:
-        """Get the camera key and keep it in the options.
+        """Get the camera key of a door station and keep it in the options.
 
         Call once without a code (EZVIZ then e-mails a one-time code), then
-        again with the code.
+        again with the code. Name the door station with ``serial`` when the
+        account has more than one: every code belongs to one device.
         """
         code = str(call.data.get("code", "")).strip()
+        wanted = str(call.data.get("serial") or "").strip()
         for entry, hub in _hubs():
+            if not wanted and len(hub.serials) > 1:
+                raise ServiceValidationError(translation_domain=DOMAIN, translation_key="serial_needed")
+            found: dict[str, str] = {}
             for serial in hub.serials:
+                if wanted and not (serial == wanted or same_device(serial, wanted)):
+                    continue
                 try:
                     key = await hass.async_add_executor_job(hub.stream.fetch_camera_key_with_code, serial, code)
                 except Exception as err:  # noqa: BLE001
@@ -123,8 +131,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                         serial,
                     )
                     continue
-                hass.config_entries.async_update_entry(entry, options={**entry.options, CONF_ENCRYPTION_KEY: key})
-                _LOGGER.warning("Stored the camera key for %s; the entry reloads and decrypts the stream.", serial)
+                found[serial] = key
+            if found:  # one update, so that the entry reloads once
+                hass.config_entries.async_update_entry(entry, options=with_keys(entry.options, found, len(hub.serials)))
+                _LOGGER.warning("Stored the camera key for %s; the entry reloads and decrypts the stream.", ", ".join(found))
 
     hass.services.async_register(DOMAIN, "unlock_door", unlock_door, SERVICE_SCHEMA)
     hass.services.async_register(DOMAIN, "unlock_gate", unlock_gate, SERVICE_SCHEMA)
@@ -142,7 +152,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         ),
     )
     async_register_admin_service(
-        hass, DOMAIN, "fetch_encryption_key", fetch_encryption_key, vol.Schema({vol.Optional("code"): cv.string})
+        hass, DOMAIN, "fetch_encryption_key", fetch_encryption_key, vol.Schema({vol.Optional("code"): cv.string, vol.Optional("serial"): cv.string})
     )
     await async_setup_card(hass)
     return True

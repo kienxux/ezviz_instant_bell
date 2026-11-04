@@ -373,6 +373,10 @@
       "name": "Fetch encryption key",
       "description": "Get the key that decrypts the video of an encrypted doorbell. Call once without a code (EZVIZ e-mails a one-time code), then again with the code.",
       "fields": {
+        "serial": {
+          "name": "Door station",
+          "description": "Serial of the door station. Needed when the account has more than one."
+        },
         "code": {
           "name": "Code",
           "description": "The 4-digit code from the e-mail. Leave empty to have one sent."

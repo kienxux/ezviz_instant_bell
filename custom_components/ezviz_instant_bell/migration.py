@@ -29,6 +29,14 @@ def _belongs_to(unique_id: str, serials: set[str]) -> bool:
     return any(unique_id.startswith(f"{LEGACY_DOMAIN}_{serial}_") for serial in serials)
 
 
+def _device_with_identifiers(devices: Any, identifiers: set[tuple[str, str]], entry_id: str) -> Any:
+    """The device of this entry with these identifiers (newer Home Assistant refuses ``async_get_device``)."""
+    if hasattr(devices, "async_get_devices"):
+        found = devices.async_get_devices(identifiers=identifiers, config_entry_id=entry_id)
+        return found[0] if found else None
+    return devices.async_get_device(identifiers=identifiers)
+
+
 def async_migrate_legacy(hass: HomeAssistant, entry: ConfigEntry, serials: set[str]) -> tuple[int, bool]:
     """Move the old entities of ``serials`` to ``entry``.
 
@@ -71,7 +79,7 @@ def async_migrate_legacy(hass: HomeAssistant, entry: ConfigEntry, serials: set[s
         new_ids = {(DOMAIN, ident) for domain, ident in device.identifiers if domain == LEGACY_DOMAIN}
         if not new_ids:
             continue
-        existing = devices.async_get_device(identifiers=new_ids)
+        existing = _device_with_identifiers(devices, new_ids, entry.entry_id)
         if existing is not None and existing.id != device.id:
             devices.async_update_device(existing.id, add_config_entry_id=entry.entry_id)
             target_device[legacy_device_id] = existing.id
