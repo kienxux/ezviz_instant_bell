@@ -1,0 +1,51 @@
+# Changelog
+
+All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
+
+## 0.7.0
+
+- Option to save the video of every ring; event `ezviz_instant_bell_clip_saved` and sensor *Last saved clip*
+- Event `ezviz_instant_bell_door_opened` and logbook entry for who opened the door or gate from Home Assistant
+- Reconfigure flow: change region, password or door stations without removing the integration
+- One encryption key per door station; `fetch_encryption_key` takes a `serial`
+- The local network client refuses oversized answers and addresses that are not on your network
+- Works with the device registry of Home Assistant 2026.10
+- German translation
+- Product name is now **EZVIZ HP7 / CP7 Video Intercom**; README rewritten
+
+## 0.6.1
+
+- Setup no longer fails when the device reports a value the EZVIZ library does not know (CP5 with sound mode 5)
+- Diagnostics download without account data, serial numbers, addresses or keys
+- `pyezvizapi` is limited to 1.0.x; a test checks the library calls this integration relies on
+
+## 0.6.0
+
+- Visitor log dashboard card
+- The ring blueprint uses a random ID for its Open door button
+- The encryption actions need an administrator
+- A failed unlock no longer blocks the retry for a few seconds
+- A flood of ffmpeg messages can no longer stall the clip queue
+
+## 0.5.x
+
+- 0.5.1: the ring blueprint ignored the first ring of a new entity
+- 0.5.0: browse and play the SD-card recordings of the door station
+
+## 0.4.x
+
+- 0.4.1: the history showed no unlock entries
+- 0.4.0: pictures of past events in the Media browser; the blueprint can notify several phones
+
+## 0.3.x
+
+- 0.3.1: the "Open door" / "Open gate" buttons of 0.1.0 and their entity IDs are kept
+- 0.3.0: live video (cloud and local network) and encryption handling
+
+## 0.2.0
+
+- Full set of sensors, switches, sliders and buttons; entities of the earlier `ezviz_hp7` integration move over with their IDs
+
+## 0.1.0
+
+- Instant ring picture and Open door

@@ -164,7 +164,7 @@ If the old integration is still running when you add this one, a repair notice s
 
 ## Roadmap and contributing
 
-See [ROADMAP.md](ROADMAP.md) for what is planned, and the [open issues](https://github.com/kienxux/ezviz_instant_bell/issues) to vote or add ideas. Bug reports and pull requests are welcome; the bug template asks for the version, model and diagnostics, which is what makes a problem fixable.
+See [ROADMAP.md](ROADMAP.md) for what is planned, [CHANGELOG.md](CHANGELOG.md) for what changed, and the [open issues](https://github.com/kienxux/ezviz_instant_bell/issues) to vote or add ideas. Bug reports and pull requests are welcome (see [CONTRIBUTING.md](CONTRIBUTING.md); security reports go through [SECURITY.md](SECURITY.md)); the bug template asks for the version, model and diagnostics, which is what makes a problem fixable.
 
 ## Credits and licence
 

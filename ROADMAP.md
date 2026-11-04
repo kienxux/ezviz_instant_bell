@@ -6,6 +6,7 @@ one to say what you need.
 
 ## Done
 
+- German translation (after 0.7.0)
 - 0.7.0: option to save the video of every ring (event `ezviz_instant_bell_clip_saved`, sensor *Last saved clip*); reconfigure flow; logbook entry and event for who opened the door from Home Assistant; one encryption key per door station; the LAN client refuses oversized answers and non-local hosts; works with the device registry of Home Assistant 2026.10
 - 0.6.1: setup no longer fails on device values the library does not know (CP5, issue #1); diagnostics download; `pyezvizapi` limited to 1.0.x with a test that guards the calls we rely on
 - 0.6.0: visitor log dashboard card (rings, unlocks, pictures and SD-card recordings in one list); hardening of the ring blueprint, the encryption actions, unlock retry and clip fetching
@@ -13,7 +14,6 @@ one to say what you need.
 
 ## Next
 
-- German translation of the setup screens and entity names
 - More about what the door station reports: motion and person events
 
 ## Later (ideas, no dates; built if someone asks)
