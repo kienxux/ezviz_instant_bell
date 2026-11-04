@@ -13,6 +13,7 @@ from typing import Any
 
 from . import state
 from .alarms import alarm_from_answer
+from .compat import tolerate_unknown_enum_values
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ class DeviceApi:
         """All values of one door station (and its monitors) for the entities."""
         from pyezvizapi.camera import EzvizCamera
 
+        tolerate_unknown_enum_values()  # a CP5 reports sound mode 5, which the library rejects
         client = self._get_client()
         info = infos.get(serial)
         if not isinstance(info, dict):

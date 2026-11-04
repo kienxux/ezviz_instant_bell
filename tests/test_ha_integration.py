@@ -1384,3 +1384,26 @@ async def test_the_card_script_is_served(hass: HomeAssistant, client: FakeClient
     http = await hass_client()
     response = await http.get(f"/{DOMAIN}_static/ezviz-visitor-log-card.js")
     assert response.status == 200 and "ezviz-visitor-log-card" in await response.text()
+
+
+# --- a device value the library does not know (issue #1: CP5 reports sound mode 5) -----
+
+
+async def test_setup_survives_a_sound_mode_the_library_does_not_know(hass: HomeAssistant, client: FakeClient) -> None:
+    client.infos[SERIAL]["STATUS"]["alarmSoundMode"] = 5
+    entry = await setup(hass, client)
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.runtime_data.coordinator.last_update_success
+
+
+# --- diagnostics ------------------------------------------------------------------
+
+
+async def test_diagnostics_have_no_secrets(hass: HomeAssistant, client: FakeClient) -> None:
+    from custom_components.ezviz_instant_bell.diagnostics import async_get_config_entry_diagnostics
+
+    entry = await setup(hass, client, {"encryption_key": "SECRETKEY", "monitor_serials": MONITOR})
+    text = json.dumps(await async_get_config_entry_diagnostics(hass, entry), default=str)
+    for secret in ("SECRETKEY", entry.data["password"], entry.data["username"], SERIAL, MONITOR, "BE0000002"):
+        assert secret not in text, secret
+    assert '"door_1"' in text and "pyezvizapi" in text
