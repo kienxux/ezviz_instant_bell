@@ -343,6 +343,9 @@ class InstantBellHub:
         if rec is None:
             _LOGGER.debug("No recording found for the %s ring of %s", moment, serial)
             return
+        wanted = clip_id(rec.begin, rec.end)
+        if self.last_clip.get(serial, {}).get("clip_id") == wanted:
+            return  # an earlier ring of the same visit already saved and announced this recording
         path = await self.clips.async_save(serial, rec.begin, rec.end)
         if path is None:
             _LOGGER.debug("The clip of the ring at %s could not be fetched", moment)
@@ -350,10 +353,9 @@ class InstantBellHub:
         size = await self.hass.async_add_executor_job(lambda: path.stat().st_size)
         info = {
             "serial": serial,
-            "clip_id": clip_id(rec.begin, rec.end),
+            "clip_id": wanted,
             "media_content_id": (
-                f"media-source://{DOMAIN}/{self.entry.entry_id}/{serial}/rec/{day_text(rec.begin.date())}/"
-                f"{clip_id(rec.begin, rec.end)}"
+                f"media-source://{DOMAIN}/{self.entry.entry_id}/{serial}/rec/{day_text(rec.begin.date())}/{wanted}"
             ),
             "begin": rec.begin.isoformat(),
             "end": rec.end.isoformat(),

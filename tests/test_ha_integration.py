@@ -1572,3 +1572,33 @@ async def test_logbook_describes_the_opening(hass: HomeAssistant, client: FakeCl
     with_user = describe(Event("x", {"lock": "gate"}, context=Context(user_id="u")))
     assert with_user["message"] == "opened the gate from Home Assistant"
     assert "automation" in describe(Event("x", {"lock": "door"}))["message"]
+
+
+async def test_two_rings_of_one_visit_announce_the_recording_once(hass: HomeAssistant, client: FakeClient, tmp_path) -> None:
+    day = dt_util.now().date()
+    ring_time = dt_util.now() - timedelta(seconds=30)
+    if ring_time.date() != day:
+        return
+    client.records = [record(day, ring_time.strftime("%H:%M:%S"), 120)]
+    entry = await setup(hass, client, {"save_clips": True})
+    hub = entry.runtime_data
+    saved, rings = [], []
+    hass.bus.async_listen("ezviz_instant_bell_clip_saved", lambda event: saved.append(event.data))
+    from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+    async_dispatcher_connect(hass, hub.signal_event, lambda event: rings.append(event))
+    with patch("custom_components.ezviz_instant_bell.hub.CLIP_SAVE_FIRST_WAIT", 0), patch(
+        "custom_components.ezviz_instant_bell.hub.CLIP_SAVE_POLL", 0.01
+    ), patch.object(hub.clips, "_ffmpeg", return_value=fake_ffmpeg(tmp_path)), patch(
+        "custom_components.ezviz_instant_bell.clips.open_playback", return_value=_Playback()
+    ), patch(
+        "custom_components.ezviz_instant_bell.clips.iter_media", side_effect=lambda *a, **k: iter([b"video"])
+    ):
+        client.messages = [ring_message("ring-1", 30)]
+        await poll_once(hass)
+        await hass.async_block_till_done(wait_background_tasks=True)
+        client.messages = [ring_message("ring-2", 5), ring_message("ring-1", 30)]
+        await poll_once(hass)
+        await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(rings) == 2  # both rings reached the hub (25 s apart, outside the duplicate window)
+    assert len(saved) == 1
