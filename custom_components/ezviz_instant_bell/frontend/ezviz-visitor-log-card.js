@@ -13,6 +13,7 @@
  */
 const DOMAIN = "ezviz_instant_bell";
 const KINDS = { all: "All", ring: "Rings", unlock: "Unlocks", other: "Other" };
+const BADGES = { ring: "Ring", unlock: "Unlock", other: "Other" };
 const REFRESH_MS = 60000;
 
 const css = `
@@ -210,7 +211,7 @@ class EzvizVisitorLogCard extends HTMLElement {
       const row = el("div", { class: "row", onclick: () => playable && this._show(item) },
         thumb,
         el("div", { class: "meta" }, el("div", { class: "t", textContent: this._when(item.time) }), el("div", { class: "s", textContent: sub })),
-        el("span", { class: `badge ${item.kind}`, textContent: KINDS[item.kind] || item.kind }));
+        el("span", { class: `badge ${item.kind}`, textContent: BADGES[item.kind] || item.kind }));
       card.append(row);
     }
     if (this._partial) card.append(el("div", { class: "msg", textContent: "Some days could not be read from EZVIZ." }));
