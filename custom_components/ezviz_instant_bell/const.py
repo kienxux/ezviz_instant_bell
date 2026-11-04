@@ -112,3 +112,11 @@ RECORDING_LIST_TTL_TODAY = 60.0
 RECORDING_LIST_TTL_PAST = 900.0
 CLIP_CACHE_DIR = "ezviz_instant_bell_clips"  # inside .storage
 CLIP_CACHE_MAX_BYTES = 500 * 1024 * 1024
+
+# -- saving the clip of a ring (option, off by default) --------------------------
+CONF_SAVE_CLIPS = "save_clips"
+EVENT_CLIP_SAVED = f"{DOMAIN}_clip_saved"
+SIGNAL_CLIP = f"{DOMAIN}_clip_{{entry_id}}"
+CLIP_SAVE_FIRST_WAIT = 20.0  # seconds after a ring before the SD-card list is looked at
+CLIP_SAVE_POLL = 15.0
+CLIP_SAVE_GIVE_UP = 240.0  # the recording of a ring is looked for this long

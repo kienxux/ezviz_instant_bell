@@ -11,7 +11,8 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import EntityCategory, PERCENTAGE, UnitOfTime
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -19,9 +20,9 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpda
 from homeassistant.util import dt as dt_util
 
 from . import InstantBellConfigEntry
-from .const import DOMAIN
+from .const import CONF_SAVE_CLIPS, DOMAIN
 from .coordinator import StatusCoordinator
-from .entity import StatusEntity
+from .entity import InstantBellEntity, StatusEntity
 from .hub import InstantBellHub
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,6 +42,8 @@ async def async_setup_entry(
 
     status = hub.coordinator
     for serial in hub.serials:
+        if entry.options.get(CONF_SAVE_CLIPS):
+            entities.append(LastClipSensor(hub, serial))
         for description in SENSORS:
             entities.append(StatusSensor(hub, status, serial, description))
         # Only when the device reports a microphone volume.
@@ -197,3 +200,39 @@ class TerminalCountSensor(CoordinatorEntity[TerminalCoordinator], SensorEntity):
             "limit": TERMINAL_LIMIT,
             "by_name": dict(Counter(self.coordinator.data)),
         }
+
+
+class LastClipSensor(InstantBellEntity, SensorEntity):
+    """When the newest saved clip of a ring starts; the attributes say where it is."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(self, hub: InstantBellHub, serial: str) -> None:
+        super().__init__(hub, serial, "last_clip")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(async_dispatcher_connect(self.hass, self._hub.signal_clip, self._saved))
+
+    @callback
+    def _saved(self, serial: str, _info: dict[str, Any]) -> None:
+        if serial == self._serial:
+            self.async_write_ha_state()
+
+    @property
+    def _info(self) -> dict[str, Any] | None:
+        return self._hub.last_clip.get(self._serial)
+
+    @property
+    def native_value(self) -> datetime | None:
+        info = self._info
+        if info is None:
+            return None
+        return datetime.fromisoformat(info["begin"]).replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        info = self._info
+        if info is None:
+            return None
+        return {k: info[k] for k in ("media_content_id", "clip_id", "seconds", "bytes", "message_id")}

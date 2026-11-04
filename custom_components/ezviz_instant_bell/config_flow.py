@@ -39,6 +39,7 @@ from .const import (
     CONF_RELAY_BIND,
     CONF_RELAY_PORT,
     CONF_REGION,
+    CONF_SAVE_CLIPS,
     CONF_STREAM_MODE,
     CONF_STREAM_QUALITY,
     CONF_STREAM_SOURCE,
@@ -343,6 +344,7 @@ class InstantBellOptionsFlow(OptionsFlow):
                 CONF_MONITOR_SERIALS: str(user_input.get(CONF_MONITOR_SERIALS) or "").strip(),
                 CONF_DOOR_LOCK_NO: int(user_input[CONF_DOOR_LOCK_NO]),
                 CONF_GATE_LOCK_NO: int(user_input[CONF_GATE_LOCK_NO]),
+                CONF_SAVE_CLIPS: bool(user_input.get(CONF_SAVE_CLIPS, False)),
                 CONF_RELAY_PORT: int(user_input.get(CONF_RELAY_PORT) or 0),
                 CONF_RELAY_BIND: str(user_input.get(CONF_RELAY_BIND) or DEFAULT_RELAY_BIND).strip(),
                 CONF_AGGRESSIVE_MPEGTS: bool(user_input.get(CONF_AGGRESSIVE_MPEGTS, False)),
@@ -380,6 +382,7 @@ class InstantBellOptionsFlow(OptionsFlow):
                     vol.Required(
                         CONF_GATE_LOCK_NO, default=opts.get(CONF_GATE_LOCK_NO, DEFAULT_GATE_LOCK_NO)
                     ): number(1, 8),
+                    vol.Required(CONF_SAVE_CLIPS, default=bool(opts.get(CONF_SAVE_CLIPS, False))): bool,
                     vol.Required(CONF_STREAM_SOURCE, default=opts.get(CONF_STREAM_SOURCE, "cloud")): choice(
                         STREAM_SOURCES
                     ),

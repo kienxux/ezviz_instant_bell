@@ -26,7 +26,12 @@ from .const import (
     CONF_NAMES,
     CONF_POLL_INTERVAL,
     CONF_REGION,
+    CONF_SAVE_CLIPS,
+    CLIP_SAVE_FIRST_WAIT,
+    CLIP_SAVE_GIVE_UP,
+    CLIP_SAVE_POLL,
     DEFAULT_DOOR_LOCK_NO,
+    EVENT_CLIP_SAVED,
     DEFAULT_GATE_LOCK_NO,
     DEFAULT_POLL_INTERVAL,
     DEFAULT_REGION,
@@ -42,6 +47,7 @@ from .const import (
     RECORDING_LIST_TTL_TODAY,
     RECORDING_MAX_PAGES,
     RECORDING_PAGE_SIZE,
+    SIGNAL_CLIP,
     SIGNAL_EVENT,
     SIGNAL_PICTURE,
     UNLOCK_COOLDOWN,
@@ -49,11 +55,13 @@ from .const import (
 from . import ezviz, state
 from .device_api import DeviceApi
 from .clips import ClipStore
-from .recordings import Recording, channel_serial, day_window, recordings_from_answer
+from .recordings import Recording, channel_serial, clip_id, day_window, recordings_from_answer
+from .visitors import clip_for
 from .stream_support import StreamSupport
 from .feature_code import resolve_feature_code
 from .history import HistoryItem, day_text, items_from_answer
 from .parsing import (
+    KIND_RING,
     BellEvent,
     EventDeduper,
     NewMessageTracker,
@@ -79,6 +87,9 @@ class InstantBellHub:
         self.names: dict[str, str] = dict(entry.data.get(CONF_NAMES, {}))
         self.signal_event = SIGNAL_EVENT.format(entry_id=entry.entry_id)
         self.signal_picture = SIGNAL_PICTURE.format(entry_id=entry.entry_id)
+        self.signal_clip = SIGNAL_CLIP.format(entry_id=entry.entry_id)
+        # The newest saved ring clip of each door station (see ``_async_save_ring_clip``).
+        self.last_clip: dict[str, dict[str, Any]] = {}
         self.push_connected = False
         # Indoor monitors that belong to each door station, by door serial.
         self.monitors: dict[str, list[str]] = {}
@@ -293,6 +304,65 @@ class InstantBellHub:
             self.entry.async_create_background_task(
                 self.hass, self._async_load_picture(event), f"{DOMAIN}_picture"
             )
+        if event.kind == KIND_RING and self.entry.options.get(CONF_SAVE_CLIPS):
+            serial = next(s for s in self.serials if same_device(event.serial, s))
+            self.entry.async_create_background_task(
+                self.hass, self._async_save_ring_clip(event, serial), f"{DOMAIN}_ring_clip"
+            )
+
+    async def _async_save_ring_clip(self, event: BellEvent, serial: str) -> None:
+        """Keep the SD-card recording of a ring and tell where it is.
+
+        The door station is still recording when the ring arrives, so the list is
+        looked at every few seconds until the recording that covers the ring has
+        ended. The clip is then fetched like one a person plays, and kept.
+        """
+        moment = event.occurred or dt_util.now()
+        day = moment.date()
+        await asyncio.sleep(CLIP_SAVE_FIRST_WAIT)
+        deadline = time.monotonic() + CLIP_SAVE_GIVE_UP
+        rec: Recording | None = None
+        previous_end = None
+        while True:
+            try:
+                recordings = await self.async_recordings_day(serial, day, refresh=True)
+            except HomeAssistantError:
+                recordings = []
+            found = clip_for(moment, recordings)
+            if found is not None:
+                # The list uses the door station's clock; a recording whose end stopped moving is over too.
+                over = dt_util.now().replace(tzinfo=None) >= found.end + timedelta(seconds=5)
+                if over or found.end == previous_end:
+                    rec = found
+                    break
+                previous_end = found.end
+            if time.monotonic() >= deadline:
+                break
+            await asyncio.sleep(CLIP_SAVE_POLL)
+        if rec is None:
+            _LOGGER.debug("No recording found for the %s ring of %s", moment, serial)
+            return
+        path = await self.clips.async_save(serial, rec.begin, rec.end)
+        if path is None:
+            _LOGGER.debug("The clip of the ring at %s could not be fetched", moment)
+            return
+        size = await self.hass.async_add_executor_job(lambda: path.stat().st_size)
+        info = {
+            "serial": serial,
+            "clip_id": clip_id(rec.begin, rec.end),
+            "media_content_id": (
+                f"media-source://{DOMAIN}/{self.entry.entry_id}/{serial}/rec/{day_text(rec.begin.date())}/"
+                f"{clip_id(rec.begin, rec.end)}"
+            ),
+            "begin": rec.begin.isoformat(),
+            "end": rec.end.isoformat(),
+            "seconds": rec.seconds,
+            "bytes": size,
+            "message_id": event.message_id,
+        }
+        self.last_clip[serial] = info
+        async_dispatcher_send(self.hass, self.signal_clip, serial, info)
+        self.hass.bus.async_fire(EVENT_CLIP_SAVED, {**info, "entry_id": self.entry.entry_id})
 
     async def _async_load_picture(self, event: BellEvent) -> None:
         """Download the picture, retrying: it can lag behind the event."""
@@ -412,12 +482,12 @@ class InstantBellHub:
             start = max(r.end for r in page).strftime("%Y-%m-%dT%H:%M:%S")
         return [found[key] for key in sorted(found)]
 
-    async def async_recordings_day(self, serial: str, day: date) -> list[Recording]:
+    async def async_recordings_day(self, serial: str, day: date, *, refresh: bool = False) -> list[Recording]:
         """Recordings of one day, oldest first. Kept for a while, so that browsing is quick."""
         key = (serial, day_text(day))
         cached = self._recordings.get(key)
         ttl = RECORDING_LIST_TTL_TODAY if day >= dt_util.now().date() else RECORDING_LIST_TTL_PAST
-        if cached and time.monotonic() - cached[0] < ttl:
+        if cached and not refresh and time.monotonic() - cached[0] < ttl:
             return cached[1]
         try:
             items = await self.hass.async_add_executor_job(self._fetch_recordings_day, serial, day)

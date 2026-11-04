@@ -94,6 +94,15 @@ class ClipStore:
 
     # -- fetching -----------------------------------------------------------
 
+    async def async_save(self, serial: str, begin: datetime, end: datetime) -> Path | None:
+        """Fetch a clip (or join the fetch that is running) and return the finished file, if there is one."""
+        ready = self.ready_file(serial, begin, end)
+        if ready is not None:
+            return ready
+        job = self.job_for(serial, begin, end)
+        await job.done.wait()
+        return self.ready_file(serial, begin, end)
+
     def job_for(self, serial: str, begin: datetime, end: datetime) -> ClipJob:
         """The running job of this clip, started if there is none. Call from the event loop."""
         final = self.path_for(serial, begin, end)

@@ -1409,3 +1409,76 @@ async def test_diagnostics_have_no_secrets(hass: HomeAssistant, client: FakeClie
     for secret in ("SECRETKEY", entry.data["password"], entry.data["username"], SERIAL, MONITOR, "BE0000002"):
         assert secret not in text, secret
     assert '"door_1"' in text and "pyezvizapi" in text
+
+
+# --- saving the clip of a ring --------------------------------------------------------
+
+
+def fake_ffmpeg(tmp_path) -> str:
+    fake = tmp_path / "fake_ffmpeg"
+    fake.write_text(
+        "#!/bin/sh\n"
+        'for last; do :; done\n'
+        'case "$*" in *pipe:0*) cat > "$last";;\n'
+        '*) while [ $# -gt 0 ]; do [ "$1" = -i ] && src="$2"; shift; done; cp "$src" "$last";; esac\n'
+    )
+    fake.chmod(0o755)
+    return str(fake)
+
+
+class _Playback:
+    def close(self):
+        pass
+
+
+async def test_a_ring_saves_its_clip_and_says_where_it_is(hass: HomeAssistant, client: FakeClient, tmp_path) -> None:
+    day = dt_util.now().date()
+    ring_time = dt_util.now() - timedelta(seconds=5)
+    if ring_time.date() != day:  # the minute around midnight: the recording would be on the other day
+        return
+    client.records = [record(day, ring_time.strftime("%H:%M:%S"))]
+    entry = await setup(hass, client, {"save_clips": True})
+    hub = entry.runtime_data
+    saved = []
+    hass.bus.async_listen("ezviz_instant_bell_clip_saved", lambda event: saved.append(event.data))
+    with patch("custom_components.ezviz_instant_bell.hub.CLIP_SAVE_FIRST_WAIT", 0), patch(
+        "custom_components.ezviz_instant_bell.hub.CLIP_SAVE_POLL", 0.01
+    ), patch.object(hub.clips, "_ffmpeg", return_value=fake_ffmpeg(tmp_path)), patch(
+        "custom_components.ezviz_instant_bell.clips.open_playback", return_value=_Playback()
+    ), patch(
+        "custom_components.ezviz_instant_bell.clips.iter_media", side_effect=lambda *a, **k: iter([b"video"])
+    ):
+        client.messages = [ring_message("m-ring", 5)]
+        await poll_once(hass)
+        await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(saved) == 1
+    info = saved[0]
+    begin, end = parse_clip_id(info["clip_id"])
+    assert hub.clips.ready_file(SERIAL, begin, end).read_bytes() == b"video"
+    assert info["media_content_id"].startswith(f"media-source://{DOMAIN}/{entry.entry_id}/{SERIAL}/rec/")
+    assert info["message_id"] == "m-ring" and info["seconds"] == 49 and info["bytes"] == 5
+    state = hass.states.get(entity_id(hass, "sensor", "last_clip"))
+    assert state.attributes["media_content_id"] == info["media_content_id"]
+    assert state.state != "unknown"
+
+
+async def test_no_clip_is_saved_unless_the_option_is_on(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    saved = []
+    hass.bus.async_listen("ezviz_instant_bell_clip_saved", lambda event: saved.append(event))
+    client.messages = [ring_message("m-ring", 5)]
+    await poll_once(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert saved == [] and entry.runtime_data.last_clip == {}
+    assert er.async_get(hass).async_get_entity_id("sensor", DOMAIN, f"{SERIAL}_last_clip") is None
+
+
+async def test_a_ring_without_a_recording_gives_up_quietly(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client, {"save_clips": True})
+    with patch("custom_components.ezviz_instant_bell.hub.CLIP_SAVE_FIRST_WAIT", 0), patch(
+        "custom_components.ezviz_instant_bell.hub.CLIP_SAVE_POLL", 0.01
+    ), patch("custom_components.ezviz_instant_bell.hub.CLIP_SAVE_GIVE_UP", 0.05):
+        client.messages = [ring_message("m-ring", 5)]
+        await poll_once(hass)
+        await hass.async_block_till_done(wait_background_tasks=True)
+    assert entry.runtime_data.last_clip == {}
