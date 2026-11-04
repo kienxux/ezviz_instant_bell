@@ -42,7 +42,7 @@ own gentler curve instead, up to OFFLINE_MAX_BACKOFF)
 when an upstream stream errors; without this throttle a single bad
 config could lock the EZVIZ account in under a minute.
 """
-# Adapted for EZVIZ Video Intercom from the ezviz_hp7 integration by Bobsilvio
+# Adapted for EZVIZ HP7 / CP7 Video Intercom from the ezviz_hp7 integration by Bobsilvio
 # (MIT, https://github.com/Bobsilvio/ezviz_hp7); see THIRD_PARTY_LICENSES.md.
 # The local-network video protocol and the motion-JPEG view are by albrzmr (MIT).
 from __future__ import annotations

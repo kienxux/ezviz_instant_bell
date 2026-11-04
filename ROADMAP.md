@@ -6,15 +6,11 @@ one to say what you need.
 
 ## Done
 
+- Next release: one encryption key per door station; the LAN client refuses oversized answers and non-local hosts; works with Home Assistant 2026.10's device registry
 - 0.6.1: setup no longer fails on device values the library does not know (CP5, issue #1); diagnostics download; `pyezvizapi` limited to 1.0.x with a test that guards the calls we rely on
 - 0.6.0: visitor log dashboard card (rings, unlocks, pictures and SD-card recordings in one list)
 - 0.6.0: hardening: random action ID in the ring blueprint, admin-only encryption services, unlock retry after a failure, no clip-queue stall from ffmpeg output
 - 0.5.x: browse and play the SD-card recordings; history of event pictures
-
-## 0.6.x: harden what exists
-
-- Encryption keys per door station (today the last one wins; only matters with two door stations)
-- Limits and checks on what the LAN client reads from the door station
 
 ## 0.7: what makes it worth installing
 

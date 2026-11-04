@@ -1,6 +1,6 @@
 """Media browser of each door station.
 
-Media > EZVIZ Video Intercom > door station > Recordings (SD card) > day > clip
+Media > EZVIZ HP7 / CP7 Video Intercom > door station > Recordings (SD card) > day > clip
                                             > Pictures of events   > day > event
 
 Recordings are the videos on the SD card of the door station; a clip is fetched
@@ -66,7 +66,7 @@ async def async_get_media_source(hass: HomeAssistant) -> InstantBellMediaSource:
 class InstantBellMediaSource(MediaSource):
     """Browse the event pictures."""
 
-    name = "EZVIZ Video Intercom"
+    name = "EZVIZ HP7 / CP7 Video Intercom"
 
     def __init__(self, hass: HomeAssistant) -> None:
         super().__init__(DOMAIN)

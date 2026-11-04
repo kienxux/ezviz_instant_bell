@@ -1,5 +1,5 @@
 /*
- * Visitor log card for EZVIZ Video Intercom.
+ * Visitor log card for EZVIZ HP7 / CP7 Video Intercom.
  *
  *   type: custom:ezviz-visitor-log-card
  *   title: Door              # optional

@@ -17,7 +17,7 @@ The parser keeps an internal byte buffer and yields exactly one
 (stream_id, payload) tuple per complete PES packet. Pack headers (0xBA),
 system headers (0xBB) and padding (0xBE) are silently consumed.
 """
-# Adapted for EZVIZ Video Intercom from the ezviz_hp7 integration by Bobsilvio
+# Adapted for EZVIZ HP7 / CP7 Video Intercom from the ezviz_hp7 integration by Bobsilvio
 # (MIT, https://github.com/Bobsilvio/ezviz_hp7); see THIRD_PARTY_LICENSES.md.
 from __future__ import annotations
 

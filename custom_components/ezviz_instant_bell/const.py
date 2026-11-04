@@ -1,4 +1,4 @@
-"""Constants for Instant Bell for EZVIZ."""
+"""Constants for the EZVIZ HP7 / CP7 Video Intercom integration."""
 
 from __future__ import annotations
 
@@ -96,7 +96,7 @@ CONF_DIAGNOSTIC_DUMPS = "diagnostic_dumps"
 # Key that decrypts the video when Image/Video Encryption is on.
 CONF_ENCRYPTION_KEY = "encryption_key"
 
-# -- history browser (Media > EZVIZ Video Intercom) ---------------------------
+# -- history browser (Media > EZVIZ HP7 / CP7 Video Intercom) ---------------------------
 HISTORY_DAYS = 14  # how many days back the browser offers
 HISTORY_PAGE_SIZE = 50  # the cloud list gives at most 50 entries per request
 HISTORY_MAX_PAGES = 4
@@ -104,7 +104,7 @@ HISTORY_TODAY_TTL = 60.0  # seconds a list of today is kept before asking again
 HISTORY_PAST_TTL = 900.0
 HISTORY_PICTURE_CACHE = 100  # pictures kept in memory (nothing is written to disk)
 
-# -- recordings of the SD card (Media > EZVIZ Video Intercom > Recordings) -------
+# -- recordings of the SD card (Media > EZVIZ HP7 / CP7 Video Intercom > Recordings) -------
 RECORDING_DAYS = HISTORY_DAYS
 RECORDING_PAGE_SIZE = 50
 RECORDING_MAX_PAGES = 6

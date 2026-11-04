@@ -1,6 +1,6 @@
 {
   "domain": "ezviz_instant_bell",
-  "name": "EZVIZ Video Intercom",
+  "name": "EZVIZ HP7 / CP7 Video Intercom",
   "after_dependencies": [
     "ffmpeg",
     "frontend",
