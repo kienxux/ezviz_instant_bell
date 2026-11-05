@@ -107,6 +107,18 @@ Import the blueprint, then create an automation from it:
 
 Choose the doorbell event, the picture, the **Unlock Door** button and the notification service of each phone (for example `notify.mobile_app_my_phone`; add one entry per phone, and whoever taps **Open door** first opens it). It works with the Home Assistant companion app on Android and iPhone. The door opens only if you tap the button for that ring, within a time limit you set. Nothing opens by itself.
 
+### More notification blueprints
+
+Two variants of the ring blueprint, for when a phone notification is not enough. Neither opens the door.
+
+- **Persistent notification.** Shows the ring with its picture link as a notification in Home Assistant, so it stays visible until you dismiss it (or until the time you set), even if you miss the phone notification.
+
+  [![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkienxux%2Fezviz_instant_bell%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fezviz_instant_bell%2Fring_persistent_notification.yaml)
+
+- **Speaker announcement.** A speaker announces the ring out loud, for example "Someone is at the door". Pick the speaker, a text-to-speech entity (its voice and language are used) and the words to say; you can also have it set the speaker volume first.
+
+  [![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkienxux%2Fezviz_instant_bell%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fezviz_instant_bell%2Fring_speaker_announcement.yaml))
+
 ## Recordings of the SD card
 
 Open **Media** in the sidebar, choose **EZVIZ HP7 / CP7 Video Intercom**, your door station, **Recordings (SD card)** and a day. Each video is listed with its start time and length, newest first; the picture of the ring or motion event next to it is its thumbnail. The same list is reachable from dashboard cards and from automations (`media-source://ezviz_instant_bell/...`).
