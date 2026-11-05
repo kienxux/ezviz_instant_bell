@@ -8,7 +8,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -133,6 +133,53 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 hass.config_entries.async_update_entry(entry, options=with_keys(entry.options, found, len(hub.serials)))
                 _LOGGER.warning("Stored the camera key for %s; the entry reloads and decrypts the stream.", ", ".join(found))
 
+    async def probe_lan(call: ServiceCall) -> ServiceResponse:
+        """Ask the door station which LAN commands it knows (research aid, see cpd7/lan_probe.py)."""
+        from .cpd7 import lan_probe
+
+        wanted = str(call.data.get("serial") or "").strip()
+        matches = [
+            (hub, serial)
+            for _entry, hub in _hubs()
+            for serial in hub.serials
+            if not wanted or serial == wanted or same_device(serial, wanted)
+        ]
+        if not matches:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="no_such_doorbell")
+        if len(matches) > 1:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="serial_needed")
+        hub, serial = matches[0]
+        try:
+            commands = lan_probe.parse_range(call.data["range"]) if call.data.get("range") else None
+        except ValueError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="bad_range", translation_placeholders={"error": str(err)}
+            ) from err
+
+        def _run() -> dict[str, object]:
+            host = hub.stream.get_local_ip(serial)
+            if not host:
+                raise RuntimeError("the local address of the door station is not known")
+            key = hub.stream.fetch_lan_aes_key(serial)
+            known = list(lan_probe.KNOWN_COMMANDS) if commands is None else lan_probe.discover(host, commands)
+            return {
+                "serial": serial,
+                "host": host,
+                "known": [f"0x{cmd:04x}" for cmd in known],
+                "answers": lan_probe.ask(host, key, known),
+            }
+
+        try:
+            result = await hass.async_add_executor_job(_run)
+        except Exception as err:  # noqa: BLE001
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="probe_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
+        _LOGGER.warning("LAN probe of %s: %s", serial, result)
+        return result
+
     hass.services.async_register(DOMAIN, "unlock_door", unlock_door, SERVICE_SCHEMA)
     hass.services.async_register(DOMAIN, "unlock_gate", unlock_gate, SERVICE_SCHEMA)
     async_register_admin_service(
@@ -150,6 +197,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
     async_register_admin_service(
         hass, DOMAIN, "fetch_encryption_key", fetch_encryption_key, vol.Schema({vol.Optional("code"): cv.string, vol.Optional("serial"): cv.string})
+    )
+    async_register_admin_service(
+        hass,
+        DOMAIN,
+        "probe_lan",
+        probe_lan,
+        vol.Schema({vol.Optional("serial"): cv.string, vol.Optional("range"): cv.string}),
+        supports_response=SupportsResponse.ONLY,
     )
     await async_setup_card(hass)
     return True

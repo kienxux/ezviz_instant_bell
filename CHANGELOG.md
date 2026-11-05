@@ -2,6 +2,10 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 0.8.2
+
+- New admin action `ezviz_instant_bell.probe_lan` (research aid for local unlock and rings): asks the door station over the local network which commands it knows and what it answers to an empty request, one connection at a time. The key stays in Home Assistant; values that look like keys, passwords or codes are hidden in the answer.
+
 ## 0.8.1
 
 - Local live video (source `local` or `auto`): the relay no longer gives up on ffmpeg's audio input after 20 seconds. ffmpeg first waits for a keyframe on the video input, which can take longer on an HP7, and the early give-up left the live view without a picture (#20).
