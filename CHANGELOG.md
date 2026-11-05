@@ -2,6 +2,10 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 0.7.3
+
+- Fixed the visitor log card not loading ("Custom element doesn't exist: ezviz-visitor-log-card"): the card is now added to the frontend as soon as the frontend is ready, regardless of the order the components start in.
+
 ## 0.7.2
 
 - When the cloud retry hits a wrong password, it now stops retrying and asks you to re-authenticate, instead of trying the old password every 5 minutes (which EZVIZ can lock the account for).

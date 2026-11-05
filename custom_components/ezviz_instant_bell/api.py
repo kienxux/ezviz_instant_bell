@@ -13,6 +13,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.http.auth import async_sign_path
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.setup import async_when_setup
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, HISTORY_DAYS
@@ -31,16 +32,19 @@ MAX_DAYS = 7
 
 
 async def async_setup_card(hass: HomeAssistant) -> None:
-    """Register the websocket call and serve the card (the card is added to the dashboards' resources)."""
+    """Register the websocket call, serve the card and add it to the frontend."""
     register_views(hass)
     websocket_api.async_register_command(hass, ws_visitor_log)
     await hass.http.async_register_static_paths([StaticPathConfig(CARD_URL, str(CARD_FILE), False)])
-    if "frontend" in hass.config.components:
+
+    async def _add_to_frontend(hass: HomeAssistant, _component: str) -> None:
+        # Runs once the frontend is set up (or at once if it already is), so the
+        # card loads no matter the order the components start in.
         from homeassistant.components.frontend import add_extra_js_url
 
         add_extra_js_url(hass, CARD_URL)
-    else:  # headless install: the file is still served
-        _LOGGER.debug("Frontend not loaded, the visitor log card is not added to the pages")
+
+    async_when_setup(hass, "frontend", _add_to_frontend)
 
 
 def _hubs(hass: HomeAssistant) -> list[InstantBellHub]:

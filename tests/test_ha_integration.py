@@ -1252,6 +1252,24 @@ async def test_the_card_script_is_served(hass: HomeAssistant, client: FakeClient
     assert response.status == 200 and "ezviz-visitor-log-card" in await response.text()
 
 
+async def test_the_card_is_added_to_the_frontend(hass: HomeAssistant, client: FakeClient) -> None:
+    # The real frontend can't be set up in tests (hass_frontend isn't installed),
+    # so capture the callback and drive it as the frontend would.
+    from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
+
+    captured: dict = {}
+
+    def fake_when_setup(_hass, component, cb):
+        captured[component] = cb
+
+    with patch("custom_components.ezviz_instant_bell.api.async_when_setup", fake_when_setup):
+        await setup(hass, client)
+    assert "frontend" in captured  # the card waits for the frontend, in any start order
+    hass.data[DATA_EXTRA_MODULE_URL] = set()
+    await captured["frontend"](hass, "frontend")
+    assert f"/{DOMAIN}_static/ezviz-visitor-log-card.js" in hass.data[DATA_EXTRA_MODULE_URL]
+
+
 # --- a device value the library does not know (issue #1: CP5 reports sound mode 5) -----
 
 
