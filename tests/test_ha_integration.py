@@ -559,103 +559,6 @@ async def test_unload(hass: HomeAssistant, client: FakeClient) -> None:
 async def test_monitor_can_be_given_by_hand(hass: HomeAssistant, client: FakeClient) -> None:
     await setup(hass, client, {"monitor_serials": "BE0000001, BE0000003"})
     legacy_entity(hass, "number", "chime_volume_monitor", "BE0000003")
-
-
-# --- taking over the entities of the earlier ezviz_hp7 integration -----------
-
-
-def add_legacy_setup(hass: HomeAssistant, *, state: ConfigEntryState = ConfigEntryState.NOT_LOADED, disabled=False):
-    """A registry as the ezviz_hp7 integration left it, with its own entity IDs."""
-    legacy = MockConfigEntry(domain=LEGACY_DOMAIN, data={"serial": SERIAL, "username": "user@example.com"})
-    legacy.add_to_hass(hass)
-    if state != ConfigEntryState.NOT_LOADED:
-        legacy.mock_state(hass, state)
-    devices = dr.async_get(hass)
-    door = devices.async_get_or_create(
-        config_entry_id=legacy.entry_id, identifiers={(LEGACY_DOMAIN, SERIAL)}, name="EZVIZ HP7 (BE0000001-BE0000002)"
-    )
-    devices.async_update_device(door.id, area_id=None, name_by_user="Front door")
-    mon = devices.async_get_or_create(
-        config_entry_id=legacy.entry_id, identifiers={(LEGACY_DOMAIN, MONITOR)}, name="EZVIZ HP7 Monitor (BE0000001)"
-    )
-    reg = er.async_get(hass)
-    made = {}
-    for domain, owner, suffix, dev, eid in (
-        ("button", SERIAL, "unlock_door", door, "button.front_door_unlock_door"),
-        ("switch", SERIAL, "dnd", door, "switch.front_door_dnd"),
-        ("number", MONITOR, "chime_volume_monitor", mon, "number.hall_monitor_volume"),
-        ("camera", SERIAL, "live", door, "camera.front_door_live"),
-    ):
-        entry = reg.async_get_or_create(
-            domain,
-            LEGACY_DOMAIN,
-            f"{LEGACY_DOMAIN}_{owner}_{suffix}",
-            config_entry=legacy,
-            device_id=dev.id,
-            suggested_object_id=eid.split(".", 1)[1],
-            disabled_by=er.RegistryEntryDisabler.CONFIG_ENTRY if disabled else None,
-        )
-        made[suffix] = entry.entity_id
-        assert entry.entity_id == eid
-    return legacy, made, door
-
-
-async def test_old_entities_keep_their_entity_ids(hass: HomeAssistant, client: FakeClient) -> None:
-    legacy, made, door = add_legacy_setup(hass)
-    entry = await setup(hass, client)
-    reg = er.async_get(hass)
-
-    moved = reg.async_get(made["unlock_door"])
-    assert moved.platform == DOMAIN and moved.config_entry_id == entry.entry_id
-    assert moved.entity_id == "button.front_door_unlock_door"
-    assert reg.async_get(made["dnd"]).platform == DOMAIN
-    assert reg.async_get(made["chime_volume_monitor"]).platform == DOMAIN
-    # no second copy was created under a different entity ID
-    assert not [e for e in reg.entities if e.endswith("_2")]
-    # the live video moves too, and keeps its entity ID
-    live = reg.async_get(made["live"])
-    assert live.platform == DOMAIN and live.entity_id == "camera.front_door_live"
-    assert hass.states.get("camera.front_door_live") is not None
-    # the device keeps its ID and the name the user gave it
-    devices = dr.async_get(hass)
-    device = device_of(devices, {(DOMAIN, SERIAL)})
-    assert device.id == door.id and device.name_by_user == "Front door"
-    assert any(e.platform == DOMAIN for e in er.async_entries_for_device(reg, device.id))
-    # and the moved button works
-    await hass.services.async_call("button", "press", {"entity_id": "button.front_door_unlock_door"}, blocking=True)
-    assert client.unlocks == [(SERIAL, "internal-user", 2)]
-
-
-async def test_old_entities_of_a_switched_off_integration_are_switched_on(hass: HomeAssistant, client: FakeClient) -> None:
-    _, made, _ = add_legacy_setup(hass, disabled=True)
-    await setup(hass, client)
-    assert er.async_get(hass).async_get(made["dnd"]).disabled_by is None
-    assert hass.states.get(made["dnd"]).state == "off"
-
-
-async def test_nothing_is_moved_while_the_old_integration_runs(hass: HomeAssistant, client: FakeClient) -> None:
-    _, made, _ = add_legacy_setup(hass, state=ConfigEntryState.LOADED)
-    await setup(hass, client)
-    assert er.async_get(hass).async_get(made["dnd"]).platform == LEGACY_DOMAIN
-    assert ir.async_get(hass).async_get_issue(DOMAIN, "legacy_running") is not None
-
-
-async def test_copies_made_while_both_ran_are_replaced(hass: HomeAssistant, client: FakeClient) -> None:
-    legacy, made, _ = add_legacy_setup(hass, state=ConfigEntryState.LOADED)
-    entry = await setup(hass, client)  # both run: the new one gets its own entity IDs
-    reg = er.async_get(hass)
-    copy_id = reg.async_get_entity_id("switch", DOMAIN, f"{LEGACY_DOMAIN}_{SERIAL}_dnd")
-    assert copy_id and copy_id != made["dnd"]
-    legacy.mock_state(hass, ConfigEntryState.NOT_LOADED)  # the old one is switched off
-    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
-        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
-    ):
-        assert await hass.config_entries.async_reload(entry.entry_id)
-        await hass.async_block_till_done()
-    assert reg.async_get_entity_id("switch", DOMAIN, f"{LEGACY_DOMAIN}_{SERIAL}_dnd") == made["dnd"]
-    assert ir.async_get(hass).async_get_issue(DOMAIN, "legacy_running") is None
-
-
 # --- config flow -------------------------------------------------------------
 
 
@@ -722,35 +625,6 @@ async def test_second_setup_of_same_account_is_refused(hass: HomeAssistant) -> N
         {"username": "user@example.com", "password": "pw", "region": "apiieu.ezvizlife.com"},
     )
     assert result["type"] == "abort" and result["reason"] == "already_configured"
-
-
-async def test_config_flow_offers_the_old_setup(hass: HomeAssistant, client: FakeClient) -> None:
-    MockConfigEntry(
-        domain=LEGACY_DOMAIN,
-        data={"username": "old@example.com", "password": "oldpw", "region": "eu", "serial": SERIAL},
-        options={"monitor_serial": "BE0000001"},
-    ).add_to_hass(hass)
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
-    assert result["type"] == "menu" and set(result["menu_options"]) == {"legacy", "manual"}
-    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client) as login, patch(
-        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
-    ):
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "legacy"})
-        assert result["step_id"] == "devices"
-        assert login.call_args.args[1:4] == ("old@example.com", "oldpw", "apiieu.ezvizlife.com")
-        key = next(k for k in result["data_schema"].schema if k == "devices")
-        assert key.default() == [SERIAL]
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"devices": [SERIAL]})
-    assert result["type"] == "create_entry"
-    assert result["data"]["username"] == "old@example.com"
-    assert result["options"] == {"monitor_serials": "BE0000001"}
-
-
-async def test_config_flow_old_setup_can_be_skipped(hass: HomeAssistant) -> None:
-    MockConfigEntry(domain=LEGACY_DOMAIN, data={"username": "a", "password": "b", "serial": SERIAL}).add_to_hass(hass)
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "manual"})
-    assert result["type"] == "form" and result["step_id"] == "user"
 
 
 async def test_options_flow(hass: HomeAssistant, client: FakeClient) -> None:
@@ -931,26 +805,6 @@ async def test_status_is_read_less_often_while_watching_locally(hass: HomeAssist
     relay._active_clients = 0
     hub.coordinator._apply_stream_aware_interval()
     assert hub.coordinator.update_interval == base
-
-
-async def test_old_stream_settings_are_taken_over(hass: HomeAssistant, client: FakeClient) -> None:
-    MockConfigEntry(
-        domain=LEGACY_DOMAIN,
-        data={"username": "old@example.com", "password": "oldpw", "region": "eu", "serial": SERIAL},
-        options={"monitor_serial": "BE0000001", "stream_source": "auto", "relay_port": 8554, "encryption_key": "K1"},
-    ).add_to_hass(hass)
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
-    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
-        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
-    ):
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "legacy"})
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"devices": [SERIAL]})
-    assert result["options"] == {
-        "stream_source": "auto",
-        "relay_port": 8554,
-        "encryption_key": "K1",
-        "monitor_serials": "BE0000001",
-    }
 
 
 # --- the optional buttons of version 0.1.0 ------------------------------------

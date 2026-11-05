@@ -50,7 +50,6 @@ from .const import (
     DEFAULT_REGION,
     DEFAULT_RELAY_BIND,
     DOMAIN,
-    LEGACY_DOMAIN,
     MAX_POLL_INTERVAL,
     MIN_POLL_INTERVAL,
     REGIONS,
@@ -66,30 +65,6 @@ _LOGGER = logging.getLogger(__name__)
 # Device categories that are the door station of an HP7 / CP7 style intercom.
 DOORBELL_CATEGORIES = {"BDoorBell"}
 
-# Live video options with the same names in the earlier ezviz_hp7 integration.
-LIVE_OPTION_KEYS = (
-    CONF_RELAY_PORT,
-    CONF_RELAY_BIND,
-    CONF_AGGRESSIVE_MPEGTS,
-    CONF_VIDEO_CODEC,
-    CONF_STREAM_SOURCE,
-    CONF_STREAM_MODE,
-    CONF_STREAM_QUALITY,
-    CONF_ENCRYPTION_KEY,
-    CONF_DIAGNOSTIC_DUMPS,
-)
-
-# Region names of the earlier ezviz_hp7 integration and the hosts they meant.
-# Region names of the old integration -> EZVIZ API host. "us" and "sa" share a server.
-LEGACY_REGIONS = {
-    "eu": "apiieu.ezvizlife.com",
-    "us": "apiisa.ezvizlife.com",
-    "cn": "apiicn.ezvizlife.com",
-    "as": "apiias.ezvizlife.com",
-    "sa": "apiisa.ezvizlife.com",
-    "ru": "apirus.ezvizru.com",
-}
-
 
 class InstantBellConfigFlow(ConfigFlow, domain=DOMAIN):
     """Set up one EZVIZ account."""
@@ -102,13 +77,7 @@ class InstantBellConfigFlow(ConfigFlow, domain=DOMAIN):
         self._region = DEFAULT_REGION
         self._client: Any = None
         self._devices: dict[str, dict[str, str]] = {}
-        self._asked = False  # the "start from the old setup?" menu was shown
         self._preselect: list[str] = []
-        self._monitors = ""
-        self._live_options: dict[str, Any] = {}
-
-    def _legacy_entries(self) -> list[Any]:
-        return self.hass.config_entries.async_entries(LEGACY_DOMAIN)
 
     async def _async_login(self, sms_code: int | None = None) -> None:
         """Log in; raises the ezviz exceptions."""
@@ -129,9 +98,6 @@ class InstantBellConfigFlow(ConfigFlow, domain=DOMAIN):
     # -- user ---------------------------------------------------------
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        if user_input is None and not self._asked and self._legacy_entries():
-            self._asked = True
-            return self.async_show_menu(step_id="user", menu_options=["legacy", "manual"])
         errors: dict[str, str] = {}
         if user_input is not None:
             self._username = user_input["username"].strip()
@@ -172,45 +138,6 @@ class InstantBellConfigFlow(ConfigFlow, domain=DOMAIN):
             ),
             errors=errors,
         )
-
-    async def async_step_manual(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Enter the login by hand even though an old setup exists."""
-        self._asked = True
-        return await self.async_step_user()
-
-    async def async_step_legacy(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Take the login, doorbell and monitor from the earlier ezviz_hp7 setup."""
-        entries = self._legacy_entries()
-        if not entries:
-            return await self.async_step_manual()
-        legacy = entries[0]
-        data = legacy.data
-        self._username = str(data.get("username") or "").strip()
-        self._password = str(data.get("password") or "")
-        region = str(data.get(CONF_REGION) or "eu")
-        self._region = LEGACY_REGIONS.get(region, region)
-        self._preselect = [str(e.data["serial"]) for e in entries if e.data.get("serial")]
-        monitors = legacy.options.get("monitor_serial") or ""
-        if isinstance(monitors, (list, tuple)):
-            monitors = ",".join(str(m) for m in monitors)
-        self._monitors = str(monitors).strip()
-        self._live_options = {k: legacy.options[k] for k in LIVE_OPTION_KEYS if k in legacy.options}
-        if not self._username or not self._password:
-            return await self.async_step_manual()
-        await self.async_set_unique_id(self._username.lower())
-        self._abort_if_unique_id_configured()
-        self._client = None
-        try:
-            await self._async_login()
-        except ezviz.NeedsCode as err:
-            self._client = err.client
-            return await self.async_step_code()
-        except ezviz.InvalidAuth:
-            self._asked = True
-            return await self.async_step_user()
-        except ezviz.CannotConnect:
-            return self.async_abort(reason="cannot_connect")
-        return await self._async_after_login()
 
     # -- verification code --------------------------------------------
 
@@ -268,10 +195,7 @@ class InstantBellConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_DEVICES: chosen,
                     CONF_NAMES: {s: self._devices[s]["name"] for s in chosen},
                 },
-                options={
-                    **self._live_options,
-                    **({CONF_MONITOR_SERIALS: self._monitors} if self._monitors else {}),
-                },
+                options={},
             )
         options = [
             SelectOptionDict(

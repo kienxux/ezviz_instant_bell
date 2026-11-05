@@ -8,10 +8,6 @@
           "username": "E-Mail oder Telefonnummer",
           "password": "Passwort",
           "region": "Region"
-        },
-        "menu_options": {
-          "legacy": "Anmeldung meiner bestehenden EZVIZ-HP7-Einrichtung übernehmen",
-          "manual": "EZVIZ-Anmeldedaten erneut eingeben"
         }
       },
       "code": {
@@ -312,10 +308,6 @@
     "terminals_almost_full": {
       "title": "EZVIZ-Terminalplätze fast belegt",
       "description": "Auf diesem EZVIZ-Konto sind {count} von {limit} Terminals registriert. Sind alle belegt, schlagen neue Anmeldungen fehl. Öffne die EZVIZ-App, gehe zu den angemeldeten Geräten deines Kontos und entferne die, die du nicht mehr benutzt."
-    },
-    "legacy_running": {
-      "title": "Die alte EZVIZ-HP7-Integration läuft noch",
-      "description": "Die Entitäten der früheren Integration ezviz_hp7 konnten nicht übernommen werden, weil diese noch läuft. Schalte sie aus (Einstellungen > Geräte & Dienste > EZVIZ HP7 > Drei-Punkte-Menü > Deaktivieren) oder entferne sie in HACS und starte neu, lade dann diese Integration neu. Deine Entitäts-IDs, Dashboards und Handy-Widgets bleiben dabei erhalten."
     },
     "hevc_webrtc": {
       "title": "HEVC-Live-Ansicht im WebRTC-Modus",

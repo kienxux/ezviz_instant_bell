@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import config_validation as cv, issue_registry as ir
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
@@ -20,7 +20,6 @@ from .const import DOMAIN
 from .keys import with_keys
 from .coordinator import StatusCoordinator
 from .hub import InstantBellHub
-from .migration import async_migrate_legacy
 from .parsing import same_device
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,8 +34,6 @@ PLATFORMS = [
     Platform.SENSOR,
     Platform.SWITCH,
 ]
-
-LEGACY_ISSUE = "legacy_running"
 
 type InstantBellConfigEntry = ConfigEntry[InstantBellHub]
 
@@ -169,24 +166,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: InstantBellConfigEntry) 
     if hub.cloud_online:
         await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = hub
-
-    # Entities of the earlier ezviz_hp7 integration move over before our own
-    # entities are created, so that they keep their entity IDs.
-    serials = set(hub.serials)
-    for monitors in hub.monitors.values():
-        serials.update(monitors)
-    _, blocked = async_migrate_legacy(hass, entry, serials)
-    if blocked:
-        ir.async_create_issue(
-            hass,
-            DOMAIN,
-            LEGACY_ISSUE,
-            is_fixable=False,
-            severity=ir.IssueSeverity.WARNING,
-            translation_key=LEGACY_ISSUE,
-        )
-    else:
-        ir.async_delete_issue(hass, DOMAIN, LEGACY_ISSUE)
 
     @callback
     def _refresh_soon(_event: object) -> None:

@@ -8,10 +8,6 @@
           "username": "Email or phone",
           "password": "Password",
           "region": "Region"
-        },
-        "menu_options": {
-          "legacy": "Use the login of my existing EZVIZ HP7 setup",
-          "manual": "Enter the EZVIZ login again"
         }
       },
       "code": {
@@ -312,10 +308,6 @@
     "terminals_almost_full": {
       "title": "EZVIZ terminal slots almost used up",
       "description": "{count} of {limit} terminals are registered on this EZVIZ account. When all are used, new logins fail. Open the EZVIZ app, go to your account's logged-in devices and remove the ones you no longer use."
-    },
-    "legacy_running": {
-      "title": "The old EZVIZ HP7 integration is still running",
-      "description": "Entities of the earlier ezviz_hp7 integration could not be taken over because that integration is still running. Switch it off (Settings > Devices & services > EZVIZ HP7 > three dots > Disable) or remove it in HACS and restart, then reload this integration. Your entity IDs, dashboards and phone widgets then stay as they are."
     },
     "hevc_webrtc": {
       "title": "HEVC live view on WebRTC mode",

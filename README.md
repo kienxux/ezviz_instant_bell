@@ -34,7 +34,7 @@ A Home Assistant integration for the **EZVIZ HP7 and CP7 video intercoms**: the 
 | **Checked on real hardware** | CS-CPD5 door station with CS-CP5 monitor (EU account) |
 | **Not for** | Other EZVIZ cameras, doorbells and locks: use Home Assistant's own EZVIZ integration for those |
 
-The reading of the device's data is tested against an anonymised copy of a real device's answers. Door and gate buttons, chime sliders and switches use the same EZVIZ calls as the earlier `ezviz_hp7` integration, and live video is ported from it. If something does not work on your model, please [open an issue](https://github.com/kienxux/ezviz_instant_bell/issues/new/choose) and attach the diagnostics download (see [Troubleshooting](#troubleshooting)).
+The reading of the device's data is tested against an anonymised copy of a real device's answers. Door and gate buttons, chime sliders and switches use the documented EZVIZ calls; the live video is ported from open-source work (see Credits). If something does not work on your model, please [open an issue](https://github.com/kienxux/ezviz_instant_bell/issues/new/choose) and attach the diagnostics download (see [Troubleshooting](#troubleshooting)).
 
 ## Install
 
@@ -68,7 +68,7 @@ Logging in registers one new terminal named `Hassio` in your EZVIZ account. EZVI
 | **Switches** | Doorbell chime and motion sound alert (door station and indoor monitor), do not disturb, privacy, armed, name-tag light |
 | **Sliders** | Chime volume (0 to 7) and ringtones for the doorbell and the motion alert, on the door station and on every indoor monitor |
 | **Camera** | `Live`: the live video (cloud or local network). `Last Snapshot`: the picture of the latest alarm |
-| **Events** | `ezviz_instant_bell_unlock` (and, for old automations, `ezviz_hp7_unlock`) with the way the lock was opened, the card id and the card holder's name; `ezviz_instant_bell_door_opened` when someone opens the door or gate from Home Assistant (with the user, and shown in the logbook); `ezviz_instant_bell_clip_saved` when a ring's video was saved |
+| **Events** | `ezviz_instant_bell_unlock` (and `ezviz_hp7_unlock`, for automations written against the old name) with the way the lock was opened and the card holder's name; `ezviz_instant_bell_door_opened` when someone opens the door or gate from Home Assistant (with the user, and shown in the logbook); `ezviz_instant_bell_clip_saved` when a ring's video was saved |
 | **Media** | *Recordings (SD card)* and *Pictures of events* in the Media browser |
 | **Dashboard** | The visitor log card |
 | **Account** | `Terminals in use`, and a repair notice before EZVIZ's 10-terminal limit is reached |
@@ -162,16 +162,6 @@ Ring check interval (seconds), serial numbers of the indoor monitors (empty = au
 - The administrator-only actions are the ones that change video encryption or fetch its key. The door can be opened by every Home Assistant user who may press the button, so give guests a dashboard without it. Every opening from Home Assistant is recorded with the user in the logbook (event `ezviz_instant_bell_door_opened`).
 - The ring blueprint uses a random ID per ring for its Open door button.
 
-## Moving over from `ezviz_hp7`
-
-You keep every entity ID, so dashboards, automations and phone widgets go on working.
-
-1. Install this integration but do not add it yet.
-2. **Switch the old one off**: *Settings > Devices & services > EZVIZ HP7 > three dots > Disable* (or remove it in HACS and restart). Do **not** delete its entry: deleting removes its entities.
-3. Add this integration. It offers *Use the login of my existing EZVIZ HP7 setup*; choose it. Sensors, switches, sliders, buttons, the snapshot camera and the `Live` camera move over with their IDs, names and areas, together with the live-video settings.
-
-If the old integration is still running when you add this one, a repair notice says so, and the old entities are taken over the next time you reload this integration after switching the old one off.
-
 ## Roadmap and contributing
 
 See [ROADMAP.md](ROADMAP.md) for what is planned, [CHANGELOG.md](CHANGELOG.md) for what changed, and the [open issues](https://github.com/kienxux/ezviz_instant_bell/issues) to vote or add ideas. Bug reports and pull requests are welcome (see [CONTRIBUTING.md](CONTRIBUTING.md); security reports go through [SECURITY.md](SECURITY.md)); the bug template asks for the version, model and diagnostics, which is what makes a problem fixable.
@@ -185,4 +175,4 @@ The live video is **ported from open-source work, with thanks**:
 - the [ezviz_hp7](https://github.com/Bobsilvio/ezviz_hp7) integration by **Bobsilvio** (MIT): the stream relay, the live camera, the encryption handling, and the model for the set of entities and their behaviour;
 - the [ezviz_hp7 fork](https://github.com/albrzmr/ezviz_hp7) by **albrzmr** (MIT): the local-network protocol of the CPD7/CP7 family and the motion-JPEG view; contributors to that project found much of the firmware behaviour described in the code comments.
 
-Their copyright notices and licence text are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). The rest (instant bell, status reading, settings, visitor log, migration) is written independently.
+Their copyright notices and licence text are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). The rest (instant bell, status reading, settings, visitor log) is written independently.

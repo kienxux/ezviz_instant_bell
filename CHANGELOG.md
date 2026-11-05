@@ -2,10 +2,14 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
-## Unreleased
+## 0.7.1
 
-- Starts without the EZVIZ cloud: the local live video works with the stored local key and address; a repair notice explains it, and everything starts again when EZVIZ answers
-- Unlocking or changing a setting while EZVIZ cannot be reached says so clearly
+- **Fully independent of the `ezviz_hp7` integration.** Removed the setup step that read its stored login and the automatic takeover of its entities and devices; you enter your EZVIZ login and pick your door station in this integration's own flow.
+- Clip file checks and stream-thread shutdown no longer run on the event loop.
+- Unlock events carry only the unlock method and the holder's name, never the card id, the raw alarm record or the household's enrolled-key list.
+- The local-stream decoder no longer logs any key material.
+- Starts without the EZVIZ cloud: the local live video works with the stored local key and address; a repair notice explains it, and everything starts again when EZVIZ answers.
+- Unlocking or changing a setting while EZVIZ cannot be reached says so clearly.
 
 ## 0.7.0
 
