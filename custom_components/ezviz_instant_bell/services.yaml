@@ -34,14 +34,3 @@ fetch_encryption_key:
       required: false
       selector:
         text:
-probe_lan:
-  fields:
-    serial:
-      required: false
-      selector:
-        text:
-    range:
-      required: false
-      example: "2000-20ff"
-      selector:
-        text:

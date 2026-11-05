@@ -302,12 +302,6 @@
     },
     "cloud_unreachable": {
       "message": "EZVIZ ist gerade nicht erreichbar, daher muss das warten. Das lokale Live-Video funktioniert weiterhin."
-    },
-    "bad_range": {
-      "message": "Kein Bereich von Befehlsnummern: {error}"
-    },
-    "probe_failed": {
-      "message": "Die LAN-Abfrage ist fehlgeschlagen: {error}"
     }
   },
   "issues": {
@@ -399,20 +393,6 @@
         "code": {
           "name": "Code",
           "description": "Der 4-stellige Code aus der E-Mail. Leer lassen, um einen senden zu lassen."
-        }
-      }
-    },
-    "probe_lan": {
-      "name": "LAN-Befehle abfragen",
-      "description": "Hilfe für die Forschung: fragt die Türstation im lokalen Netz, welche Befehle sie kennt und was sie auf eine leere Anfrage antwortet. Immer nur eine Verbindung; der Schlüssel bleibt in Home Assistant und wird nicht angezeigt.",
-      "fields": {
-        "serial": {
-          "name": "Türstation",
-          "description": "Seriennummer der Türstation. Nötig, wenn das Konto mehrere hat."
-        },
-        "range": {
-          "name": "Bereich",
-          "description": "Hexadezimale Befehlsnummern, die zuerst gesucht werden, zum Beispiel 2000-20ff (höchstens 512). Leer lassen, um die schon bekannten Befehle abzufragen."
         }
       }
     }

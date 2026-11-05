@@ -2,6 +2,10 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 0.8.3
+
+- Removed the `probe_lan` action again. Two captures of the EZVIZ app at home showed that the door station reports rings and receives door and gate commands only through the EZVIZ cloud, even when the phone is on the same network, so there is no local path to build on. The local live video is unchanged.
+
 ## 0.8.2
 
 - New admin action `ezviz_instant_bell.probe_lan` (research aid for local unlock and rings): asks the door station over the local network which commands it knows and what it answers to an empty request, one connection at a time. The key stays in Home Assistant; values that look like keys, passwords or codes are hidden in the answer.

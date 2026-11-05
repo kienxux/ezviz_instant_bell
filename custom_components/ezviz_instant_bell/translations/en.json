@@ -302,12 +302,6 @@
     },
     "cloud_unreachable": {
       "message": "EZVIZ cannot be reached right now, so this needs to wait. The local live video still works."
-    },
-    "bad_range": {
-      "message": "Not a range of command numbers: {error}"
-    },
-    "probe_failed": {
-      "message": "The LAN probe failed: {error}"
     }
   },
   "issues": {
@@ -399,20 +393,6 @@
         "code": {
           "name": "Code",
           "description": "The 4-digit code from the e-mail. Leave empty to have one sent."
-        }
-      }
-    },
-    "probe_lan": {
-      "name": "Probe LAN commands",
-      "description": "Research aid: asks the door station over the local network which commands it knows and what it answers to an empty request. One connection at a time; the key stays in Home Assistant and is not shown.",
-      "fields": {
-        "serial": {
-          "name": "Door station",
-          "description": "Serial of the door station. Needed when the account has more than one."
-        },
-        "range": {
-          "name": "Range",
-          "description": "Hex command numbers to look for first, for example 2000-20ff (at most 512). Leave empty to ask the commands already known."
         }
       }
     }

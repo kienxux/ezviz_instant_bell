@@ -6,6 +6,7 @@ one to say what you need.
 
 ## Done
 
+- Local first, checked (November 2026): captures of the EZVIZ app at home (live view, door, gate, two rings) show that a CPD5 reports rings and receives door and gate commands only through the EZVIZ cloud, even with the phone on the same network. Its local broadcasts are a timed heartbeat, not events. Only the live video is local, and that already works. Owners of other HP7/CP7 models who see different behaviour are welcome to open an issue
 - Next release: starts and shows the local live video when the EZVIZ cloud is down
 - German translation (after 0.7.0)
 - 0.7.0: option to save the video of every ring (event `ezviz_instant_bell_clip_saved`, sensor *Last saved clip*); reconfigure flow; logbook entry and event for who opened the door from Home Assistant; one encryption key per door station; the LAN client refuses oversized answers and non-local hosts; works with the device registry of Home Assistant 2026.10
@@ -15,7 +16,6 @@ one to say what you need.
 
 ## Next
 
-- Local first: find out whether the door station rings, unlocks and talks over the local network (needs a capture of the EZVIZ app at home), then move those parts off the cloud
 - More about what the door station reports: motion and person events
 
 ## Later (ideas, no dates; built if someone asks)
