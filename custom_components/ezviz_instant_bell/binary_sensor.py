@@ -197,13 +197,12 @@ class AlarmBinary(StatusEntity, BinarySensorEntity):
             "alarm_time": fields.get("alarm_time"),
             "serial": self._serial,
         }
-        if detail is not None:
-            payload["details"] = detail
+        # The name of whoever opened the lock is useful to an automation; the card
+        # id, the raw alarm record and the full enrolled-key list are access
+        # credentials of the whole household and must not go into every event
+        # (the recorder keeps them and every automation sees them).
         card_id = extract_card_id(detail)
-        if card_id is not None:
-            payload["card_id"] = card_id
         if isinstance(keys, list) and keys:
-            payload["keys"] = keys
             card_name = resolve_card_name(keys, card_id)
             if card_name:
                 payload["card_name"] = card_name

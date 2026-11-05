@@ -89,19 +89,24 @@ class ClipStore:
         return self.root / safe_name(serial) / f"{clip_id(begin, end)}.mp4"
 
     def ready_file(self, serial: str, begin: datetime, end: datetime) -> Path | None:
+        """Blocking (``is_file``): call from the executor, or ``async_ready_file`` from the loop."""
         path = self.path_for(serial, begin, end)
         return path if path.is_file() else None
+
+    async def async_ready_file(self, serial: str, begin: datetime, end: datetime) -> Path | None:
+        """The finished clip file if it exists, checked off the event loop."""
+        return await self.hass.async_add_executor_job(self.ready_file, serial, begin, end)
 
     # -- fetching -----------------------------------------------------------
 
     async def async_save(self, serial: str, begin: datetime, end: datetime) -> Path | None:
         """Fetch a clip (or join the fetch that is running) and return the finished file, if there is one."""
-        ready = self.ready_file(serial, begin, end)
+        ready = await self.async_ready_file(serial, begin, end)
         if ready is not None:
             return ready
         job = self.job_for(serial, begin, end)
         await job.done.wait()
-        return self.ready_file(serial, begin, end)
+        return await self.async_ready_file(serial, begin, end)
 
     def job_for(self, serial: str, begin: datetime, end: datetime) -> ClipJob:
         """The running job of this clip, started if there is none. Call from the event loop."""

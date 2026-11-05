@@ -1375,7 +1375,9 @@ class StreamRelay:
             except Exception:
                 pass
         if self._shared_reader is not None:
-            self._shared_reader.join(timeout=2.0)
+            # A sender thread can sit in accept() or sendall() past the timeout,
+            # so join off the event loop rather than blocking it.
+            await asyncio.get_event_loop().run_in_executor(None, self._shared_reader.join, 2.0)
             self._shared_reader = None
         _LOGGER.debug("StreamRelay: shared VTM torn down (serial=%s)", self._serial)
 
@@ -1985,7 +1987,8 @@ class StreamRelay:
                     except OSError:
                         pass
             for t in threads:
-                t.join(timeout=2.0)
+                # These threads can block in sendall()/accept(); join off the loop.
+                await asyncio.get_event_loop().run_in_executor(None, t.join, 2.0)
             try:
                 writer.close()
                 await writer.wait_closed()

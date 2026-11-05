@@ -476,7 +476,10 @@ async def test_unlock_fires_one_home_assistant_event_per_unlock(hass: HomeAssist
     categories = [d["category"] for d in seen]
     assert categories.count("unlock_lock") == 1
     assert legacy_seen and legacy_seen[0]["serial"] == SERIAL
-    assert [d for d in seen if d["category"] == "unlock_lock"][0]["keys"][0]["keyName"] == "Alice"
+    unlock = [d for d in seen if d["category"] == "unlock_lock"][0]
+    # no access credentials (card id, the raw alarm record, or the household's
+    # enrolled-key list) go into the event
+    assert "keys" not in unlock and "details" not in unlock and "card_id" not in unlock
 
 
 async def test_push_for_other_device_is_ignored(hass: HomeAssistant, client: FakeClient) -> None:

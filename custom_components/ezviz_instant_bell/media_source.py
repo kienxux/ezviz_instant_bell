@@ -306,21 +306,25 @@ class ClipView(HomeAssistantView):
         if hub is None or serial not in hub.serials or span is None:
             return web.Response(status=HTTPStatus.NOT_FOUND)
         begin, end = span
-        ready = hub.clips.ready_file(serial, begin, end)
+        ready = await hub.clips.async_ready_file(serial, begin, end)
         if ready is not None:
             return web.FileResponse(ready, headers={"Content-Type": "video/mp4"})
 
         job = hub.clips.job_for(serial, begin, end)
         waited = 0.0
-        while part_size(job.part_path) == 0 and job.state != "failed" and not job.done.is_set():
+        while (
+            await hass.async_add_executor_job(part_size, job.part_path) == 0
+            and job.state != "failed"
+            and not job.done.is_set()
+        ):
             if waited >= CLIP_START_WAIT:
                 return web.Response(status=HTTPStatus.GATEWAY_TIMEOUT, text="The recording did not start in time")
             await asyncio.sleep(0.3)
             waited += 0.3
-        ready = hub.clips.ready_file(serial, begin, end)
+        ready = await hub.clips.async_ready_file(serial, begin, end)
         if ready is not None:
             return web.FileResponse(ready, headers={"Content-Type": "video/mp4"})
-        if job.state == "failed" or part_size(job.part_path) == 0:
+        if job.state == "failed" or await hass.async_add_executor_job(part_size, job.part_path) == 0:
             return web.Response(status=HTTPStatus.BAD_GATEWAY, text=job.error or "No video")
         return await _tail(request, hass, job)
 

@@ -177,11 +177,7 @@ class StreamDecoder:
             .update(encrypted_key)
         )
         self._chacha20_key = chacha20_key
-        _LOGGER.debug(
-            "CPD7 decoder: ChaCha20 key derived (shared=%s..., key=%s...)",
-            shared.hex()[:16],
-            chacha20_key.hex()[:16],
-        )
+        _LOGGER.debug("CPD7 decoder: ChaCha20 session key derived")
 
     def _decrypt_data_chunk(self, chunk: bytes) -> bytes:
         if len(chunk) < 4:
