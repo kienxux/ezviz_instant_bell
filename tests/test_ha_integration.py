@@ -1565,10 +1565,20 @@ async def test_everything_starts_again_when_the_cloud_answers(hass: HomeAssistan
 async def test_a_refused_password_while_offline_asks_for_a_new_login(hass: HomeAssistant, hass_storage) -> None:
     hass_storage[LOCAL_STORE] = stored_local_data()
     entry = await setup_without_cloud(hass)
-    with patch("custom_components.ezviz_instant_bell.ezviz.login", side_effect=ezviz.InvalidAuth("Incorrect Password.")):
+    with patch(
+        "custom_components.ezviz_instant_bell.ezviz.login", side_effect=ezviz.InvalidAuth("Incorrect Password.")
+    ) as login:
         await tick(hass, 301)
         await hass.async_block_till_done()
-    assert any(flow["context"]["source"] == "reauth" for flow in hass.config_entries.flow.async_progress_by_handler(DOMAIN))
+        assert login.call_count == 1
+        assert any(
+            flow["context"]["source"] == "reauth" for flow in hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+        )
+        # the retry timer is cancelled, so the wrong password is not tried again
+        # (EZVIZ locks an account after repeated failed logins)
+        await tick(hass, 301)
+        await hass.async_block_till_done()
+        assert login.call_count == 1
     assert entry.runtime_data.cloud_online is False
 
 

@@ -2,6 +2,10 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 0.7.2
+
+- When the cloud retry hits a wrong password, it now stops retrying and asks you to re-authenticate, instead of trying the old password every 5 minutes (which EZVIZ can lock the account for).
+
 ## 0.7.1
 
 - **Fully independent of the `ezviz_hp7` integration.** Removed the setup step that read its stored login and the automatic takeover of its entities and devices; you enter your EZVIZ login and pick your door station in this integration's own flow.

@@ -169,9 +169,7 @@ class InstantBellHub:
     async def async_stop(self) -> None:
         """Stop push and polling."""
         self._stopping = True
-        if self._unsub_cloud_retry:
-            self._unsub_cloud_retry()
-            self._unsub_cloud_retry = None
+        self._cancel_cloud_retry()
         await self.clips.async_stop()
         relays = list(self.live_relays.values())
         self.live_relays.clear()
@@ -221,6 +219,10 @@ class InstantBellHub:
             code = await self.hass.async_add_executor_job(resolve_feature_code, storage)
             await self.hass.async_add_executor_job(self._login, code)
         except ConfigEntryAuthFailed:
+            # The password is wrong, not the connection: stop retrying so we do
+            # not keep logging in with it (EZVIZ locks an account after repeated
+            # failures). Re-authenticating updates the entry and reloads it.
+            self._cancel_cloud_retry()
             self.entry.async_start_reauth(self.hass)
             return
         except Exception as err:  # noqa: BLE001
@@ -228,11 +230,14 @@ class InstantBellHub:
             return
         _LOGGER.info("EZVIZ answers again; reloading to start everything")
         self.cloud_online = True
+        self._cancel_cloud_retry()
+        ir.async_delete_issue(self.hass, DOMAIN, f"{ISSUE_CLOUD_OFFLINE}_{self.entry.entry_id}")
+        self.hass.config_entries.async_schedule_reload(self.entry.entry_id)
+
+    def _cancel_cloud_retry(self) -> None:
         if self._unsub_cloud_retry:
             self._unsub_cloud_retry()
             self._unsub_cloud_retry = None
-        ir.async_delete_issue(self.hass, DOMAIN, f"{ISSUE_CLOUD_OFFLINE}_{self.entry.entry_id}")
-        self.hass.config_entries.async_schedule_reload(self.entry.entry_id)
 
     def remembered_model(self, serial: str) -> str | None:
         return self._models.get(serial)
