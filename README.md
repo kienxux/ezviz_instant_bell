@@ -9,7 +9,7 @@
   <a href="https://github.com/kienxux/ezviz_instant_bell/actions/workflows/tests.yml"><img alt="Tests" src="https://github.com/kienxux/ezviz_instant_bell/actions/workflows/tests.yml/badge.svg"></a>
   <a href="https://github.com/kienxux/ezviz_instant_bell/actions/workflows/validate.yml"><img alt="HACS and hassfest" src="https://github.com/kienxux/ezviz_instant_bell/actions/workflows/validate.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-blue"></a>
-  <a href="https://hacs.xyz"><img alt="HACS" src="https://img.shields.io/badge/HACS-Integration-41BDF5"></a>
+  <a href="https://hacs.xyz"><img alt="HACS Default" src="https://img.shields.io/badge/HACS-Default-41BDF5"></a>
 </p>
 
 A Home Assistant integration for the **EZVIZ HP7 and CP7 video intercoms**: the door station at your gate or door and the indoor monitor inside. It shows everything the intercom reports, lets you change its settings, and adds what makes a video intercom worth having in a smart home: a ring notification **with the picture**, an **Open door** button on your phone, the **recordings on the SD card**, and the **live video**, all in Home Assistant.
@@ -40,7 +40,7 @@ The reading of the device's data is tested against an anonymised copy of a real 
 
 ### With HACS
 
-1. Open HACS and search for **EZVIZ HP7 / CP7 Video Intercom**, or add it as a custom repository (three-dot menu, **Custom repositories**, `https://github.com/kienxux/ezviz_instant_bell`, type **Integration**).
+1. Open HACS, search for **EZVIZ HP7 / CP7 Video Intercom** and open it. It is listed in the HACS default store, so no custom repository is needed.
 2. Install it and restart Home Assistant.
 
 ### Set up
