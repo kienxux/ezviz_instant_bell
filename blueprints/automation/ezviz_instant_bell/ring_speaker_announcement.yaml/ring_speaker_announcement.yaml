@@ -1,0 +1,100 @@
+blueprint:
+  name: Doorbell ring announced on a speaker
+  description: >
+    When the doorbell rings, a speaker announces it out loud, for example
+    "Someone is at the door". It never opens the door: this only announces the
+    ring, so use the ring notification blueprint if you want an "Open door"
+    button. The voice and language come from the text-to-speech entity you
+    pick below.
+  domain: automation
+  input:
+    bell:
+      name: Doorbell event
+      selector:
+        entity:
+          filter:
+            - integration: ezviz_instant_bell
+              domain: event
+    speaker:
+      name: Speaker
+      description: >
+        The media player that should announce the ring. Add one entry per
+        speaker.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: media_player
+    tts_entity:
+      name: Text-to-speech entity
+      description: >
+        The text-to-speech entity that speaks, for example tts.piper or
+        tts.google_translate_en_com. Its voice and language are used.
+      selector:
+        entity:
+          filter:
+            - domain: tts
+    message:
+      name: What the speaker says
+      default: Someone is at the door
+      selector:
+        text:
+    adjust_volume:
+      name: Set the speaker volume first
+      description: >
+        Off leaves the volume as it is; on sets every speaker to the volume
+        below before the announcement.
+      default: false
+      selector:
+        boolean:
+    volume_level:
+      name: Speaker volume
+      default: 0.5
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+
+mode: restart
+
+variables:
+  bell_entity: !input bell
+  speaker_input: !input speaker
+  # Older automations hold a single text; newer ones a list.
+  speakers: "{{ speaker_input if speaker_input is not string else [speaker_input] }}"
+  adjust_volume: !input adjust_volume
+
+triggers:
+  - trigger: state
+    entity_id: !input bell
+
+conditions:
+  # A ring. "Unavailable -> restored state" happens at startup and is not a ring;
+  # "unknown -> ring" is the very first ring of a new entity and is one.
+  - condition: template
+    value_template: >
+      {{ trigger.to_state.attributes.event_type == 'ring'
+         and trigger.from_state is not none
+         and trigger.from_state.state != 'unavailable' }}
+
+actions:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ adjust_volume }}"
+        sequence:
+          - repeat:
+              for_each: "{{ speakers }}"
+              sequence:
+                - action: media_player.volume_set
+                  target:
+                    entity_id: "{{ repeat.item }}"
+                  data:
+                    volume_level: !input volume_level
+  - action: tts.speak
+    target:
+      entity_id: !input tts_entity
+    data:
+      media_player_entity_id: !input speaker
+      message: !input message
