@@ -2,6 +2,12 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 0.8.1
+
+- Local live video (source `local` or `auto`): the relay no longer gives up on ffmpeg's audio input after 20 seconds. ffmpeg first waits for a keyframe on the video input, which can take longer on an HP7, and the early give-up left the live view without a picture (#20).
+- Closing the live view while the relay was still waiting no longer crashes a thread with "Bad file descriptor" (#20).
+- README: what to do when the HACS search does not find the integration yet.
+
 ## 0.8.0
 
 - The visitor log card now shows an **Open door** button by default (it still asks to confirm). Set `unlock: both` for a door and a gate button, or `show_unlock: false` to hide it.

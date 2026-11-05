@@ -247,7 +247,13 @@ LOCKOUT_BACKOFF = 600.0
 # exists to prevent.
 OFFLINE_MAX_BACKOFF = 300.0
 
-INPUT_ACCEPT_TIMEOUT = 20.0
+# How long a sender waits for ffmpeg to connect to its input, as a backstop
+# only: the wait normally ends with the session (its stop event). ffmpeg
+# opens its inputs one after another and first probes the video input until
+# it has seen a keyframe, which on an HP7 can be tens of seconds away (#20,
+# #37) — a short limit closed the audio input before ffmpeg got to it.
+INPUT_ACCEPT_TIMEOUT = 90.0
+INPUT_ACCEPT_POLL = 0.5
 
 # Pre-warm: how long a shared VTM session stays alive after the last HA
 # Stream client disconnected before we tear it down. Long enough that the
@@ -525,14 +531,23 @@ def _sender_thread(
 ) -> None:
     """Wait for ffmpeg to connect, then forward the queue into that socket."""
     try:
-        listener.settimeout(INPUT_ACCEPT_TIMEOUT)
-        try:
-            conn, peer = listener.accept()
-        except socket.timeout:
-            _LOGGER.warning(
-                "StreamRelay: ffmpeg %s input accept timed out", label
-            )
-            return
+        listener.settimeout(INPUT_ACCEPT_POLL)
+        deadline = time.monotonic() + INPUT_ACCEPT_TIMEOUT
+        while True:
+            if stop.is_set():
+                return  # the session ended before ffmpeg got to this input
+            try:
+                conn, peer = listener.accept()
+                break
+            except socket.timeout:
+                if time.monotonic() >= deadline:
+                    _LOGGER.warning(
+                        "StreamRelay: ffmpeg %s input accept timed out", label
+                    )
+                    return
+            except OSError:
+                # The session closed the listener while we waited (#20).
+                return
         _LOGGER.debug("StreamRelay: %s accepted from %s", label, peer)
     finally:
         try:

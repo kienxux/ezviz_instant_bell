@@ -20,7 +20,7 @@ A Home Assistant integration for the **EZVIZ HP7 and CP7 video intercoms**: the 
 
 - **Instant ring picture.** An event and the picture of the visitor arrive in about 5 to 12 seconds, most of which is EZVIZ's own delay.
 - **Open the door from the notification.** A ready-made blueprint sends the picture to every phone with an **Open door** button. The door only opens when someone taps it for that ring.
-- **Visitor log card.** One dashboard card with the rings and unlocks of the last days, their pictures and their SD-card videos, and an optional Open door button.
+- **Visitor log card.** One dashboard card with the rings and unlocks of the last days, their pictures and their SD-card videos, and an Open door button.
 - **Recordings of the SD card.** Browse and play what the door station recorded, by day, in the Media browser. No EZVIZ cloud plan needed.
 - **Live video.** Cloud or directly from your network, with sound in the Home Assistant stream mode.
 - **Everything the intercom reports.** Sensors, switches, chime volume and ringtones for the door station and every indoor monitor, and who unlocked the door (app, card, face, palm or code).
@@ -42,6 +42,8 @@ The reading of the device's data is tested against an anonymised copy of a real 
 
 1. Open HACS, search for **EZVIZ HP7 / CP7 Video Intercom** and open it. It is listed in the HACS default store, so no custom repository is needed.
 2. Install it and restart Home Assistant.
+
+If the search finds nothing: HACS refreshes its store list every few hours, and your HACS keeps its copy for a while longer. Restart Home Assistant to make HACS fetch the list again, or add the repository by hand meanwhile (three-dot menu > **Custom repositories** > `https://github.com/kienxux/ezviz_instant_bell`, type **Integration**). Both lead to the same integration and updates.
 
 ### Set up
 
@@ -141,7 +143,7 @@ Most of this integration works through the EZVIZ cloud, like the EZVIZ app does.
 
 - After the integration has run once with the cloud, it stores the door station's local key and address, its model and its indoor monitors in `<config>/.storage/ezviz_instant_bell.local.<entry>`.
 - If EZVIZ cannot be reached when Home Assistant starts, the integration starts anyway with the same entities. The **Live** camera plays with the stored key when its source is `local` or `auto`; the other entities show as unavailable, and a repair notice says why. A new login is tried every 5 minutes, and everything starts again by itself when EZVIZ answers.
-- What still needs the cloud: rings, unlocking the door, settings, recordings and pictures. Unlocking says so instead of failing silently. For a door that must open even without internet, wire a relay (for example a Shelly) in parallel to the lock's own button.
+- What still needs the cloud: rings, unlocking the door, settings, recordings and pictures. Unlocking says so instead of failing silently.
 - If the door station changes its local key (it may after a reboot), the stored key no longer fits until the cloud answers once.
 
 ## Options
