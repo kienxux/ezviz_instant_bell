@@ -90,12 +90,12 @@ type: custom:ezviz-visitor-log-card
 title: Front door            # optional
 serial: BE0000001-BE0000002  # optional; all door stations when left out
 days: 2                      # 1 to 7, default 1
-show_unlock: true            # adds an "Open door" button (asks to confirm), default false
-unlock: door                 # door or gate, default door
+show_unlock: true            # show the open button(s), default true (asks to confirm)
+unlock: door                 # door, gate or both, default door
 event_entity: event.front_door_doorbell   # optional: reload the moment a ring arrives
 ```
 
-`show_unlock` needs `serial` when you have more than one door station. The list refreshes every minute. Pictures and videos are served through signed links that expire after ten minutes.
+The open button shows by default; set `show_unlock: false` to hide it, or `unlock: both` for a door and a gate button. With more than one door station, set `serial` so the button knows which one to open. The list refreshes every minute. Pictures and videos are served through signed links that expire after ten minutes.
 
 ## Notification with an Open door button
 

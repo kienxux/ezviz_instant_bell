@@ -5,8 +5,8 @@
  *   title: Door              # optional
  *   serial: BE0000001-BE0000002   # optional, all door stations when left out
  *   days: 2                  # 1-7, default 1
- *   show_unlock: true        # "Open door" button, default false
- *   unlock: door             # door | gate (what the button opens), default door
+ *   show_unlock: true        # show the open button(s), default true
+ *   unlock: door             # door | gate | both (which buttons), default door
  *   event_entity: event.tor_doorbell   # optional: reload the moment it changes
  *
  * Everything the cloud sends is put on the page as text, never as HTML.
@@ -79,7 +79,7 @@ class EzvizVisitorLogCard extends HTMLElement {
   setConfig(config) {
     const days = Number(config.days ?? 1);
     if (!Number.isInteger(days) || days < 1 || days > 7) throw new Error("days must be 1 to 7");
-    this._config = { show_unlock: false, unlock: "door", ...config, days };
+    this._config = { show_unlock: true, unlock: "door", ...config, days };
     this._loaded = false;
     this._render();
   }
@@ -128,10 +128,9 @@ class EzvizVisitorLogCard extends HTMLElement {
     }
   }
 
-  async _open() {
+  async _open(what) {
     const serial = this._config.serial || (this._doors && this._doors.length === 1 ? this._doors[0].serial : "");
-    if (!serial) { this._error = "Set `serial` on the card to use the Open button"; this._render(); return; }
-    const what = this._config.unlock === "gate" ? "gate" : "door";
+    if (!serial) { this._error = "Set `serial` on the card to use the open button"; this._render(); return; }
     if (!window.confirm(`Open the ${what}?`)) return;
     try {
       await this._hass.callService(DOMAIN, `unlock_${what}`, { serial });
@@ -181,8 +180,12 @@ class EzvizVisitorLogCard extends HTMLElement {
     if (!this._config) return;
     const card = el("ha-card");
     const head = el("div", { class: "head" }, el("h2", { textContent: this._config.title || "Visitors" }));
-    if (this._config.show_unlock) {
-      head.append(el("button", { class: "open", textContent: this._config.unlock === "gate" ? "Open gate" : "Open door", onclick: () => this._open() }));
+    const unlock = this._config.show_unlock === false ? "none" : this._config.unlock || "door";
+    if (unlock === "door" || unlock === "both") {
+      head.append(el("button", { class: "open", textContent: "Open door", onclick: () => this._open("door") }));
+    }
+    if (unlock === "gate" || unlock === "both") {
+      head.append(el("button", { class: "open", textContent: "Open gate", onclick: () => this._open("gate") }));
     }
     head.append(el("button", { textContent: "↻", title: "Refresh", disabled: this._busy, onclick: () => this._load() }));
     card.append(head);
@@ -226,5 +229,5 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: "ezviz-visitor-log-card",
   name: "EZVIZ visitor log",
-  description: "Rings, unlocks and their pictures and recordings, with an optional Open door button.",
+  description: "Rings, unlocks and their pictures and recordings, with an Open door button.",
 });
