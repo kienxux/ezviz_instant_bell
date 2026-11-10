@@ -1379,8 +1379,8 @@ async def test_persistent_notification_blueprint_notifies_on_ring(
         data = create[0].data
         assert data["notification_id"] == "ezviz_instant_bell_ring"
         assert data["title"] == "Someone is at the door"
-        assert data["message"].startswith("The doorbell rang.")
-        assert data["message"].split("Picture: ")[1].startswith("/api/image_proxy/")
+        assert data["message"].startswith("The doorbell rang at ")
+        assert "![Doorbell picture](/api/image_proxy/" in data["message"]
     finally:
         target.unlink(missing_ok=True)
 
@@ -1627,6 +1627,81 @@ async def test_no_motion_picture_is_saved_unless_the_option_is_on(hass: HomeAssi
     client.messages = [motion_message("m-motion", 2)]
     await poll_once(hass)
     assert not (tmp_path / "media").exists()
+
+
+# --- motion and person as event types --------------------------------------------------
+
+
+async def test_motion_and_person_fire_the_event_entity_when_switched_on(hass: HomeAssistant, client: FakeClient) -> None:
+    await setup(hass, client, {"motion_events": True, "person_events": True})
+    bell = entity_id(hass, "event", "bell")
+    image = hass.data["image"].get_entity(entity_id(hass, "image", "last_picture"))
+    seen = []
+    hass.bus.async_listen("state_changed", lambda e: seen.append(e.data["new_state"]) if e.data["entity_id"] == bell else None)
+    client.messages = [  # newest first, as the cloud sends them
+        motion_message("m-person", 1, deviceSerial=None, **{"from": "Tor"}, title="Human detected"),
+        motion_message("m-unknown", 2, title="Bewegung erkannt"),  # not recognised: no event
+        motion_message("m-motion", 3),
+    ]
+    await poll_once(hass)
+    # Sorted: older Home Assistant runs a plain listener in the executor, in no fixed order.
+    assert sorted((s.attributes["event_type"], s.attributes["message"]) for s in seen) == [
+        ("motion", "Motion Detection Alarm"),
+        ("person", "Human detected"),
+    ]
+    assert all(s.attributes["source"] == "poll" for s in seen)
+    assert await image.async_image() is None  # the ring picture is not replaced by motion
+
+
+async def test_motion_is_no_event_unless_switched_on(hass: HomeAssistant, client: FakeClient) -> None:
+    await setup(hass, client, {"person_events": True})
+    bell = entity_id(hass, "event", "bell")
+    client.messages = [motion_message("m-motion", 2)]
+    await poll_once(hass)
+    assert hass.states.get(bell).attributes.get("event_type") is None
+
+
+def push_alert(client: FakeClient, title: str, code: int = 10001, msg_id: int = 7) -> None:
+    client.mqtt.callback(
+        {
+            "id": msg_id,
+            "alert": title,
+            "ext": {"device_serial": SERIAL, "alert_type_code": code, "time": dt_util.now().strftime("%Y-%m-%d %H:%M:%S")},
+        }
+    )
+
+
+async def test_a_pushed_motion_is_motion_only_when_switched_on(hass: HomeAssistant, client: FakeClient) -> None:
+    await setup(hass, client)
+    bell = entity_id(hass, "event", "bell")
+    push_alert(client, "Motion Detection Alarm")
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert hass.states.get(bell).attributes["event_type"] == "other"  # as before
+
+    hass.config_entries.async_update_entry(client_entry := hass.config_entries.async_entries(DOMAIN)[0], options={"motion_events": True})
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert client_entry.options["motion_events"]
+    bell = entity_id(hass, "event", "bell")
+    push_alert(client, "Motion Detection Alarm", msg_id=8)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert hass.states.get(bell).attributes["event_type"] == "motion"
+
+
+async def test_diagnostics_show_the_codes_of_recent_messages(hass: HomeAssistant, client: FakeClient) -> None:
+    from custom_components.ezviz_instant_bell.diagnostics import async_get_config_entry_diagnostics
+
+    client.messages = [
+        motion_message("m-card", 2, title="RFID card unlock Anna"),
+        motion_message("m-motion", 3, ext={"alarmType": 2402}),
+    ]
+    entry = await setup(hass, client, {"motion_events": True})
+    await poll_once(hass)
+    diag = await async_get_config_entry_diagnostics(hass, entry)
+    assert diag["detection_events"] == ["motion"]
+    assert diag["recent_messages"] == [
+        {"subtype": 2401, "alarm_type": 2402, "kind": "motion", "title": "Motion Detection Alarm"},
+        {"subtype": 2401, "alarm_type": None, "kind": None, "title": None},  # an unlock's title can carry a name
+    ]
 
 
 # --- reconfigure ----------------------------------------------------------------------

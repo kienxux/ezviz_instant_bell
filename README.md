@@ -63,7 +63,7 @@ Logging in registers one new terminal named `Hassio` in your EZVIZ account. EZVI
 
 | Kind | Entities |
 | --- | --- |
-| **Instant bell** | `Doorbell` (event: `ring`, `door_unlock`, `gate_open`, `other`) and `Last picture` (image), both within seconds |
+| **Instant bell** | `Doorbell` (event: `ring`, `door_unlock`, `gate_open`, `motion`, `person`, `other`) and `Last picture` (image), both within seconds |
 | **Open** | Buttons `Unlock Door` and `Unlock Gate`, and the actions `ezviz_instant_bell.unlock_door` / `unlock_gate` |
 | **Sensors** | Name, firmware, online status, WiFi signal, SSID, local and WAN IP, motion, last alarm and its type, seconds since last motion, update available, microphone volume |
 | **Binary sensors** | Motion; short pulses (3 s) for doorbell ringing, gate open, lock unlocked and app unlock. Card, face, palm and code unlock and the smart and intelligent detection alarms depend on the model, so each appears the first time the door station reports one. Read-only states of mute, loitering, stranger and human detection, when the device reports them |
@@ -152,6 +152,15 @@ Switch on **Save the picture of every motion and person event** in the options. 
 - Each saved picture fires `ezviz_instant_bell_picture_saved` with `path` and `media_content_id`, should you want a notification after all.
 - The folder is the `local` media folder: `/media` on Home Assistant OS and in the Docker image when it is mounted, otherwise `<config>/media`. Each check reads the newest 5 entries, so if more than 5 events happen within one check interval, the older ones are missed.
 
+## Motion and person as events
+
+Switch on **Motion as an event of the Doorbell entity** and/or **Person as an event of the Doorbell entity** in the options (both off by default). The **Doorbell** event entity then also fires `motion` or `person`, with the message's text in `message`, so an automation can trigger on them like on a ring.
+
+- They come through the same message check as the rings, a few seconds after the door station reports them. Each check reads the newest 5 entries.
+- Motion and person are told apart by the name of the message (for example *Motion Detection Alarm*, *Human detected*, *Smart Detection Alarm*) and by its code. A message that is recognised as neither stays `other`, as before. The codes of the latest messages are in the diagnostics download (`recent_messages`); please attach it to an issue if your door station's messages land in the wrong type.
+- Their picture does not replace the **Last picture** of a ring. To keep it, use the option above.
+- Which events the door station reports is set in the EZVIZ app.
+
 ## Live video
 
 - **Source**: `cloud` (EZVIZ relay, the default), `local` (straight from the door station on your network; Home Assistant must be on the same network) or `auto` (local first, then cloud).
@@ -171,7 +180,7 @@ Most of this integration works through the EZVIZ cloud, like the EZVIZ app does.
 
 ## Options
 
-Ring check interval (seconds), serial numbers of the indoor monitors (empty = automatic), the lock numbers for door (2) and gate (1) as seen on an HP7, whether to save the video of every ring, whether to save the pictures of motion and person events (and for how many days), and the live video settings (source, mode, codec, quality, port, listen address, key). To change the login, region or chosen door stations, use **Reconfigure** in the three-dot menu of the integration.
+Ring check interval (seconds), serial numbers of the indoor monitors (empty = automatic), the lock numbers for door (2) and gate (1) as seen on an HP7, whether to save the video of every ring, whether to save the pictures of motion and person events (and for how many days), whether motion and person fire the event entity, and the live video settings (source, mode, codec, quality, port, listen address, key). To change the login, region or chosen door stations, use **Reconfigure** in the three-dot menu of the integration.
 
 ## Troubleshooting
 

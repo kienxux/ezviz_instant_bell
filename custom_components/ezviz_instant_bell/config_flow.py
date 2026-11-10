@@ -42,6 +42,8 @@ from .const import (
     CONF_SAVE_CLIPS,
     CONF_DETECTION_PICTURE_DAYS,
     CONF_SAVE_DETECTION_PICTURES,
+    CONF_MOTION_EVENTS,
+    CONF_PERSON_EVENTS,
     DEFAULT_DETECTION_PICTURE_DAYS,
     MAX_DETECTION_PICTURE_DAYS,
     CONF_STREAM_MODE,
@@ -331,6 +333,8 @@ class InstantBellOptionsFlow(OptionsFlowWithReload):
                 CONF_DETECTION_PICTURE_DAYS: int(
                     user_input.get(CONF_DETECTION_PICTURE_DAYS) or DEFAULT_DETECTION_PICTURE_DAYS
                 ),
+                CONF_MOTION_EVENTS: bool(user_input.get(CONF_MOTION_EVENTS, False)),
+                CONF_PERSON_EVENTS: bool(user_input.get(CONF_PERSON_EVENTS, False)),
                 CONF_RELAY_PORT: int(user_input.get(CONF_RELAY_PORT) or 0),
                 CONF_RELAY_BIND: str(user_input.get(CONF_RELAY_BIND) or DEFAULT_RELAY_BIND).strip(),
                 CONF_AGGRESSIVE_MPEGTS: bool(user_input.get(CONF_AGGRESSIVE_MPEGTS, False)),
@@ -377,6 +381,8 @@ class InstantBellOptionsFlow(OptionsFlowWithReload):
                         CONF_DETECTION_PICTURE_DAYS,
                         default=int(opts.get(CONF_DETECTION_PICTURE_DAYS, DEFAULT_DETECTION_PICTURE_DAYS)),
                     ): number(1, MAX_DETECTION_PICTURE_DAYS),
+                    vol.Required(CONF_MOTION_EVENTS, default=bool(opts.get(CONF_MOTION_EVENTS, False))): bool,
+                    vol.Required(CONF_PERSON_EVENTS, default=bool(opts.get(CONF_PERSON_EVENTS, False))): bool,
                     vol.Required(CONF_STREAM_SOURCE, default=opts.get(CONF_STREAM_SOURCE, "cloud")): choice(
                         STREAM_SOURCES
                     ),

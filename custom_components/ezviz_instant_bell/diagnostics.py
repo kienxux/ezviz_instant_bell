@@ -63,4 +63,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: Instant
         "stored_for_local_use": {f"door_{n}": sorted(hub.stream.remembered.get(s.split("-")[0].upper(), {})) for n, s in enumerate(hub.serials, start=1)},
         "last_update_ok": coordinator.last_update_success if coordinator is not None else None,
         "doors": doors,
+        # Codes of the latest list entries, to check how motion and person are told apart.
+        "recent_messages": list(hub.recent_messages.values()),
+        "detection_events": list(hub.detection_kinds),
     }

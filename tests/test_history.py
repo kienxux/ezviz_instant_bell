@@ -40,3 +40,10 @@ def test_serial_is_taken_from_deviceserial_not_from_the_name():
     entry = {"msgId": "x", "time": 1000, "title": "EZVIZ app open the gate", "from": "Tor",
              "deviceSerial": "BE1-BE2", "subType": 2401, "pic": "https://example.invalid/p"}
     assert item_from_message(entry, TZ).serial == "BE1-BE2"
+
+
+def test_alarm_type_is_read_from_ext_as_dict_or_json_text():
+    assert item_from_message({**message("a", 1), "ext": {"alarmType": "2403"}}, TZ).alarm_type == 2403
+    assert item_from_message({**message("b", 1), "ext": '{"alarmType": 2402}'}, TZ).alarm_type == 2402
+    for ext in (None, "not json", {"alarmType": "x"}, ["list"]):
+        assert item_from_message({**message("c", 1), "ext": ext}, TZ).alarm_type is None

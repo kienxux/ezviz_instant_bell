@@ -1,4 +1,4 @@
-"""Event entity: fires when the bell rings or a door or gate is opened."""
+"""Event entity: fires when the bell rings, a door or gate is opened and, if switched on, at motion or a person."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ async def async_setup_entry(
 
 
 class BellEventEntity(InstantBellEntity, EventEntity):
-    """One entity per doorbell with the event types ring, door_unlock, gate_open, other."""
+    """One entity per doorbell with the event types ring, door_unlock, gate_open, motion, person, other."""
 
     _attr_event_types = EVENT_KINDS
 

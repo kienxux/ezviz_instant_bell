@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 
-from alarms import is_detection
+from alarms import detection_kind, is_detection
 from detection_pictures import FOLDER, picture_path, prune, slug, write_picture
 
 
@@ -19,6 +19,23 @@ def test_rings_and_openings_are_not():
     assert not is_detection("EZVIZ app unlock the lock", 0)
     assert not is_detection("Monitor open the gate", None)
     assert not is_detection("", 10243)
+
+
+def test_motion_and_person_are_told_apart():
+    assert detection_kind("Motion Detection Alarm", 2401) == "motion"
+    assert detection_kind("PIR alarm", None) == "motion"
+    assert detection_kind("Human detected", 2401) == "person"
+    assert detection_kind("Smart Detection Alarm", None) == "person"
+    assert detection_kind("Something", 2401, 2403) == "person"  # by the code of ext.alarmType
+    assert detection_kind("Something", 2402) == "motion"
+
+
+def test_unknown_entries_rings_and_openings_are_no_detection_kind():
+    assert detection_kind("Bewegung erkannt", 12345) is None  # a detection, but which kind is not known
+    assert detection_kind("Your doorbell is ringing", 2701) is None
+    assert detection_kind("Motion while ringing", 2701) is None  # the ring subtype wins
+    assert detection_kind("EZVIZ app unlock the lock", 2403) is None
+    assert detection_kind(None, None) is None
 
 
 def test_slug_is_safe_for_any_file_system():
