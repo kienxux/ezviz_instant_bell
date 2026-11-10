@@ -1644,11 +1644,12 @@ async def test_motion_and_person_fire_the_event_entity_when_switched_on(hass: Ho
         motion_message("m-motion", 3),
     ]
     await poll_once(hass)
-    assert [(s.attributes["event_type"], s.attributes["message"]) for s in seen] == [
+    # Sorted: older Home Assistant runs a plain listener in the executor, in no fixed order.
+    assert sorted((s.attributes["event_type"], s.attributes["message"]) for s in seen) == [
         ("motion", "Motion Detection Alarm"),
         ("person", "Human detected"),
     ]
-    assert seen[0].attributes["source"] == "poll"
+    assert all(s.attributes["source"] == "poll" for s in seen)
     assert await image.async_image() is None  # the ring picture is not replaced by motion
 
 
