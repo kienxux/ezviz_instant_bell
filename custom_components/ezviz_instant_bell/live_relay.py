@@ -696,6 +696,18 @@ class StreamRelay:
         except Exception as exc:  # noqa: BLE001
             _LOGGER.debug("StreamRelay: could not raise OTP repair: %s", exc)
 
+    def _headers_readable(self, parser: Any) -> bool:
+        """Whether the NAL headers can tell H.264 from HEVC yet (#22).
+
+        Some firmware encrypts the NAL header too. Its random bytes matched
+        an H.264 SPS by chance and fixed the codec wrongly, which on the
+        cloud path also gives ffmpeg the wrong input format. So a scrambled
+        stream is sniffed only once it is decrypted.
+        """
+        if self._decrypt_key is not None and not self._decrypt_failed:
+            return True
+        return parser.scrambled_packets == 0
+
     def _check_scrambled(self, parser: Any) -> None:
         """Tell the user when the device is scrambling the stream (#41).
 
@@ -1061,6 +1073,11 @@ class StreamRelay:
                     break
                 if not body:
                     continue
+                # Both sources carry MPEG-PS, so an encrypted stream is
+                # decrypted here for either of them (#22).
+                body = self._maybe_decrypt(body)
+                if not body:
+                    continue
                 if self._active_lan:
                     # LAN path: the decoder emits complete MPEG-PS (muxed
                     # video + audio). Fan the raw feed out for the VIDEO
@@ -1072,9 +1089,6 @@ class StreamRelay:
                     # MP2, so we feed the extracted AAC to a second input
                     # instead. Video stays a clean raw passthrough; audio
                     # comes from the de-mislabelled PES.
-                    body = self._maybe_decrypt(body)
-                    if not body:
-                        continue
                     v_bytes += len(body)
                     self._gop_update(body)
                     self._ps_dump(body)
@@ -1087,7 +1101,7 @@ class StreamRelay:
                                 self._fanout(self._sub_a_qs, payload)
                         elif stream_id == VIDEO_STREAM_ID and payload:
                             self._es_dump(payload)
-                            if self._detected_codec is None:
+                            if self._detected_codec is None and self._headers_readable(parser):
                                 # Sniff h264 vs hevc so "auto" knows whether
                                 # to transcode on the LAN path too (CP7
                                 # streams HEVC, which WebRTC can't show as a
@@ -1118,7 +1132,7 @@ class StreamRelay:
                         v_bytes += len(payload)
                         self._gop_update(payload)
                         self._es_dump(payload)
-                        if self._detected_codec is None:
+                        if self._detected_codec is None and self._headers_readable(parser):
                             guess = _sniff_video_codec(payload)
                             if guess is not None:
                                 self._detected_codec = guess
@@ -1139,6 +1153,9 @@ class StreamRelay:
                             )
                             next_v_log = time.monotonic() + PROGRESS_LOG_SEC
                     elif stream_id == AUDIO_STREAM_ID:
+                        payload = self._readable_audio(payload)
+                        if not payload:
+                            continue
                         a_bytes += len(payload)
                         self._fanout(self._sub_a_qs, payload)
                         if time.monotonic() >= next_a_log:
@@ -1149,6 +1166,7 @@ class StreamRelay:
                                 len(self._sub_a_qs),
                             )
                             next_a_log = time.monotonic() + PROGRESS_LOG_SEC
+                self._check_scrambled(parser)
         except Exception as exc:
             # EBADF here is the expected race when the shared VTM session
             # is torn down by another thread (idle timeout or stop()) while

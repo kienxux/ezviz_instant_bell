@@ -516,3 +516,35 @@ async def test_the_encrypted_sound_of_a_local_session_reaches_the_viewers_decryp
         await wait_for(lambda: r._shared_vtm is None)
     reader.join(2)
     assert [a_q.get_nowait() for _ in range(2)] == [plain, None]
+
+
+async def test_an_encrypted_cloud_session_reaches_the_viewers_decrypted() -> None:
+    """The cloud source passed encrypted picture and sound on as they came (#22)."""
+    plain_video, encrypted_video = _hevc_ps(b"ABCDEF", 2)
+    plain_sound, encrypted_sound = _aac_frame(b"ABCDEF")
+    source = FakeSource([encrypted_video, pes(0xC0, encrypted_sound, scrambled=True)])
+    r = relay()
+    r._decrypt_key = "ABCDEF"
+    v_q, a_q = queue.Queue(), queue.Queue()
+    r._sub_v_qs.append(v_q)
+    r._sub_a_qs.append(a_q)
+    with patch.object(live_relay, "open_cloud_stream", return_value=source):
+        await r.prewarm()
+        reader = r._shared_reader
+        await wait_for(lambda: r._shared_vtm is None)
+    reader.join(2)
+    assert v_q.get_nowait() == plain_video[9:]  # the payload behind the PES header
+    assert a_q.get_nowait() == plain_sound
+    assert r.detected_codec == "hevc"
+
+
+async def test_scrambled_video_does_not_decide_the_codec_before_it_is_decrypted() -> None:
+    """With the NAL header encrypted too, random bytes looked like an H.264 SPS (#22)."""
+    source = FakeSource([pes(0xE0, SPS_PPS + IDR, scrambled=True), pes(0xC0, b"\xff\xf1AAC")])
+    r = relay()
+    with patch.object(live_relay, "open_cloud_stream", return_value=source):
+        await r.prewarm()
+        reader = r._shared_reader
+        await wait_for(lambda: r._shared_vtm is None)
+    reader.join(2)
+    assert r.detected_codec is None

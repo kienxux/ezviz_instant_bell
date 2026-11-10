@@ -2,6 +2,11 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 0.10.2
+
+- Encrypted live video now also plays with the cloud stream source (#22). Until now only the local source decrypted it, and the cloud live view stayed black. With the cloud source the integration now also notices the encryption and asks for the camera key (or the 4-digit e-mail code in Settings > Repairs), as it does locally.
+- On door stations that also encrypt the header of each video frame part, random bytes could look like an H.264 header, and the integration settled on the wrong codec. It now reads the codec only from video that is unencrypted or already decrypted; with the cloud source the wrong codec also gave ffmpeg the wrong input format.
+
 ## 0.10.1
 
 - Encrypted live video on HP7 firmware 5.4 still stayed black with 0.10.0 (#22). The door station encrypts the sound as well, and ffmpeg sends no picture until it has decoded some sound. The sound is now decrypted with the same camera key; frames that still cannot be read are played as silence, so the picture shows in any case. This works with the local stream source (`local`, or `auto` on the same network); the cloud source decrypts neither picture nor sound. Door stations without encryption are not affected.
