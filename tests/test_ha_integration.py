@@ -1205,6 +1205,107 @@ async def test_blueprint_sends_the_notification_on_the_first_ring(
         target.unlink(missing_ok=True)
 
 
+# --- the ring blueprint variants (issue #10) ----------------------------------
+
+
+async def setup_blueprint_file(hass: HomeAssistant, blueprint: Path, filename: str, inputs: dict):
+    import shutil
+
+    from homeassistant.setup import async_setup_component
+
+    target = Path(hass.config.path(f"blueprints/automation/ezviz_instant_bell/{filename}"))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(blueprint, target)
+    config = {
+        "automation": {
+            "alias": "Ring variant",
+            "use_blueprint": {
+                "path": f"ezviz_instant_bell/{filename}",
+                "input": inputs,
+            },
+        }
+    }
+    assert await async_setup_component(hass, "automation", config)
+    await hass.async_block_till_done()
+    return target
+
+
+PERSISTENT_BLUEPRINT = (
+    Path(__file__).parents[1] / "blueprints/automation/ezviz_instant_bell/ring_persistent_notification.yaml"
+)
+SPEAKER_BLUEPRINT = (
+    Path(__file__).parents[1] / "blueprints/automation/ezviz_instant_bell/ring_speaker_announcement.yaml"
+)
+
+
+async def test_persistent_notification_blueprint_notifies_on_ring(
+    hass: HomeAssistant, client: FakeClient
+) -> None:
+    from pytest_homeassistant_custom_component.common import async_mock_service
+
+    await setup(hass, client)
+    create = async_mock_service(hass, "persistent_notification", "create")
+    target = await setup_blueprint_file(
+        hass,
+        PERSISTENT_BLUEPRINT,
+        "ring_persistent_notification.yaml",
+        {
+            "bell": entity_id(hass, "event", "bell"),
+            "picture": entity_id(hass, "image", "last_picture"),
+            "picture_wait": 5,
+            "auto_dismiss": 0,
+        },
+    )
+    try:
+        client.messages = [ring_message("first")]
+        await poll_once(hass)
+        await hass.async_block_till_done(wait_background_tasks=True)
+        await tick(hass, 1)
+        assert len(create) == 1
+        data = create[0].data
+        assert data["notification_id"] == "ezviz_instant_bell_ring"
+        assert data["title"] == "Someone is at the door"
+        assert data["message"].startswith("The doorbell rang.")
+        assert data["message"].split("Picture: ")[1].startswith("/api/image_proxy/")
+    finally:
+        target.unlink(missing_ok=True)
+
+
+async def test_speaker_announcement_blueprint_speaks_on_ring(
+    hass: HomeAssistant, client: FakeClient
+) -> None:
+    from pytest_homeassistant_custom_component.common import async_mock_service
+
+    await setup(hass, client)
+    speak = async_mock_service(hass, "tts", "speak")
+    volume = async_mock_service(hass, "media_player", "volume_set")
+    target = await setup_blueprint_file(
+        hass,
+        SPEAKER_BLUEPRINT,
+        "ring_speaker_announcement.yaml",
+        {
+            "bell": entity_id(hass, "event", "bell"),
+            "speaker": ["media_player.kitchen"],
+            "tts_entity": "tts.google_translate_en_com",
+            "message": "Someone is at the door",
+            "adjust_volume": False,
+            "volume_level": 0.5,
+        },
+    )
+    try:
+        client.messages = [ring_message("first")]
+        await poll_once(hass)
+        await hass.async_block_till_done(wait_background_tasks=True)
+        await tick(hass, 1)
+        assert len(speak) == 1
+        data = speak[0].data
+        assert data["message"] == "Someone is at the door"
+        assert data["media_player_entity_id"] == ["media_player.kitchen"]
+        assert len(volume) == 0  # adjust_volume is off: the volume is left as it is
+    finally:
+        target.unlink(missing_ok=True)
+
+
 # --- visitor log card ----------------------------------------------------------
 
 
