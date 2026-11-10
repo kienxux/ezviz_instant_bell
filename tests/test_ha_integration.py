@@ -1243,7 +1243,7 @@ async def test_persistent_notification_blueprint_notifies_on_ring(
 ) -> None:
     from pytest_homeassistant_custom_component.common import async_mock_service
 
-    entry = await setup(hass, client)
+    await setup(hass, client)
     create = async_mock_service(hass, "persistent_notification", "create")
     target = await setup_blueprint_file(
         hass,
@@ -1276,7 +1276,7 @@ async def test_speaker_announcement_blueprint_speaks_on_ring(
 ) -> None:
     from pytest_homeassistant_custom_component.common import async_mock_service
 
-    entry = await setup(hass, client)
+    await setup(hass, client)
     speak = async_mock_service(hass, "tts", "speak")
     volume = async_mock_service(hass, "media_player", "volume_set")
     target = await setup_blueprint_file(
