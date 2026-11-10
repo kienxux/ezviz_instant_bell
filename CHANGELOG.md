@@ -2,6 +2,10 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 0.10.3
+
+- The encrypted cloud live view of 0.10.2 still stayed black (#22). The cloud hands the stream over in pieces that do not start at a packet, and once the key was found in the middle of one, nothing was decrypted or passed on any more (`video sender done (0 B sent)`). Decryption now starts at the next packet. A decryption buffer that grows past 2 MB without anything to decrypt now skips ahead instead of growing without limit.
+
 ## 0.10.2
 
 - Encrypted live video now also plays with the cloud stream source (#22). Until now only the local source decrypted it, and the cloud live view stayed black. With the cloud source the integration now also notices the encryption and asks for the camera key (or the 4-digit e-mail code in Settings > Repairs), as it does locally.

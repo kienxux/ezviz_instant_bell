@@ -56,7 +56,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any, List, Optional
 
-from ._pes import PesParser, keep_clear_video_pes
+from ._pes import PesParser, cut_to_packet_start, keep_clear_video_pes
 from pyezvizapi.cloud_stream import open_cloud_stream
 
 from .const import DOMAIN
@@ -97,6 +97,10 @@ OUTPUT_STALL_TIMEOUT = 30.0
 # GOP exceeds this the cache is dropped for that GOP (new viewers fall back
 # to waiting for the next keyframe — the pre-cache behaviour).
 GOP_CACHE_MAX = 8 * 1024 * 1024
+# The decryption buffer holds a run of video packets until the next audio
+# packet, normally well under a second. Past this size without anything to
+# decrypt it is stuck on a packet it cannot parse and skips to the next one.
+DECRYPT_STALL_BYTES = 2 * 1024 * 1024
 # Interval between relay progress log lines (#44).
 PROGRESS_LOG_SEC = 60.0
 # A subscriber queue saturated this long with nothing draining it has no live
@@ -572,9 +576,13 @@ class StreamRelay:
             )
 
             self._decrypt_buf.extend(body)
+            head = cut_to_packet_start(self._decrypt_buf)
             n = mpeg_ps_decryptable_prefix_length(bytes(self._decrypt_buf))
+            if n <= 0 and len(self._decrypt_buf) > DECRYPT_STALL_BYTES:
+                head += cut_to_packet_start(self._decrypt_buf, stalled=True)
+                n = mpeg_ps_decryptable_prefix_length(bytes(self._decrypt_buf))
             if n <= 0:
-                return b""
+                return head
             chunk = bytes(self._decrypt_buf[:n])
             del self._decrypt_buf[:n]
             if self._decrypt_header_size is None:
@@ -586,7 +594,7 @@ class StreamRelay:
                         "StreamRelay: decrypting with %d clear NAL header byte(s) (serial=%s)",
                         self._decrypt_header_size, self._serial,
                     )
-            return keep_clear_video_pes(chunk, decrypt_hikvision_ps_video(
+            return head + keep_clear_video_pes(chunk, decrypt_hikvision_ps_video(
                 chunk,
                 self._decrypt_key,
                 nalu_header_size=2 if self._decrypt_header_size is None else self._decrypt_header_size,

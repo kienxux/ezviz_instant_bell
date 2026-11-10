@@ -28,6 +28,7 @@ SPS_PPS = SC4 + b"\x67\x42\x00\x1f" + SC4 + b"\x68\xce\x3c\x80"
 IDR = SC4 + b"\x65\x88\x84\x00"
 P = SC4 + b"\x41\x9a\x02\x00"
 HEVC_VPS = SC4 + b"\x40\x01\x0c\x01"
+PACK = b"\x00\x00\x01\xba\x44\x00\x04\x00\x04\x01\x00\x00\x03\xf8"  # MPEG-2 pack header, no stuffing
 
 
 class FakeApi:
@@ -484,6 +485,27 @@ def test_video_packets_that_are_not_scrambled_are_passed_unchanged() -> None:
     assert out[7:len(encrypted)] == plain[7:]
 
 
+def test_decryption_starts_at_the_next_packet_when_the_buffer_begins_inside_one() -> None:
+    """Cloud chunks are not cut at packets; a buffer starting inside one never yielded anything (#22)."""
+    plain, encrypted = _hevc_ps(b"ABCDEF", 2)
+    tail = encrypted[-30:]  # the end of a packet that began before the key was known
+    r = relay()
+    r._decrypt_key = "ABCDEF"
+    out = r._maybe_decrypt(tail + PACK + encrypted + pes(0xC0, b"\xff\xf1"))
+    assert out.startswith(tail + PACK + plain[:6] + b"\xa0" + plain[7:])
+
+
+def test_a_buffer_that_yields_nothing_for_too_long_skips_to_the_next_packet() -> None:
+    plain, encrypted = _hevc_ps(b"ABCDEF", 2)
+    stuck = b"\x00\x00\x01\xe0\xff\xff\x80\x00\x00" + bytes(100)  # announces 64 KB that never come
+    r = relay()
+    r._decrypt_key = "ABCDEF"
+    with patch.object(live_relay, "DECRYPT_STALL_BYTES", 64):
+        out = r._maybe_decrypt(stuck + PACK + encrypted + pes(0xC0, b"\xff\xf1"))
+    assert out.startswith(stuck + PACK + plain[:6] + b"\xa0" + plain[7:])
+    assert not r._decrypt_buf
+
+
 def _aac_frame(key: bytes) -> tuple[bytes, bytes]:
     """An AAC-LC 16 kHz mono frame, plain and with its body encrypted as on firmware 5.4."""
     from Crypto.Cipher import AES
@@ -535,6 +557,27 @@ async def test_an_encrypted_cloud_session_reaches_the_viewers_decrypted() -> Non
     reader.join(2)
     assert v_q.get_nowait() == plain_video[9:]  # the payload behind the PES header
     assert a_q.get_nowait() == plain_sound
+    assert r.detected_codec == "hevc"
+
+
+async def test_a_key_found_in_the_middle_of_a_cloud_session_decrypts_what_follows() -> None:
+    """The next cloud chunk began inside a packet, and nothing reached the viewers any more (#22)."""
+    plain, encrypted = _hevc_ps(b"ABCDEF", 2)
+    cut = len(encrypted) // 2
+    source = FakeSource([
+        pes(0xE0, P, scrambled=True) * 8 + encrypted[:cut],
+        encrypted[cut:] + PACK + encrypted + pes(0xC0, b"\xff\xf1AAC"),
+    ])
+    r = relay(encryption_key="ABCDEF")
+    v_q = queue.Queue()
+    r._sub_v_qs.append(v_q)
+    with patch.object(live_relay, "open_cloud_stream", return_value=source):
+        await r.prewarm()
+        reader = r._shared_reader
+        await wait_for(lambda: r._shared_vtm is None)
+    reader.join(2)
+    viewed = [v_q.get_nowait() for _ in range(v_q.qsize())]
+    assert r._decrypt_key == "ABCDEF" and plain[9:] in viewed
     assert r.detected_codec == "hevc"
 
 

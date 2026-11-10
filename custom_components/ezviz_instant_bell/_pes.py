@@ -216,3 +216,29 @@ def keep_clear_video_pes(original: bytes, decrypted: bytes) -> bytes:
             out[i:end] = original[i:end]
         i = max(end, i + 4)
     return bytes(out)
+
+
+PACK_START = b"\x00\x00\x01\xba"
+
+
+def cut_to_packet_start(buf: bytearray, stalled: bool = False) -> bytes:
+    """Remove and return the bytes in front of the first MPEG-PS packet (#22).
+
+    pyezvizapi parses MPEG-PS from the first byte of what it gets. Cloud
+    chunks are not cut at packet boundaries, and the key can arrive in the
+    middle of a packet, so the buffer may start inside one and would then
+    never yield anything to decrypt. The bytes up to the next pack header are
+    handed back to be passed on as they are. ``stalled`` means the buffer grew
+    without yielding anything, so a start code at its first byte is skipped
+    too.
+    """
+    if len(buf) < 4:
+        return b""
+    if not stalled and buf[:3] == b"\x00\x00\x01" and 0xBA <= buf[3] <= 0xEF:
+        return b""
+    start = buf.find(PACK_START, 1)
+    if start < 0:
+        start = len(buf) - 3  # the last bytes may begin a pack header
+    head = bytes(buf[:start])
+    del buf[:start]
+    return head
