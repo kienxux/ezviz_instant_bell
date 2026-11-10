@@ -2,6 +2,11 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 0.10.4
+
+- Still images of the live camera (dashboard pictures, thumbnails, cards that refresh every second) are now made from the latest keyframe the running live stream already has: encoded once per keyframe and shared by all requests. Each request used to start its own ffmpeg that read the stream like a viewer, which took about 10 seconds with the local stream source and showed nothing while the stream gave nothing (#22).
+- A live viewer that disconnects before the picture starts now stops its ffmpeg at once. Before, it kept running for 90 seconds; with a card refreshing every second that added up to dozens of ffmpeg processes.
+
 ## 0.10.3
 
 - The encrypted cloud live view of 0.10.2 still stayed black (#22). The cloud hands the stream over in pieces that do not start at a packet, and once the key was found in the middle of one, nothing was decrypted or passed on any more (`video sender done (0 B sent)`). Decryption now starts at the next packet. A decryption buffer that grows past 2 MB without anything to decrypt now skips ahead instead of growing without limit.

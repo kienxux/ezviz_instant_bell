@@ -101,6 +101,12 @@ GOP_CACHE_MAX = 8 * 1024 * 1024
 # packet, normally well under a second. Past this size without anything to
 # decrypt it is stuck on a packet it cannot parse and skips to the next one.
 DECRYPT_STALL_BYTES = 2 * 1024 * 1024
+# Still images (#22): how long a request waits for the first keyframe (Home
+# Assistant gives it 10 s), how long the encoder may take, and how much of
+# the GOP it gets (it only needs the keyframe at the start).
+STILL_WAIT = 8.0
+STILL_TIMEOUT = 10.0
+STILL_INPUT_MAX = 2 * 1024 * 1024
 # Interval between relay progress log lines (#44).
 PROGRESS_LOG_SEC = 60.0
 # A subscriber queue saturated this long with nothing draining it has no live
@@ -124,6 +130,15 @@ OFFLINE_MAX_BACKOFF = 300.0
 # (sub-second first frame), short enough that we don't leave a cloud session
 # open all day after a stray motion event.
 PREWARM_IDLE_TIMEOUT = 120.0
+
+
+async def _viewer_left(reader: asyncio.StreamReader) -> None:
+    """Return once the viewer has closed its side of the relay connection."""
+    try:
+        while await reader.read(4096):
+            pass
+    except OSError:
+        pass
 
 
 def _is_offline_error(exc: BaseException) -> bool:
@@ -297,6 +312,12 @@ class StreamRelay:
         # prepended before a decoder can use it (#51).
         self._param_sets: bytes = b""
         self._gop_lock = threading.Lock()
+        # Counts restarts of the GOP cache, so a still image is encoded once
+        # per keyframe and handed out until the next one (#22).
+        self._gop_serial = 0
+        self._still: Optional[bytes] = None
+        self._still_serial = -1
+        self._still_task: Optional[asyncio.Task] = None
         # True while the active shared source is the CPD7 LAN pipeline.
         self._active_lan: bool = False
         self._idle_handle: Optional[asyncio.TimerHandle] = None
@@ -520,6 +541,7 @@ class StreamRelay:
                     self._param_sets = extracted
             if _has_keyframe(chunk):
                 self._kf_markers_seen += 1
+                self._gop_serial += 1
                 self._gop_buf = bytearray(chunk)
             elif self._gop_buf:
                 if len(self._gop_buf) + len(chunk) > GOP_CACHE_MAX:
@@ -554,6 +576,76 @@ class StreamRelay:
                 return []
             buf = params + buf
         return [buf[i:i + RELAY_CHUNK] for i in range(0, len(buf), RELAY_CHUNK)]
+
+    def _es_config(self) -> str:
+        """The video codec setting the cloud path works with: "h264", "hevc" or "hevc_copy"."""
+        if self._video_codec in ("h264", "hevc", "hevc_copy"):
+            return self._video_codec
+        return "hevc" if self._detected_codec == "hevc" else "h264"
+
+    async def still_image(self) -> Optional[bytes]:
+        """A JPEG of the latest keyframe, for still-image requests (#22).
+
+        Dashboard cards ask for one up to every second. Each request used to
+        run its own ffmpeg against the relay, which probes the stream like a
+        viewer (about 10 s on the local path) and piled up while the stream
+        gave nothing. Now the keyframe already in the GOP cache is encoded
+        once and its JPEG handed out until the next keyframe; requests in
+        the meantime share one run.
+        """
+        if self._still_task is None or self._still_task.done():
+            self._still_task = asyncio.ensure_future(self._make_still())
+        return await asyncio.shield(self._still_task)
+
+    async def _make_still(self) -> Optional[bytes]:
+        try:
+            await self.prewarm()
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("StreamRelay: still image prewarm failed: %s", exc)
+            return self._still
+        deadline = time.monotonic() + STILL_WAIT
+        while True:
+            serial = self._gop_serial
+            if self._still is not None and serial == self._still_serial:
+                return self._still
+            gop = self._gop_snapshot()
+            if gop:
+                break
+            if self._shared_vtm is None or time.monotonic() >= deadline:
+                return self._still
+            await asyncio.sleep(0.2)
+        # The local path caches MPEG-PS, the cloud path the video stream alone.
+        fmt = "mpeg" if self._active_lan else ("h264" if self._es_config() == "h264" else "hevc")
+        jpeg = await self._encode_still(fmt, b"".join(gop)[:STILL_INPUT_MAX])
+        if jpeg:
+            self._still, self._still_serial = jpeg, serial
+        return jpeg or self._still
+
+    async def _encode_still(self, fmt: str, data: bytes) -> Optional[bytes]:
+        """Decode the first frame of ``data`` into a JPEG with a one-shot ffmpeg."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                self._ffmpeg_path,
+                "-hide_banner", "-loglevel", "error",
+                "-f", fmt, "-i", "pipe:0",
+                "-frames:v", "1", "-q:v", "5", "-f", "image2", "pipe:1",
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("StreamRelay: still image ffmpeg spawn failed: %s", exc)
+            return None
+        try:
+            jpeg, _ = await asyncio.wait_for(proc.communicate(data), timeout=STILL_TIMEOUT)
+        except asyncio.TimeoutError:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+            _LOGGER.debug("StreamRelay: still image ffmpeg timed out (serial=%s)", self._serial)
+            return None
+        return jpeg or None
 
     def _maybe_decrypt(self, body: bytes) -> bytes:
         """Decrypt scrambled video payloads when the device encrypts them.
@@ -856,6 +948,8 @@ class StreamRelay:
             )
 
     async def stop(self) -> None:
+        if self._still_task is not None:
+            self._still_task.cancel()
         if self._server is None:
             return
         self._server.close()
@@ -1448,12 +1542,7 @@ class StreamRelay:
                 #   hevc       -> input hevc, transcode to h264 (WebRTC-safe)
                 #   hevc_copy  -> input hevc, copy (low-power hosts, #36)
                 #   auto       -> sniff; hevc gets transcoded, else copy
-                if self._video_codec in ("h264", "hevc", "hevc_copy"):
-                    cfg = self._video_codec
-                elif self._detected_codec == "hevc":
-                    cfg = "hevc"
-                else:
-                    cfg = "h264"
+                cfg = self._es_config()
                 in_is_hevc = cfg in ("hevc", "hevc_copy")
                 transcode = cfg == "hevc"
                 in_fmt = "hevc" if in_is_hevc else "h264"
@@ -1559,33 +1648,48 @@ class StreamRelay:
 
             assert proc.stdout is not None
             got_output = False
-            while True:
-                try:
-                    data = await asyncio.wait_for(
-                        proc.stdout.read(RELAY_CHUNK),
+            # A viewer that gave up used to be noticed only at the next
+            # write, which never came while ffmpeg had no output: its ffmpeg
+            # ran for the full 90 s, one per still-image request, up to ~50
+            # at once (#22). The viewer never sends anything, so the end of
+            # its side of the connection means it left.
+            left = asyncio.ensure_future(_viewer_left(reader))
+            try:
+                while True:
+                    read = asyncio.ensure_future(proc.stdout.read(RELAY_CHUNK))
+                    done, _ = await asyncio.wait(
+                        {read, left},
                         timeout=(
                             OUTPUT_STALL_TIMEOUT
                             if got_output
                             else FIRST_OUTPUT_TIMEOUT
                         ),
+                        return_when=asyncio.FIRST_COMPLETED,
                     )
-                except asyncio.TimeoutError:
-                    _LOGGER.warning(
-                        "StreamRelay: relay ffmpeg produced no output for "
-                        "%.0fs (serial=%s, got_output=%s) — closing session",
-                        OUTPUT_STALL_TIMEOUT if got_output
-                        else FIRST_OUTPUT_TIMEOUT,
-                        self._serial, got_output,
-                    )
-                    break
-                if not data:
-                    break
-                got_output = True
-                try:
-                    writer.write(data)
-                    await writer.drain()
-                except (ConnectionResetError, BrokenPipeError):
-                    break
+                    if read not in done:
+                        read.cancel()
+                        if left in done:
+                            _LOGGER.debug("StreamRelay: viewer %s left", peer)
+                        else:
+                            _LOGGER.warning(
+                                "StreamRelay: relay ffmpeg produced no output for "
+                                "%.0fs (serial=%s, got_output=%s) — closing session",
+                                OUTPUT_STALL_TIMEOUT if got_output
+                                else FIRST_OUTPUT_TIMEOUT,
+                                self._serial, got_output,
+                            )
+                        break
+                    data = read.result()
+                    if not data:
+                        break
+                    got_output = True
+                    try:
+                        writer.write(data)
+                        await writer.drain()
+                    except (ConnectionResetError, BrokenPipeError):
+                        break
+            finally:
+                left.cancel()
         except Exception as exc:
             _LOGGER.warning(
                 "StreamRelay: stream error for serial=%s: %s",

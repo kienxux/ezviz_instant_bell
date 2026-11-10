@@ -591,3 +591,144 @@ async def test_scrambled_video_does_not_decide_the_codec_before_it_is_decrypted(
         await wait_for(lambda: r._shared_vtm is None)
     reader.join(2)
     assert r.detected_codec is None
+
+
+# --- still images and viewers that leave ----------------------------------------------
+
+
+class FakeEncoder:
+    """A one-shot ffmpeg that turns whatever it gets into ``jpeg``."""
+
+    def __init__(self, jpeg: bytes = b"JPEG") -> None:
+        self.jpeg = jpeg
+        self.input = b""
+
+    async def communicate(self, data: bytes = b"") -> tuple[bytes, None]:
+        self.input = data
+        return self.jpeg, None
+
+    def kill(self) -> None:
+        pass
+
+
+class FakeExec:
+    """Stands in for asyncio.create_subprocess_exec and remembers each command."""
+
+    def __init__(self, make=FakeEncoder) -> None:
+        self.make = make
+        self.runs: list[tuple[tuple[str, ...], object]] = []
+
+    async def __call__(self, *cmd: str, **kwargs):
+        proc = self.make()
+        self.runs.append((cmd, proc))
+        return proc
+
+
+async def test_still_images_are_encoded_once_per_keyframe() -> None:
+    """Cards asked every second and each request ran its own ffmpeg against the relay (#22)."""
+    source = FakeSource([pes(0xE0, SPS_PPS + IDR), pes(0xE0, P)], hold=True)
+    r = relay()
+    encoder = FakeExec()
+    with patch.object(live_relay, "open_cloud_stream", return_value=source), patch.object(
+        live_relay.asyncio, "create_subprocess_exec", encoder
+    ):
+        assert await r.still_image() == b"JPEG"
+        assert await r.still_image() == b"JPEG"
+        assert len(encoder.runs) == 1
+        cmd, proc = encoder.runs[0]
+        assert cmd[cmd.index("-f") + 1] == "h264" and proc.input.startswith(SPS_PPS + IDR)
+        r._gop_update(SPS_PPS + IDR)  # the next keyframe
+        assert await r.still_image() == b"JPEG"
+        assert len(encoder.runs) == 2
+        await r._shutdown_shared()
+
+
+async def test_still_image_requests_at_the_same_time_share_one_encoder_run() -> None:
+    source = FakeSource([pes(0xE0, SPS_PPS + IDR)], hold=True)
+    r = relay()
+    encoder = FakeExec()
+    with patch.object(live_relay, "open_cloud_stream", return_value=source), patch.object(
+        live_relay.asyncio, "create_subprocess_exec", encoder
+    ):
+        assert await asyncio.gather(*(r.still_image() for _ in range(3))) == [b"JPEG"] * 3
+        assert len(encoder.runs) == 1
+        await r._shutdown_shared()
+
+
+async def test_no_still_image_and_no_waiting_without_a_session() -> None:
+    r = relay()
+    encoder = FakeExec()
+    started = time.monotonic()
+    with patch.object(live_relay, "open_cloud_stream", side_effect=RuntimeError("cloud down")), patch.object(
+        live_relay.asyncio, "create_subprocess_exec", encoder
+    ):
+        assert await r.still_image() is None
+    assert not encoder.runs and time.monotonic() - started < 2
+
+
+class SilentFfmpeg:
+    """A relay ffmpeg that never writes anything."""
+
+    def __init__(self) -> None:
+        self.stdout = asyncio.StreamReader()
+        self.stderr = asyncio.StreamReader()
+        self.stderr.feed_eof()
+        self.killed = False
+
+    def kill(self) -> None:
+        self.killed = True
+        self.stdout.feed_eof()
+
+    async def wait(self) -> int:
+        return 0
+
+
+class FakeListener:
+    """ffmpeg's input socket; already closed, so its sender thread ends at once."""
+
+    def settimeout(self, timeout: float) -> None:
+        pass
+
+    def accept(self):
+        raise OSError("closed")
+
+    def close(self) -> None:
+        pass
+
+
+class FakeWriter:
+    def __init__(self) -> None:
+        self.closed = False
+
+    def get_extra_info(self, name: str):
+        return ("127.0.0.1", 40000)
+
+    def write(self, data: bytes) -> None:
+        pass
+
+    async def drain(self) -> None:
+        pass
+
+    def close(self) -> None:
+        self.closed = True
+
+    async def wait_closed(self) -> None:
+        pass
+
+
+async def test_a_viewer_that_leaves_before_any_output_stops_its_ffmpeg() -> None:
+    """It used to run for the full 90 s, one per still-image request, up to ~50 at once (#22)."""
+    source = FakeSource(hold=True)
+    r = relay()
+    ffmpeg = FakeExec(SilentFfmpeg)
+    viewer = asyncio.StreamReader()
+    viewer.feed_eof()  # the viewer has already hung up
+    writer = FakeWriter()
+    with patch.object(live_relay, "open_cloud_stream", return_value=source), patch.object(
+        live_relay.asyncio, "create_subprocess_exec", ffmpeg
+    ), patch.object(live_relay, "_free_local_port", return_value=1), patch.object(
+        live_relay, "_start_local_listener", return_value=FakeListener()
+    ):
+        await asyncio.wait_for(r._handle_client(viewer, writer), timeout=10)
+        await r._shutdown_shared()
+    assert ffmpeg.runs[0][1].killed and writer.closed and r._active_clients == 0
