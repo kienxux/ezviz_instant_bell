@@ -2,13 +2,10 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
-## Unreleased
+## 0.10.0
 
 - New options **Motion as an event of the Doorbell entity** and **Person as an event of the Doorbell entity**, both off by default (#12). The **Doorbell** event entity then also has the types `motion` and `person`. They come from the cloud message list a few seconds after the event and are told apart by the message's name and code; an unrecognised message stays `other`. With the options off nothing changes. Their picture does not replace the ring's in **Last picture**.
 - The diagnostics download lists the codes of the latest messages (`recent_messages`: subtype, alarm type, recognised kind; the text only for motion and person messages), to check how a door station names them.
-
-## 0.9.1
-
 - Encrypted live video on newer HP7 firmware (5.4) stayed black although the camera key was stored (#22). This firmware also encrypts the header of each video frame part, and the integration now finds out per session which way the door station encrypts before decrypting. Door stations that already worked are not affected.
 - On the same firmware only the video packets with keyframes are encrypted; the others come in the clear and were garbled by decrypting them too (`PPS id out of range`). Packets the door station does not mark as scrambled are now passed on unchanged (#22).
 - The **persistent notification** ring blueprint shows the picture in the notification instead of printing its address as text. The picture link expires after a few minutes, so the notification also says where the picture stays: *Media > EZVIZ HP7 / CP7 Video Intercom*. Re-import the blueprint to get the change.

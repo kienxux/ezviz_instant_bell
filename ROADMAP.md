@@ -6,6 +6,7 @@ one to say what you need.
 
 ## Done
 
+- 0.10.0: motion and person as event types of the Doorbell entity (options, off by default), with their message codes in the diagnostics; required CI checks on `main`; fixes for encrypted HEVC video on HP7 firmware 5.4 (#22); the persistent-notification blueprint shows the picture inline
 - 0.9.0: pictures of motion and person events saved in the media folder (option); devices named as in the EZVIZ app, indoor monitors shown as connected to their door station; the live video code split into modules, with tests for the clip store, the media source and the stream relay
 - Local first, checked (November 2026): captures of the EZVIZ app at home (live view, door, gate, two rings) show that a CPD5 reports rings and receives door and gate commands only through the EZVIZ cloud, even with the phone on the same network. Its local broadcasts are a timed heartbeat, not events. Only the live video is local, and that already works. Owners of other HP7/CP7 models who see different behaviour are welcome to open an issue
 - Next release: starts and shows the local live video when the EZVIZ cloud is down
@@ -17,16 +18,11 @@ one to say what you need.
 
 ## Next
 
-- More about what the door station reports: motion and person events
+- Check the motion/person mapping against real messages (diagnostics `recent_messages`)
 
 ## Later (ideas, no dates; built if someone asks)
 
-- Motion and person events as events or binary sensors
 - Two-way audio. The library only knows talk as a capability flag and has no way to send audio, so this needs protocol research with a real door station (see issue #15).
-
-## Housekeeping
-
-- Make the HACS, hassfest and test checks required
 
 ## Not planned
 
