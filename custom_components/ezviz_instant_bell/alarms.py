@@ -80,6 +80,29 @@ def is_detection(title: Any, subtype: int | None) -> bool:
     return not any(key in DOOR_KEYS for key in kinds_for(title))
 
 
+# Codes that pyezvizapi uses as filters of the message list for motion and for
+# a person. Not yet seen on a real entry, so the words below decide as well.
+MOTION_CODES = frozenset({2402})
+PERSON_CODES = frozenset({2403})
+# "Smart" and "intelligent detection" are EZVIZ's names for human shape
+# detection (assumed from the app; the plain motion alarm says "motion").
+PERSON_WORDS = ("person", "people", "human", "smart detection", "intelligent detection")
+MOTION_WORDS = ("motion", "movement", "pir")
+
+
+def detection_kind(title: Any, subtype: int | None, alarm_type: int | None = None) -> str | None:
+    """``"person"``, ``"motion"`` or None for a message that is neither (or not recognised)."""
+    if not is_detection(title, subtype):
+        return None
+    codes = {subtype, alarm_type}
+    lowered = title.lower() if isinstance(title, str) else ""
+    if codes & PERSON_CODES or any(word in lowered for word in PERSON_WORDS):
+        return "person"
+    if codes & MOTION_CODES or any(word in lowered for word in MOTION_WORDS):
+        return "motion"
+    return None
+
+
 def matches(kind: AlarmKind, text: Any) -> bool:
     """True if ``text`` contains one of the kind's names (any letter case)."""
     if not isinstance(text, str):

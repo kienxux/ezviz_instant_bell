@@ -73,7 +73,9 @@
           "diagnostic_dumps": "Diagnose-Dumps (schreibt zwei .bin-Dateien nach /config mit dem Anfang des Streams, für die Fehleranalyse bei Videoproblemen. Ausgeschaltet lassen: im Normalbetrieb nutzlos)",
           "save_clips": "Video jeder Klingel speichern (holt nach dem Klingeln die Aufnahme von der SD-Karte und behält sie)",
           "save_detection_pictures": "Bild jeder Bewegungs- und Personenerkennung im Medienordner speichern",
-          "detection_picture_days": "Gespeicherte Bilder behalten (Tage)"
+          "detection_picture_days": "Gespeicherte Bilder behalten (Tage)",
+          "motion_events": "Bewegung als Ereignis der Entität Türklingel",
+          "person_events": "Person als Ereignis der Entität Türklingel"
         },
         "data_description": {
           "poll_interval": "Wie oft EZVIZ nach neuen Klingeln gefragt wird. Kürzer bedeutet eine schnellere Benachrichtigung.",
@@ -82,7 +84,9 @@
           "monitor_serials": "Leer lassen, um den Monitor automatisch zu finden. Sonst die Seriennummern durch Kommas getrennt angeben (bei mehreren Monitoren im Haus).",
           "save_clips": "Standardmäßig aus. Ein gespeichertes Video wird durch das Ereignis ezviz_instant_bell_clip_saved und den Sensor 'Zuletzt gespeichertes Video' gemeldet. Braucht eine SD-Karte in der Türstation und ausgeschaltete Videoverschlüsselung; die Videos zählen zu den 500 MB des Video-Ordners.",
           "save_detection_pictures": "Standardmäßig aus. Die Bilder erscheinen unter Medien > Meine Medien > ezviz_instant_bell, ein Ordner pro Türstation und Tag, etwa 5 bis 12 Sekunden nach dem Ereignis; jedes wird durch das Ereignis ezviz_instant_bell_picture_saved gemeldet. Klingeln und Türöffnungen werden hier nicht gespeichert. Welche Ereignisse die Türstation meldet (Bewegung, Personenerkennung), wird in der EZVIZ-App eingestellt.",
-          "detection_picture_days": "Ältere Tagesordner werden gelöscht. Nur der eigene Ordner der Integration wird angefasst."
+          "detection_picture_days": "Ältere Tagesordner werden gelöscht. Nur der eigene Ordner der Integration wird angefasst.",
+          "motion_events": "Standardmäßig aus. Die Ereignis-Entität meldet dann auch Bewegung, einige Sekunden nachdem die Türstation sie meldet (sie kommt wie ein Klingeln aus der Nachrichtenliste). Welche Ereignisse die Türstation meldet, wird in der EZVIZ-App eingestellt.",
+          "person_events": "Standardmäßig aus. Wie Bewegung, für die Personenerkennung. Bewegung und Person werden am Namen der Nachricht unterschieden; eine nicht erkannte bleibt Sonstiges."
         },
         "description": "Optionen für das Live-Video gelten nach dem Neuladen der Integration."
       }
@@ -273,6 +277,8 @@
               "ring": "Klingel",
               "door_unlock": "Tür geöffnet",
               "gate_open": "Tor geöffnet",
+              "motion": "Bewegung",
+              "person": "Person",
               "other": "Sonstiges"
             }
           }

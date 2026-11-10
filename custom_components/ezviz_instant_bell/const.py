@@ -132,6 +132,10 @@ DEFAULT_DETECTION_PICTURE_DAYS = 30
 MAX_DETECTION_PICTURE_DAYS = 365
 EVENT_PICTURE_SAVED = f"{DOMAIN}_picture_saved"
 
+# -- motion and person as types of the event entity (options, off by default) ----
+CONF_MOTION_EVENTS = "motion_events"
+CONF_PERSON_EVENTS = "person_events"
+
 # -- working without the EZVIZ cloud --------------------------------------------
 CLOUD_RETRY_SECONDS = 300  # while the cloud is unreachable, try a new login this often
 ISSUE_CLOUD_OFFLINE = "cloud_offline"

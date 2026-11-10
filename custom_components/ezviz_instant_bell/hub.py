@@ -7,6 +7,7 @@ import logging
 import threading
 import time
 from collections import OrderedDict
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,8 @@ from .const import (
     CONF_SAVE_CLIPS,
     CONF_DETECTION_PICTURE_DAYS,
     CONF_SAVE_DETECTION_PICTURES,
+    CONF_MOTION_EVENTS,
+    CONF_PERSON_EVENTS,
     CLIP_SAVE_FIRST_WAIT,
     CLIP_SAVE_GIVE_UP,
     CLIP_SAVE_POLL,
@@ -63,7 +66,7 @@ from .const import (
     UNLOCK_COOLDOWN,
 )
 from . import detection_pictures, ezviz, state
-from .alarms import LEARNED_KEYS, is_detection, kinds_for
+from .alarms import LEARNED_KEYS, detection_kind, is_detection, kinds_for
 from .device_api import DeviceApi
 from .clips import ClipStore
 from .recordings import Recording, channel_serial, clip_id, day_window, recordings_from_answer
@@ -72,6 +75,10 @@ from .stream_support import StreamSupport
 from .feature_code import resolve_feature_code
 from .history import HistoryItem, day_text, item_from_message, items_from_answer
 from .parsing import (
+    DETECTION_KINDS,
+    KIND_MOTION,
+    KIND_OTHER,
+    KIND_PERSON,
     KIND_RING,
     MAX_EVENT_AGE,
     BellEvent,
@@ -87,6 +94,7 @@ from .parsing import (
 _LOGGER = logging.getLogger(__name__)
 
 POLL_WARN_AFTER = 5  # consecutive poll failures before a warning is logged
+RECENT_MESSAGES = 20  # list entries kept for the diagnostics
 
 
 class InstantBellHub:
@@ -133,6 +141,8 @@ class InstantBellHub:
         self.cloud_online = True
         self._unsub_cloud_retry: Any = None
         self._tracker = NewMessageTracker()
+        # What the latest list entries were, without names or links: shown in the diagnostics.
+        self.recent_messages: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self._dedupe = EventDeduper()
         self._unsub_poll: Any = None
         self._polling = False
@@ -431,6 +441,10 @@ class InstantBellHub:
         event = event_from_push(decoded, dt_util.DEFAULT_TIME_ZONE)
         if event is None:
             return
+        if event.kind == KIND_OTHER:
+            kind = detection_kind(event.title, event.code)
+            if kind in self.detection_kinds:
+                event = replace(event, kind=kind)
         self.hass.loop.call_soon_threadsafe(self._handle_event, event)
 
     async def _async_poll(self, _now: Any) -> None:
@@ -448,12 +462,68 @@ class InstantBellHub:
             self._polling = False
         self._poll_failures = 0
         tz = dt_util.DEFAULT_TIME_ZONE
-        for message in self._tracker.fresh(messages_from_answer(answer)):
+        messages = messages_from_answer(answer)
+        self._remember_codes(messages, tz)
+        for message in self._tracker.fresh(messages):
             event = event_from_message(message, tz)
             if event is not None:
                 self._handle_event(event)
-            elif self.entry.options.get(CONF_SAVE_DETECTION_PICTURES):
-                self._handle_detection(item_from_message(message, tz))
+                continue
+            item = item_from_message(message, tz)
+            detection = self._detection_event(item)
+            if detection is not None:
+                self._handle_event(detection)
+            if self.entry.options.get(CONF_SAVE_DETECTION_PICTURES):
+                self._handle_detection(item)
+
+    @property
+    def detection_kinds(self) -> tuple[str, ...]:
+        """Motion and person, as far as they are switched on in the options."""
+        options = self.entry.options
+        wanted = {KIND_MOTION: options.get(CONF_MOTION_EVENTS), KIND_PERSON: options.get(CONF_PERSON_EVENTS)}
+        return tuple(kind for kind in DETECTION_KINDS if wanted[kind])
+
+    def _serial_of(self, item: HistoryItem) -> str | None:
+        # "from" is the device's name on some entries, its serial on others.
+        return next(
+            (s for s in self.serials if item.serial and (same_device(item.serial, s) or item.serial == self.names.get(s))),
+            None,
+        )
+
+    def _detection_event(self, item: HistoryItem | None) -> BellEvent | None:
+        """A motion or person event from a list entry, if that kind is switched on."""
+        if item is None:
+            return None
+        kind = detection_kind(item.title, item.subtype, item.alarm_type)
+        serial = self._serial_of(item)
+        if kind not in self.detection_kinds or serial is None:
+            return None
+        return BellEvent(
+            serial=serial,
+            kind=kind,
+            occurred=item.occurred,
+            title=item.title,
+            picture_url=item.picture_url,
+            source="poll",
+            code=item.subtype,
+            message_id=item.message_id,
+        )
+
+    def _remember_codes(self, messages: list[dict[str, Any]], tz: Any) -> None:
+        for message in reversed(messages):  # oldest first, so the oldest are dropped
+            item = item_from_message(message, tz)
+            if item is None or item.message_id in self.recent_messages:
+                continue
+            kind = detection_kind(item.title, item.subtype, item.alarm_type)
+            self.recent_messages[item.message_id] = {
+                "subtype": item.subtype,
+                "alarm_type": item.alarm_type,
+                "kind": kind,
+                # Only the titles of motion and person entries: others can carry a name.
+                "title": item.title if is_detection(item.title, item.subtype) else None,
+            }
+        while len(self.recent_messages) > RECENT_MESSAGES:
+            self.recent_messages.popitem(last=False)
 
     @callback
     def _handle_event(self, event: BellEvent) -> None:
@@ -468,7 +538,8 @@ class InstantBellHub:
         fields = {"alarm_name": event.title, "alarm_time": event.occurred.isoformat() if event.occurred else None}
         self.learn_alarm_kinds(serial, event.title, event.kind, (stamp, fields))
         async_dispatcher_send(self.hass, self.signal_event, event)
-        if event.picture_url:
+        # Motion is frequent: its picture must not push the ring's out of the image entity.
+        if event.picture_url and event.kind not in DETECTION_KINDS:
             self.entry.async_create_background_task(
                 self.hass, self._async_load_picture(event), f"{DOMAIN}_picture"
             )
@@ -563,11 +634,7 @@ class InstantBellHub:
         """Keep the picture of a new list entry about movement or a person."""
         if item is None or not item.picture_url or not is_detection(item.title, item.subtype):
             return
-        # "from" is the device's name on some entries, its serial on others.
-        serial = next(
-            (s for s in self.serials if item.serial and (same_device(item.serial, s) or item.serial == self.names.get(s))),
-            None,
-        )
+        serial = self._serial_of(item)
         if serial is None:
             return
         occurred = item.occurred or dt_util.now()

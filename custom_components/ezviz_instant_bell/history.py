@@ -6,6 +6,7 @@ day; each has a title, a time and, mostly, a picture link.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date, datetime, tzinfo
 from typing import Any
@@ -26,11 +27,26 @@ class HistoryItem:
     title: str
     picture_url: str | None
     subtype: int | None
+    alarm_type: int | None = None  # ``ext.alarmType``: finer than the subtype on some entries
 
     def label(self) -> str:
         """Short text for lists: ``14:03:12  Your doorbell is ringing``."""
         clock = self.occurred.strftime("%H:%M:%S") if self.occurred else "--:--:--"
         return f"{clock}  {self.title}".rstrip() if self.title else clock
+
+
+def alarm_type_of(message: dict[str, Any]) -> int | None:
+    """``alarmType`` of the entry's ``ext`` (a dict, or the same as JSON text), if it is a number."""
+    ext = message.get("ext")
+    if isinstance(ext, str):
+        try:
+            ext = json.loads(ext)
+        except ValueError:
+            return None
+    try:
+        return int(ext.get("alarmType")) if isinstance(ext, dict) else None
+    except (TypeError, ValueError):
+        return None
 
 
 def item_from_message(message: dict[str, Any], tz: tzinfo) -> HistoryItem | None:
@@ -52,6 +68,7 @@ def item_from_message(message: dict[str, Any], tz: tzinfo) -> HistoryItem | None
         title=str(message.get("title") or "").strip(),
         picture_url=picture if isinstance(picture, str) and picture.startswith("http") else None,
         subtype=subtype,
+        alarm_type=alarm_type_of(message),
     )
 
 
