@@ -6,6 +6,7 @@ All notable changes. The newest version is first. Versions follow the `version` 
 
 - Encrypted live video on newer HP7 firmware (5.4) stayed black although the camera key was stored (#22). This firmware also encrypts the header of each video frame part, and the integration now finds out per session which way the door station encrypts before decrypting. Door stations that already worked are not affected.
 - On the same firmware only the video packets with keyframes are encrypted; the others come in the clear and were garbled by decrypting them too (`PPS id out of range`). Packets the door station does not mark as scrambled are now passed on unchanged (#22).
+- The **persistent notification** ring blueprint shows the picture in the notification instead of printing its address as text. The picture link expires after a few minutes, so the notification also says where the picture stays: *Media > EZVIZ HP7 / CP7 Video Intercom*. Re-import the blueprint to get the change.
 - The log message for an encrypted stream without a key no longer points to the 6-character label code; it names the 4-digit e-mail code and Settings > Repairs.
 
 ## 0.9.0

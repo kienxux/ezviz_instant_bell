@@ -1379,8 +1379,8 @@ async def test_persistent_notification_blueprint_notifies_on_ring(
         data = create[0].data
         assert data["notification_id"] == "ezviz_instant_bell_ring"
         assert data["title"] == "Someone is at the door"
-        assert data["message"].startswith("The doorbell rang.")
-        assert data["message"].split("Picture: ")[1].startswith("/api/image_proxy/")
+        assert data["message"].startswith("The doorbell rang at ")
+        assert "![Doorbell picture](/api/image_proxy/" in data["message"]
     finally:
         target.unlink(missing_ok=True)
 

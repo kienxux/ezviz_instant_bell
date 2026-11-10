@@ -2,7 +2,7 @@ blueprint:
   name: Doorbell ring as a persistent notification
   description: >
     When the doorbell rings, waits for the picture and shows a persistent
-    notification in Home Assistant with the picture link. The notification stays
+    notification in Home Assistant with the picture. The notification stays
     until you dismiss it (or until the time set below), so a ring is not lost if
     you miss the phone notification. It never opens the door: a persistent
     notification has no button to tap, so use the ring notification blueprint
@@ -73,9 +73,18 @@ actions:
     data:
       notification_id: ezviz_instant_bell_ring
       title: Someone is at the door
+      # The picture link carries an access token that Home Assistant renews
+      # every few minutes, so the inline picture can break later; the ring
+      # picture stays in the Media browser.
       message: >
-        The doorbell rang.
-        Picture: {{ state_attr(picture_entity, 'entity_picture') }}
+        The doorbell rang at {{ as_timestamp(now()) | timestamp_custom('%H:%M') }}.
+
+
+        ![Doorbell picture]({{ state_attr(picture_entity, 'entity_picture') }})
+
+
+        If the picture no longer shows, it is under *Media > EZVIZ HP7 / CP7
+        Video Intercom* (pictures of that day).
   - choose:
       - conditions:
           - condition: template
