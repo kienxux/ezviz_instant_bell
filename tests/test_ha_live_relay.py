@@ -482,3 +482,37 @@ def test_video_packets_that_are_not_scrambled_are_passed_unchanged() -> None:
     out = r._maybe_decrypt(encrypted + p_frame + pes(0xC0, b"\xff\xf1"))
     assert out[len(encrypted):].startswith(p_frame)
     assert out[7:len(encrypted)] == plain[7:]
+
+
+def _aac_frame(key: bytes) -> tuple[bytes, bytes]:
+    """An AAC-LC 16 kHz mono frame, plain and with its body encrypted as on firmware 5.4."""
+    from Crypto.Cipher import AES
+
+    header = b"\xff\xf1\x60\x40\x08\xff\xfc"  # 71 bytes, no CRC
+    body = b"\x00\xd4\x35\xa8" + bytes(range(60))
+    return header + body, header + AES.new(key.ljust(16, b"\0"), AES.MODE_ECB).encrypt(body)
+
+
+def test_the_sound_is_left_alone_while_no_key_is_in_use() -> None:
+    _, encrypted = _aac_frame(b"ABCDEF")
+    assert relay()._readable_audio(encrypted) == encrypted
+
+
+async def test_the_encrypted_sound_of_a_local_session_reaches_the_viewers_decrypted() -> None:
+    """ffmpeg showed no picture as long as it could not decode the sound (#22)."""
+    plain, encrypted = _aac_frame(b"ABCDEF")
+
+    class Lan(FakeSource):
+        def __init__(self, *args, **kwargs) -> None:
+            super().__init__([pes(0xC0, encrypted, scrambled=True)])
+
+    r = relay(stream_source="local")
+    r._decrypt_key = "ABCDEF"
+    a_q = queue.Queue()
+    r._sub_a_qs.append(a_q)
+    with patch.object(live_relay, "Cpd7LanSource", Lan):
+        await r.prewarm()
+        reader = r._shared_reader
+        await wait_for(lambda: r._shared_vtm is None)
+    reader.join(2)
+    assert [a_q.get_nowait() for _ in range(2)] == [plain, None]

@@ -2,6 +2,10 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 0.10.1
+
+- Encrypted live video on HP7 firmware 5.4 still stayed black with 0.10.0 (#22). The door station encrypts the sound as well, and ffmpeg sends no picture until it has decoded some sound. The sound is now decrypted with the same camera key; frames that still cannot be read are played as silence, so the picture shows in any case. This works with the local stream source (`local`, or `auto` on the same network); the cloud source decrypts neither picture nor sound. Door stations without encryption are not affected.
+
 ## 0.10.0
 
 - New options **Motion as an event of the Doorbell entity** and **Person as an event of the Doorbell entity**, both off by default (#12). The **Doorbell** event entity then also has the types `motion` and `person`. They come from the cloud message list a few seconds after the event and are told apart by the message's name and code; an unrecognised message stays `other`. With the options off nothing changes. Their picture does not replace the ring's in **Last picture**.

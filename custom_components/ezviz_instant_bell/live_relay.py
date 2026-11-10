@@ -60,6 +60,7 @@ from ._pes import PesParser, keep_clear_video_pes
 from pyezvizapi.cloud_stream import open_cloud_stream
 
 from .const import DOMAIN
+from .live_aac import SETTLE_FRAMES, AacDecryptor
 from .live_io import _free_local_port, _mk_drain, _put_sentinel, _sender_thread, _start_local_listener
 from .live_nal import _extract_param_sets, _has_keyframe, _has_param_sets, _sniff_video_codec
 from .live_sources import Cpd7LanSource, _PreStartedSource
@@ -276,6 +277,9 @@ class StreamRelay:
         # 1 for H.264, 0 when the header is encrypted too (HP7 firmware 5.4,
         # #22). Found once from the first chunk that shows it; 2 until then.
         self._decrypt_header_size: Optional[int] = None
+        # The sound is encrypted too on that firmware (#22); made per session
+        # once the key is known.
+        self._aac: Optional[AacDecryptor] = None
         # GOP cache (#37): the stream since the last keyframe. A new viewer
         # can only start painting from an IDR, and some doorbells emit
         # keyframes tens of seconds apart — replaying this to each new
@@ -594,6 +598,30 @@ class StreamRelay:
                 "unchanged (serial=%s): %s", self._serial, exc,
             )
             return body
+
+    def _readable_audio(self, payload: bytes) -> bytes:
+        """Decrypt the AAC frames of an encrypted stream (#22).
+
+        ffmpeg writes no output at all until it has decoded an audio frame,
+        so encrypted sound kept the picture away too. Frames that still do
+        not read as AAC become silence (see live_aac). Unchanged while no key
+        is in use.
+        """
+        if self._decrypt_key is None:
+            return payload
+        if self._aac is None:
+            self._aac = AacDecryptor(self._decrypt_key)
+        aac = self._aac
+        before = aac.frames
+        out = aac.feed(payload)
+        if before < SETTLE_FRAMES <= aac.frames:
+            _LOGGER.log(
+                logging.WARNING if aac.silenced > aac.frames // 2 else logging.DEBUG,
+                "StreamRelay: sound of the encrypted stream: %d frames clear, %d "
+                "decrypted, %d unreadable and played as silence (serial=%s)",
+                aac.clear, aac.decrypted, aac.silenced, self._serial,
+            )
+        return out
 
     def _enable_decryption(self) -> None:
         """Fetch the camera key so scrambled payloads can be decrypted."""
@@ -1021,6 +1049,7 @@ class StreamRelay:
         self._warned_scrambled = False
         self._decrypt_buf = bytearray()
         self._decrypt_header_size = None
+        self._aac = None
         v_bytes = a_bytes = 0
         # Time-based, not byte-based: at ~400 KB/s a 256 KB threshold emitted
         # an INFO line every ~0.6 s forever — a 24/7 Frigate consumer logged
@@ -1052,8 +1081,10 @@ class StreamRelay:
                     self._fanout(self._sub_raw_qs, body, video=True)
                     for stream_id, payload in parser.feed(body):
                         if stream_id == AUDIO_STREAM_ID and payload:
-                            a_bytes += len(payload)
-                            self._fanout(self._sub_a_qs, payload)
+                            payload = self._readable_audio(payload)
+                            if payload:
+                                a_bytes += len(payload)
+                                self._fanout(self._sub_a_qs, payload)
                         elif stream_id == VIDEO_STREAM_ID and payload:
                             self._es_dump(payload)
                             if self._detected_codec is None:
@@ -1301,14 +1332,12 @@ class StreamRelay:
                 # internally and copies video. Codec autodetected by the
                 # mpeg demuxer, so no -f h264/hevc guessing.
                 #
-                # Audio is dropped (-an) for now. The LAN MPEG-PS tags audio
-                # as MP2 but the frames have broken headers ("mp2 Header
-                # missing", #36 bob) — it's almost certainly AAC/G.711
-                # mislabelled, like the VTM cloud path. Undecodable MP2 can't
-                # be re-encoded to the AAC that HA's WebRTC needs, and copying
-                # raw MP2 doesn't play over WebRTC either, so we keep video
-                # clean and stable and revisit audio once the real codec is
-                # identified from a capture.
+                # Audio comes from a second input. The LAN MPEG-PS tags it as
+                # MP2 ("mp2 Header missing", #36 bob), but it is AAC ADTS, so
+                # the reader thread extracts the 0xC0 PES payloads and they
+                # are fed as `-f aac`. ffmpeg writes no output until it has
+                # decoded an audio frame, so sound it cannot decode keeps the
+                # picture away too (#22, see _readable_audio).
                 raw_port = _free_local_port()
                 a_port = _free_local_port()
                 raw_listener = _start_local_listener(raw_port)
