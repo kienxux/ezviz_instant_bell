@@ -61,9 +61,9 @@ class FakeSource:
         self._closed.set()
 
 
-def pes(stream_id: int, payload: bytes) -> bytes:
+def pes(stream_id: int, payload: bytes, scrambled: bool = False) -> bytes:
     """One MPEG-PS PES packet with an empty optional header."""
-    body = b"\x80\x00\x00" + payload
+    body = (b"\xa0" if scrambled else b"\x80") + b"\x00\x00" + payload
     return b"\x00\x00\x01" + bytes((stream_id, len(body) >> 8, len(body) & 0xFF)) + body
 
 
@@ -459,7 +459,7 @@ def _hevc_ps(key: bytes, clear_header: int) -> tuple[bytes, bytes]:
         plain += SC4 + nal
         encrypted += SC4 + nal[:clear_header] + body + nal[cut:]
     assert b"\x00\x00\x01" not in encrypted.replace(SC4, b"")
-    return pes(0xE0, plain), pes(0xE0, encrypted)
+    return pes(0xE0, plain), pes(0xE0, encrypted, scrambled=True)
 
 
 @pytest.mark.parametrize("clear_header", [2, 0])
@@ -469,5 +469,16 @@ def test_encrypted_hevc_is_decrypted_with_clear_or_encrypted_nal_headers(clear_h
     r = relay()
     r._decrypt_key = "ABCDEF"
     out = r._maybe_decrypt(encrypted + pes(0xC0, b"\xff\xf1"))
-    assert out.startswith(plain)
+    assert out.startswith(plain[:6] + b"\xa0" + plain[7:])
     assert r._decrypt_header_size == clear_header
+
+
+def test_video_packets_that_are_not_scrambled_are_passed_unchanged() -> None:
+    """The HP7 on firmware 5.4 scrambles only the keyframe packets (#22)."""
+    plain, encrypted = _hevc_ps(b"ABCDEF", 2)
+    p_frame = pes(0xE0, SC4 + b"\x02\x01\xd0\x01\x6d\xc4\x11\x80\xfd\x59\xc2\xf2\x91\x30\x00\x00\x03\x01\xb6\x1d")
+    r = relay()
+    r._decrypt_key = "ABCDEF"
+    out = r._maybe_decrypt(encrypted + p_frame + pes(0xC0, b"\xff\xf1"))
+    assert out[len(encrypted):].startswith(p_frame)
+    assert out[7:len(encrypted)] == plain[7:]

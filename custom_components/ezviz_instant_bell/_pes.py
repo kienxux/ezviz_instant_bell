@@ -173,3 +173,46 @@ class PesParser:
         self.packets_yielded += 1
         del buf[:total]
         return total
+
+
+def keep_clear_video_pes(original: bytes, decrypted: bytes) -> bytes:
+    """Undo the decryption of video PES packets that were not scrambled.
+
+    The HP7 on firmware 5.4 scrambles only some video PES packets (the ones
+    with keyframes and parameter sets) and marks them with
+    PES_scrambling_control; the others are sent in the clear (#22). The
+    decryption works on every NAL, so it garbles those. ``original`` must be
+    complete packets, as handed to the decryption; ``decrypted`` the same
+    length.
+    """
+    if len(original) != len(decrypted):
+        return decrypted
+    out = bytearray(decrypted)
+    i = 0
+    n = len(original)
+    while i + 6 <= n:
+        if original[i:i + 3] != b"\x00\x00\x01":
+            idx = original.find(b"\x00\x00\x01", i + 1)
+            if idx < 0:
+                break
+            i = idx
+            continue
+        stream_id = original[i + 3]
+        if stream_id == 0xBA:
+            if i + 14 > n:
+                break
+            i += 14 + (original[i + 13] & 0x07)
+            continue
+        if stream_id == 0xB9:
+            i += 4
+            continue
+        length = (original[i + 4] << 8) | original[i + 5]
+        if length:
+            end = min(n, i + 6 + length)
+        else:
+            idx = original.find(b"\x00\x00\x01", i + 6)
+            end = n if idx < 0 else idx
+        if 0xE0 <= stream_id <= 0xEF and i + 6 < end and not (original[i + 6] >> 4) & 0x03:
+            out[i:end] = original[i:end]
+        i = max(end, i + 4)
+    return bytes(out)

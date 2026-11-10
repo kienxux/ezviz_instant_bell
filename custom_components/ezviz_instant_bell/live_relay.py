@@ -56,7 +56,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any, List, Optional
 
-from ._pes import PesParser
+from ._pes import PesParser, keep_clear_video_pes
 from pyezvizapi.cloud_stream import open_cloud_stream
 
 from .const import DOMAIN
@@ -582,11 +582,11 @@ class StreamRelay:
                         "StreamRelay: decrypting with %d clear NAL header byte(s) (serial=%s)",
                         self._decrypt_header_size, self._serial,
                     )
-            return decrypt_hikvision_ps_video(
+            return keep_clear_video_pes(chunk, decrypt_hikvision_ps_video(
                 chunk,
                 self._decrypt_key,
                 nalu_header_size=2 if self._decrypt_header_size is None else self._decrypt_header_size,
-            )
+            ))
         except Exception as exc:  # noqa: BLE001
             self._decrypt_failed = True
             _LOGGER.error(
