@@ -445,3 +445,29 @@ def test_a_started_source_is_not_started_twice() -> None:
     assert list(wrapped.iter_payloads()) == [b"x"]
     wrapped.close()
     assert inner.closed == 1 and wrapped.streamssn == "lan"
+
+
+def _hevc_ps(key: bytes, clear_header: int) -> tuple[bytes, bytes]:
+    """A video PES of HEVC parameter sets and a keyframe, plain and with each NAL encrypted after ``clear_header`` bytes."""
+    from Crypto.Cipher import AES
+
+    plain = encrypted = b""
+    for header in (b"\x40\x01", b"\x42\x01", b"\x44\x01", b"\x26\x01"):
+        nal = header + bytes(range(1, 47))
+        cut = clear_header + (len(nal) - clear_header) // 16 * 16
+        body = AES.new(key.ljust(16, b"\0"), AES.MODE_ECB).encrypt(nal[clear_header:cut])
+        plain += SC4 + nal
+        encrypted += SC4 + nal[:clear_header] + body + nal[cut:]
+    assert b"\x00\x00\x01" not in encrypted.replace(SC4, b"")
+    return pes(0xE0, plain), pes(0xE0, encrypted)
+
+
+@pytest.mark.parametrize("clear_header", [2, 0])
+def test_encrypted_hevc_is_decrypted_with_clear_or_encrypted_nal_headers(clear_header: int) -> None:
+    """Firmware 5.4 of the HP7 encrypts the HEVC NAL header too (#22)."""
+    plain, encrypted = _hevc_ps(b"ABCDEF", clear_header)
+    r = relay()
+    r._decrypt_key = "ABCDEF"
+    out = r._maybe_decrypt(encrypted + pes(0xC0, b"\xff\xf1"))
+    assert out.startswith(plain)
+    assert r._decrypt_header_size == clear_header

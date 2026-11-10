@@ -2,6 +2,11 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 0.9.1
+
+- Encrypted live video on newer HP7 firmware (5.4) stayed black although the camera key was stored (#22). This firmware also encrypts the header of each video frame part, and the integration now finds out per session which way the door station encrypts before decrypting. Door stations that already worked are not affected.
+- The log message for an encrypted stream without a key no longer points to the 6-character label code; it names the 4-digit e-mail code and Settings > Repairs.
+
 ## 0.9.0
 
 - New option **Save the picture of every motion and person event**, off by default. The picture of each motion and person event is stored in the media folder of Home Assistant (*Media > My media > ezviz_instant_bell*), in one folder per door station and day, about 5 to 12 seconds after the event and without an automation. The pictures are kept for 30 days by default (option **Keep the saved pictures for**). Each saved picture fires the event `ezviz_instant_bell_picture_saved`. Rings and door or gate openings are not saved this way.

@@ -272,6 +272,10 @@ class StreamRelay:
         self._decrypt_key: Optional[str] = None
         self._decrypt_buf = bytearray()
         self._decrypt_failed = False
+        # Clear codec header bytes before the encrypted NAL body: 2 for HEVC,
+        # 1 for H.264, 0 when the header is encrypted too (HP7 firmware 5.4,
+        # #22). Found once from the first chunk that shows it; 2 until then.
+        self._decrypt_header_size: Optional[int] = None
         # GOP cache (#37): the stream since the last keyframe. A new viewer
         # can only start painting from an IDR, and some doorbells emit
         # keyframes tens of seconds apart — replaying this to each new
@@ -559,6 +563,7 @@ class StreamRelay:
         try:
             from pyezvizapi.stream import (
                 decrypt_hikvision_ps_video,
+                detect_hikvision_ps_video_nalu_header_size,
                 mpeg_ps_decryptable_prefix_length,
             )
 
@@ -568,7 +573,20 @@ class StreamRelay:
                 return b""
             chunk = bytes(self._decrypt_buf[:n])
             del self._decrypt_buf[:n]
-            return decrypt_hikvision_ps_video(chunk, self._decrypt_key)
+            if self._decrypt_header_size is None:
+                self._decrypt_header_size = detect_hikvision_ps_video_nalu_header_size(
+                    chunk, self._decrypt_key, default=None
+                )
+                if self._decrypt_header_size is not None:
+                    _LOGGER.debug(
+                        "StreamRelay: decrypting with %d clear NAL header byte(s) (serial=%s)",
+                        self._decrypt_header_size, self._serial,
+                    )
+            return decrypt_hikvision_ps_video(
+                chunk,
+                self._decrypt_key,
+                nalu_header_size=2 if self._decrypt_header_size is None else self._decrypt_header_size,
+            )
         except Exception as exc:  # noqa: BLE001
             self._decrypt_failed = True
             _LOGGER.error(
@@ -612,10 +630,9 @@ class StreamRelay:
                 return
             _LOGGER.warning(
                 "StreamRelay: the stream is encrypted but no key is "
-                "available (serial=%s). The cloud only hands the key out "
-                "after 2FA elevation, so enter the device's 6-character "
-                "verification code in Configure -> 'Encryption key' and it "
-                "will be used directly.",
+                "available (serial=%s). Call ezviz_instant_bell.fetch_encryption_key "
+                "and enter the 4-digit code EZVIZ e-mails in Settings -> "
+                "Repairs. The 6-character label code will NOT work here.",
                 self._serial,
             )
             return
@@ -1003,6 +1020,7 @@ class StreamRelay:
         self._warned_saturation = False
         self._warned_scrambled = False
         self._decrypt_buf = bytearray()
+        self._decrypt_header_size = None
         v_bytes = a_bytes = 0
         # Time-based, not byte-based: at ~400 KB/s a 256 KB threshold emitted
         # an INFO line every ~0.6 s forever — a 24/7 Frigate consumer logged
