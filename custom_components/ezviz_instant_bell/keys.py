@@ -39,3 +39,18 @@ def with_keys(options: Mapping[str, Any], found: Mapping[str, str], door_count: 
     if door_count == 1 and found:
         merged[CONF_KEY] = next(iter(found.values()))
     return merged
+
+
+def kept_keys(options: Mapping[str, Any], typed_key: str) -> dict[str, str]:
+    """The stored keys to keep when the options form is saved.
+
+    The form shows only the single ``encryption_key``; the keys fetched per door
+    station must survive it. When the user changes that field, the keys that were
+    only a copy of the old value go, so that the typed key is the one used.
+    Clearing the field keeps them: a fetched key is still right.
+    """
+    keys = {k: str(v) for k, v in dict(options.get(CONF_KEYS) or {}).items()}
+    old = str(options.get(CONF_KEY) or "").strip()
+    if old and typed_key and typed_key != old:
+        keys = {k: v for k, v in keys.items() if v != old}
+    return keys

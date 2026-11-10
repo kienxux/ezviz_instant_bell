@@ -7,7 +7,7 @@ import logging
 import threading
 import time
 from collections import OrderedDict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -29,12 +29,16 @@ from .const import (
     CONF_POLL_INTERVAL,
     CONF_REGION,
     CONF_SAVE_CLIPS,
+    CONF_DETECTION_PICTURE_DAYS,
+    CONF_SAVE_DETECTION_PICTURES,
     CLIP_SAVE_FIRST_WAIT,
     CLIP_SAVE_GIVE_UP,
     CLIP_SAVE_POLL,
     CLOUD_RETRY_SECONDS,
+    DEFAULT_DETECTION_PICTURE_DAYS,
     DEFAULT_DOOR_LOCK_NO,
     EVENT_CLIP_SAVED,
+    EVENT_PICTURE_SAVED,
     EVENT_DOOR_OPENED,
     DEFAULT_GATE_LOCK_NO,
     DEFAULT_POLL_INTERVAL,
@@ -52,21 +56,24 @@ from .const import (
     RECORDING_LIST_TTL_TODAY,
     RECORDING_MAX_PAGES,
     RECORDING_PAGE_SIZE,
+    SIGNAL_ALARM_KIND,
     SIGNAL_CLIP,
     SIGNAL_EVENT,
     SIGNAL_PICTURE,
     UNLOCK_COOLDOWN,
 )
-from . import ezviz, state
+from . import detection_pictures, ezviz, state
+from .alarms import LEARNED_KEYS, is_detection, kinds_for
 from .device_api import DeviceApi
 from .clips import ClipStore
 from .recordings import Recording, channel_serial, clip_id, day_window, recordings_from_answer
 from .visitors import clip_for
 from .stream_support import StreamSupport
 from .feature_code import resolve_feature_code
-from .history import HistoryItem, day_text, items_from_answer
+from .history import HistoryItem, day_text, item_from_message, items_from_answer
 from .parsing import (
     KIND_RING,
+    MAX_EVENT_AGE,
     BellEvent,
     EventDeduper,
     NewMessageTracker,
@@ -89,10 +96,15 @@ class InstantBellHub:
         self.hass = hass
         self.entry = entry
         self.serials: list[str] = list(entry.data.get(CONF_DEVICES, []))
+        # Names given in the EZVIZ app: of the door stations, and of their indoor monitors.
         self.names: dict[str, str] = dict(entry.data.get(CONF_NAMES, {}))
+        self.monitor_names: dict[str, str] = {}
         self.signal_event = SIGNAL_EVENT.format(entry_id=entry.entry_id)
         self.signal_picture = SIGNAL_PICTURE.format(entry_id=entry.entry_id)
         self.signal_clip = SIGNAL_CLIP.format(entry_id=entry.entry_id)
+        self.signal_alarm_kind = SIGNAL_ALARM_KIND.format(entry_id=entry.entry_id)
+        # Alarm kinds that only some door stations have, by serial, once each has reported one.
+        self.alarm_kinds: dict[str, set[str]] = {}
         # The newest saved ring clip of each door station (see ``_async_save_ring_clip``).
         self.last_clip: dict[str, dict[str, Any]] = {}
         self.push_connected = False
@@ -146,6 +158,13 @@ class InstantBellHub:
         stored = await self._local_store.async_load() or {}
         self.stream.load_remembered(stored.get("doors"))
         self._models = {str(k): str(v) for k, v in (stored.get("models") or {}).items()}
+        self.names.update({str(k): str(v) for k, v in (stored.get("names") or {}).items() if k in self.serials})
+        self.monitor_names = {str(k): str(v) for k, v in (stored.get("monitor_names") or {}).items()}
+        self.alarm_kinds = {
+            str(k): {str(key) for key in v if key in LEARNED_KEYS}
+            for k, v in (stored.get("alarm_kinds") or {}).items()
+            if isinstance(v, list)
+        }
         storage = Path(self.hass.config.path(".storage"))
         code = await self.hass.async_add_executor_job(resolve_feature_code, storage)
         try:
@@ -170,6 +189,8 @@ class InstantBellHub:
         """Stop push and polling."""
         self._stopping = True
         self._cancel_cloud_retry()
+        # A reload within the delay of ``_save_local`` would otherwise start with the old data.
+        await self._local_store.async_save(self._local_data())
         await self.clips.async_stop()
         relays = list(self.live_relays.values())
         self.live_relays.clear()
@@ -252,34 +273,64 @@ class InstantBellHub:
     def _learned_from_thread(self) -> None:
         self.hass.loop.call_soon_threadsafe(self._save_local)
 
+    def _local_data(self) -> dict[str, Any]:
+        return {
+            "doors": {k: dict(v) for k, v in list(self.stream.remembered.items())},
+            "models": dict(self._models),
+            "monitors": {k: list(v) for k, v in self.monitors.items()},
+            "names": dict(self.names),
+            "monitor_names": dict(self.monitor_names),
+            "alarm_kinds": {k: sorted(v) for k, v in self.alarm_kinds.items()},
+        }
+
     @callback
     def _save_local(self) -> None:
-        def data() -> dict[str, Any]:
-            return {
-                "doors": {k: dict(v) for k, v in list(self.stream.remembered.items())},
-                "models": dict(self._models),
-                "monitors": {k: list(v) for k, v in self.monitors.items()},
-            }
+        self._local_store.async_delay_save(self._local_data, 5)
 
-        self._local_store.async_delay_save(data, 5)
+    @callback
+    def learn_alarm_kinds(
+        self, serial: str, title: Any, event_kind: str | None = None, pulse: tuple[float, dict[str, Any]] | None = None
+    ) -> None:
+        """Remember the model-dependent alarm kinds a door station has reported; their sensors are made then.
+
+        ``pulse`` (time stamp and fields) is given when the alarm has just
+        happened, so that the new sensor still shows it.
+        """
+        known = self.alarm_kinds.setdefault(serial, set())
+        new = [key for key in kinds_for(title, event_kind) if key in LEARNED_KEYS and key not in known]
+        if not new:
+            return
+        _LOGGER.debug("%s reported %s for the first time", serial, ", ".join(new))
+        known.update(new)
+        self._save_local()
+        async_dispatcher_send(self.hass, self.signal_alarm_kind, serial, new, pulse)
 
     async def _async_find_monitors(self) -> None:
-        """Work out which indoor monitors belong to the chosen door stations.
+        """Work out which indoor monitors belong to the chosen door stations, and the current names.
 
-        The option lists them by hand; empty means: take the part of a
+        The option lists the monitors by hand; empty means: take the part of a
         composite serial (``MONITOR-DOOR``) that the account lists as a device.
         """
-        text = str(self.entry.options.get(CONF_MONITOR_SERIALS) or "")
-        manual = [part.strip() for part in text.replace(";", ",").split(",") if part.strip()]
-        if manual:
-            self.monitors = {serial: list(manual) for serial in self.serials}
-            return
         try:
             devices = await self.hass.async_add_executor_job(self._list_serials)
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Could not look for indoor monitors: %s", err)
             devices = {}
-        self.monitors = {s: state.find_monitors(s, devices) for s in self.serials}
+        text = str(self.entry.options.get(CONF_MONITOR_SERIALS) or "")
+        manual = [part.strip() for part in text.replace(";", ",").split(",") if part.strip()]
+        if manual:
+            self.monitors = {serial: list(manual) for serial in self.serials}
+        else:
+            self.monitors = {s: state.find_monitors(s, devices) for s in self.serials}
+        # A name renamed in the EZVIZ app is taken over at the next start.
+        for serial, info in devices.items():
+            name = str(info.get("name") or "")
+            if not name or name == serial:
+                continue
+            if serial in self.serials:
+                self.names[serial] = name
+            elif any(serial in monitors for monitors in self.monitors.values()):
+                self.monitor_names[serial] = name
 
     def _list_serials(self) -> dict[str, Any]:
         with self._call_lock:
@@ -401,6 +452,8 @@ class InstantBellHub:
             event = event_from_message(message, tz)
             if event is not None:
                 self._handle_event(event)
+            elif self.entry.options.get(CONF_SAVE_DETECTION_PICTURES):
+                self._handle_detection(item_from_message(message, tz))
 
     @callback
     def _handle_event(self, event: BellEvent) -> None:
@@ -410,13 +463,16 @@ class InstantBellHub:
         if is_stale(event, now) or not self._dedupe.is_new(event, now):
             return
         _LOGGER.debug("EZVIZ event: %s from %s via %s", event.kind, event.serial, event.source)
+        serial = next(s for s in self.serials if same_device(event.serial, s))
+        stamp = event.occurred.timestamp() if event.occurred else time.time()
+        fields = {"alarm_name": event.title, "alarm_time": event.occurred.isoformat() if event.occurred else None}
+        self.learn_alarm_kinds(serial, event.title, event.kind, (stamp, fields))
         async_dispatcher_send(self.hass, self.signal_event, event)
         if event.picture_url:
             self.entry.async_create_background_task(
                 self.hass, self._async_load_picture(event), f"{DOMAIN}_picture"
             )
         if event.kind == KIND_RING and self.entry.options.get(CONF_SAVE_CLIPS):
-            serial = next(s for s in self.serials if same_device(event.serial, s))
             self.entry.async_create_background_task(
                 self.hass, self._async_save_ring_clip(event, serial), f"{DOMAIN}_ring_clip"
             )
@@ -478,21 +534,91 @@ class InstantBellHub:
         self.hass.bus.async_fire(EVENT_CLIP_SAVED, {**info, "entry_id": self.entry.entry_id})
 
     async def _async_load_picture(self, event: BellEvent) -> None:
+        data = await self._async_fetch_picture(event.picture_url, event.serial)
+        if data:
+            async_dispatcher_send(self.hass, self.signal_picture, event, data)
+        else:
+            _LOGGER.debug("No picture for %s event from %s", event.kind, event.serial)
+
+    async def _async_fetch_picture(self, url: str, serial: str) -> bytes | None:
         """Download the picture, retrying: it can lag behind the event."""
         for attempt in range(PICTURE_ATTEMPTS):
             if attempt:
                 await asyncio.sleep(PICTURE_RETRY_DELAY)
             try:
-                data = await self.hass.async_add_executor_job(
-                    self._download_picture, event.picture_url, event.serial
-                )
+                data = await self.hass.async_add_executor_job(self._download_picture, url, serial)
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("Picture attempt %s failed: %s", attempt + 1, err)
                 continue
             if data:
-                async_dispatcher_send(self.hass, self.signal_picture, event, data)
-                return
-        _LOGGER.debug("No picture for %s event from %s", event.kind, event.serial)
+                return data
+        return None
+
+    # ------------------------------------------------------------------
+    # Pictures of motion and person events (Media > My media)
+    # ------------------------------------------------------------------
+
+    @callback
+    def _handle_detection(self, item: HistoryItem | None) -> None:
+        """Keep the picture of a new list entry about movement or a person."""
+        if item is None or not item.picture_url or not is_detection(item.title, item.subtype):
+            return
+        # "from" is the device's name on some entries, its serial on others.
+        serial = next(
+            (s for s in self.serials if item.serial and (same_device(item.serial, s) or item.serial == self.names.get(s))),
+            None,
+        )
+        if serial is None:
+            return
+        occurred = item.occurred or dt_util.now()
+        if dt_util.now() - occurred > MAX_EVENT_AGE:
+            return
+        self.entry.async_create_background_task(
+            self.hass, self._async_save_detection_picture(serial, item, occurred), f"{DOMAIN}_detection_picture"
+        )
+
+    def media_root(self) -> tuple[str | None, Path]:
+        """The folder that *Media > My media* shows, and its name there (None if it is not shown)."""
+        dirs = self.hass.config.media_dirs
+        for key in ("local", *dirs):
+            if key in dirs:
+                return key, Path(dirs[key])
+        return None, Path(self.hass.config.path("media"))
+
+    async def _async_save_detection_picture(self, serial: str, item: HistoryItem, occurred: datetime) -> None:
+        data = await self._async_fetch_picture(item.picture_url, serial)
+        if not data:
+            _LOGGER.debug("No picture for the %s entry of %s", item.title, serial)
+            return
+        source, root = self.media_root()
+        device = self.names.get(serial) or serial
+        keep = int(self.entry.options.get(CONF_DETECTION_PICTURE_DAYS, DEFAULT_DETECTION_PICTURE_DAYS))
+
+        def _write() -> Path:
+            path = detection_pictures.picture_path(root, device, occurred, item.title)
+            detection_pictures.write_picture(path, data)
+            detection_pictures.prune(path.parent.parent, dt_util.now().date(), keep)
+            return path
+
+        try:
+            path = await self.hass.async_add_executor_job(_write)
+        except OSError as err:
+            _LOGGER.warning("The picture of %s could not be saved in %s: %s", item.title, root, err)
+            return
+        _LOGGER.debug("Saved %s", path)
+        relative = path.relative_to(root).as_posix()
+        self.hass.bus.async_fire(
+            EVENT_PICTURE_SAVED,
+            {
+                "entry_id": self.entry.entry_id,
+                "serial": serial,
+                "title": item.title,
+                "occurred": occurred.isoformat(),
+                "path": str(path),
+                "media_content_id": f"media-source://media_source/{source}/{relative}" if source else None,
+                "message_id": item.message_id,
+            },
+        )
 
     # ------------------------------------------------------------------
     # Actions

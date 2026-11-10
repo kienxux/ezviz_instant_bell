@@ -66,11 +66,11 @@ Logging in registers one new terminal named `Hassio` in your EZVIZ account. EZVI
 | **Instant bell** | `Doorbell` (event: `ring`, `door_unlock`, `gate_open`, `other`) and `Last picture` (image), both within seconds |
 | **Open** | Buttons `Unlock Door` and `Unlock Gate`, and the actions `ezviz_instant_bell.unlock_door` / `unlock_gate` |
 | **Sensors** | Name, firmware, online status, WiFi signal, SSID, local and WAN IP, motion, last alarm and its type, seconds since last motion, update available, microphone volume |
-| **Binary sensors** | Motion; short pulses (3 s) for doorbell ringing, gate open, lock unlocked and how (app, RFID card, face, palm, code), smart and intelligent detection alarm; read-only states of mute, loitering, stranger and human detection |
+| **Binary sensors** | Motion; short pulses (3 s) for doorbell ringing, gate open, lock unlocked and app unlock. Card, face, palm and code unlock and the smart and intelligent detection alarms depend on the model, so each appears the first time the door station reports one. Read-only states of mute, loitering, stranger and human detection, when the device reports them |
 | **Switches** | Doorbell chime and motion sound alert (door station and indoor monitor), do not disturb, privacy, armed, name-tag light |
 | **Sliders** | Chime volume (0 to 7) and ringtones for the doorbell and the motion alert, on the door station and on every indoor monitor |
 | **Camera** | `Live`: the live video (cloud or local network). `Last Snapshot`: the picture of the latest alarm |
-| **Events** | `ezviz_instant_bell_unlock` (and `ezviz_hp7_unlock`, for automations written against the old name) with the way the lock was opened and the card holder's name; `ezviz_instant_bell_door_opened` when someone opens the door or gate from Home Assistant (with the user, and shown in the logbook); `ezviz_instant_bell_clip_saved` when a ring's video was saved |
+| **Events** | `ezviz_instant_bell_unlock` (and `ezviz_hp7_unlock`, for automations written against the old name) with the way the lock was opened and the card holder's name; `ezviz_instant_bell_door_opened` when someone opens the door or gate from Home Assistant (with the user, and shown in the logbook); `ezviz_instant_bell_clip_saved` when a ring's video was saved; `ezviz_instant_bell_picture_saved` when the picture of a motion or person event was saved |
 | **Media** | *Recordings (SD card)* and *Pictures of events* in the Media browser |
 | **Dashboard** | The visitor log card |
 | **Account** | `Terminals in use`, and a repair notice before EZVIZ's 10-terminal limit is reached |
@@ -141,6 +141,17 @@ Switch on **Save the video of every ring** in the options and the integration ke
 - Pictures are fetched on demand and the last 100 are kept in memory; nothing is written to disk.
 - The first view of a day takes a moment (up to 4 requests of 50 entries); the list is then kept for a minute (today) or 15 minutes (older days).
 
+## Save the pictures of motion and people
+
+Switch on **Save the picture of every motion and person event** in the options. The integration then stores the picture of each motion and person event in the media folder of Home Assistant. No automation is needed. Find them under **Media > My media > ezviz_instant_bell > your door station > a day**, named like `14-03-12_motion_detection_alarm.jpg`.
+
+- The picture arrives about 5 to 12 seconds after the event, through the same message check as the rings.
+- Everything the door station reports with a picture counts, except rings and door or gate openings. Rings already have the **Last picture** entity, which this option does not change.
+- Which events the door station reports (motion, human detection, sensitivity, zones) is set in the EZVIZ app.
+- Pictures are kept for 30 days by default (option **Keep the saved pictures for**); older day folders are deleted. Nothing outside `ezviz_instant_bell` in the media folder is touched.
+- Each saved picture fires `ezviz_instant_bell_picture_saved` with `path` and `media_content_id`, should you want a notification after all.
+- The folder is the `local` media folder: `/media` on Home Assistant OS and in the Docker image when it is mounted, otherwise `<config>/media`. Each check reads the newest 5 entries, so if more than 5 events happen within one check interval, the older ones are missed.
+
 ## Live video
 
 - **Source**: `cloud` (EZVIZ relay, the default), `local` (straight from the door station on your network; Home Assistant must be on the same network) or `auto` (local first, then cloud).
@@ -160,7 +171,7 @@ Most of this integration works through the EZVIZ cloud, like the EZVIZ app does.
 
 ## Options
 
-Ring check interval (seconds), serial numbers of the indoor monitors (empty = automatic), the lock numbers for door (2) and gate (1) as seen on an HP7, whether to save the video of every ring, and the live video settings (source, mode, codec, quality, port, listen address, key). To change the login, region or chosen door stations, use **Reconfigure** in the three-dot menu of the integration.
+Ring check interval (seconds), serial numbers of the indoor monitors (empty = automatic), the lock numbers for door (2) and gate (1) as seen on an HP7, whether to save the video of every ring, whether to save the pictures of motion and person events (and for how many days), and the live video settings (source, mode, codec, quality, port, listen address, key). To change the login, region or chosen door stations, use **Reconfigure** in the three-dot menu of the integration.
 
 ## Troubleshooting
 

@@ -277,9 +277,7 @@ async def test_full_set_of_entities_with_the_old_unique_ids(hass: HomeAssistant,
                                            "signal", "ssid", "local_ip", "wan_ip", "seconds_last_trigger",
                                            "upgrade_available", "mic_volume")],
         "binary_sensor": ["binary_motion", "alarm_doorbell_ringing", "alarm_gate_open", "alarm_unlock_lock",
-                          "alarm_unlock_rfid", "alarm_unlock_face", "alarm_unlock_palm", "alarm_unlock_code",
-                          "alarm_unlock_app", "alarm_smart_detection_alarm", "alarm_intelligent_detection_alarm",
-                          "binary_mute_on", "binary_loitering_on", "binary_stranger_detection_on"],
+                          "alarm_unlock_app", "binary_mute_on", "binary_loitering_on", "binary_stranger_detection_on"],
         "switch": ["chime_sound", "dnd", "privacy", "defence", "label_light", "chime_pir"],
         "number": ["chime_volume", "chime_ringtone", "chime_pir_ringtone"],
         "button": ["unlock_door", "unlock_gate"],
@@ -296,6 +294,9 @@ async def test_full_set_of_entities_with_the_old_unique_ids(hass: HomeAssistant,
     # features the device does not report get no entity
     reg = er.async_get(hass)
     assert reg.async_get_entity_id("binary_sensor", DOMAIN, f"{LEGACY_DOMAIN}_{SERIAL}_binary_human_detection_on") is None
+    # nor do alarms that depend on the model until the door station has reported one
+    for kind in LEARNED_KINDS:
+        assert reg.async_get_entity_id("binary_sensor", DOMAIN, f"{LEGACY_DOMAIN}_{SERIAL}_alarm_{kind}") is None
 
 
 async def test_sensor_values_and_names(hass: HomeAssistant, client: FakeClient) -> None:
@@ -305,10 +306,26 @@ async def test_sensor_values_and_names(hass: HomeAssistant, client: FakeClient) 
     assert hass.states.get(legacy_entity(hass, "sensor", "sensor_mic_volume")).state == "90"
     assert hass.states.get(legacy_entity(hass, "switch", "defence")).state == "on"
     assert hass.states.get(legacy_entity(hass, "switch", "privacy")).state == "off"
-    # device named the way the earlier integration named it
+    # devices named as in the EZVIZ app; the monitor has the same name there (#16)
     reg = dr.async_get(hass)
     device = device_of(reg, {(DOMAIN, SERIAL)})
-    assert device.name == "EZVIZ CPD5 (BE0000001-BE0000002)"
+    monitor = device_of(reg, {(DOMAIN, MONITOR)})
+    assert device.name == "Tor" and device.model == "CPD5"
+    assert monitor.name == "Tor Monitor" and monitor.via_device_id == device.id
+
+
+async def test_device_names_without_an_ezviz_name(hass: HomeAssistant, client: FakeClient) -> None:
+    devices = {MONITOR: {"name": MONITOR, "category": "DBScreen"}, SERIAL: {"name": SERIAL, "category": "BDoorBell"}}
+    entry = make_entry()
+    entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(entry, data={**entry.data, "names": {}})
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
+        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=devices
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    reg = dr.async_get(hass)
+    assert device_of(reg, {(DOMAIN, SERIAL)}).name == "EZVIZ CPD5 (BE0000001-BE0000002)"
     assert device_of(reg, {(DOMAIN, MONITOR)}).name == "EZVIZ CPD5 Monitor (BE0000001)"
 
 
@@ -489,6 +506,71 @@ async def test_push_for_other_device_is_ignored(hass: HomeAssistant, client: Fak
     assert hass.states.get(entity_id(hass, "event", "bell")).attributes.get("event_type") is None
 
 
+LEARNED_KINDS = ("unlock_rfid", "unlock_face", "unlock_palm", "unlock_code",
+                 "smart_detection_alarm", "intelligent_detection_alarm")
+
+
+def alarm_sensor(hass: HomeAssistant, kind: str) -> str | None:
+    return er.async_get(hass).async_get_entity_id("binary_sensor", DOMAIN, f"{LEGACY_DOMAIN}_{SERIAL}_alarm_{kind}")
+
+
+async def test_a_card_unlock_makes_its_sensor_and_still_counts(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    assert alarm_sensor(hass, "unlock_rfid") is None
+    seen = []
+    hass.bus.async_listen(EVENT_UNLOCK, lambda e: seen.append(e.data["category"]))
+    push_unlock(client, title="RFID card unlock")
+    await hass.async_block_till_done(wait_background_tasks=True)
+    rfid = alarm_sensor(hass, "unlock_rfid")
+    assert rfid and hass.states.get(rfid).state == "on"  # the first card unlock is shown, not lost
+    assert seen.count("unlock_rfid") == 1
+    assert alarm_sensor(hass, "unlock_face") is None
+    # kept across a restart
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
+        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
+    ):
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+    assert hass.states.get(rfid).state == "off"
+    push_unlock(client, msg_id=2, title="RFID card unlock")
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert hass.states.get(rfid).state == "on"
+
+
+async def test_a_smart_detection_in_the_status_makes_its_sensor(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    assert alarm_sensor(hass, "smart_detection_alarm") is None
+    api = entry.runtime_data.api
+    read = api.build_status
+
+    def with_alarm(*args, **kwargs):
+        status = read(*args, **kwargs)
+        status["alarm_name"] = "Smart Detection Alarm"
+        status["last_alarm_time"] = dt_util.now().strftime("%Y-%m-%d %H:%M:%S")
+        return status
+
+    with patch.object(api, "build_status", with_alarm):
+        await tick(hass, 16)
+    sensor = alarm_sensor(hass, "smart_detection_alarm")
+    assert sensor and hass.states.get(sensor).state == "on"
+    assert alarm_sensor(hass, "intelligent_detection_alarm") is None
+
+
+async def test_sensors_of_alarms_never_reported_are_removed(hass: HomeAssistant, client: FakeClient) -> None:
+    reg = er.async_get(hass)
+    entry = make_entry()
+    entry.add_to_hass(hass)
+    for kind in ("unlock_face", "unlock_palm"):
+        reg.async_get_or_create("binary_sensor", DOMAIN, f"{LEGACY_DOMAIN}_{SERIAL}_alarm_{kind}", config_entry=entry)
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
+        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    assert alarm_sensor(hass, "unlock_face") is None and alarm_sensor(hass, "unlock_palm") is None
+    assert alarm_sensor(hass, "unlock_lock") is not None
+
+
 async def test_buttons_open_the_right_lock_only(hass: HomeAssistant, client: FakeClient) -> None:
     await setup(hass, client)
     for suffix in ("unlock_door", "unlock_gate"):
@@ -640,6 +722,38 @@ async def test_options_flow(hass: HomeAssistant, client: FakeClient) -> None:
         await hass.async_block_till_done()
     assert result["type"] == "create_entry"
     assert entry.options["poll_interval"] == 3
+
+
+async def test_options_reload_without_update_listener(hass: HomeAssistant, client: FakeClient) -> None:
+    # HA 2026.12 drops reloads through update listeners (#23); the options flow reloads itself.
+    entry = await setup(hass, client)
+    assert not entry.update_listeners
+    hub = entry.runtime_data
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
+        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
+    ):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {"poll_interval": 3, "monitor_serials": "", "door_lock_no": 2, "gate_lock_no": 1},
+        )
+        await hass.async_block_till_done()
+    assert entry.runtime_data is not hub
+
+
+async def test_options_flow_keeps_the_fetched_keys(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "encryption_keys": {"AAA": "k1"}})
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
+        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
+    ):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {"poll_interval": 3, "monitor_serials": "", "door_lock_no": 2, "gate_lock_no": 1},
+        )
+        await hass.async_block_till_done()
+    assert entry.options["encryption_keys"] == {"AAA": "k1"}
 
 
 # --- live video -----------------------------------------------------------------
@@ -1467,6 +1581,54 @@ async def test_a_ring_without_a_recording_gives_up_quietly(hass: HomeAssistant, 
     assert entry.runtime_data.last_clip == {}
 
 
+# --- pictures of motion and person events ---------------------------------------------
+
+
+def motion_message(msg_id: str, age_seconds: int = 0, **changes) -> dict:
+    return {**ring_message(msg_id, age_seconds), "subType": 2401, "title": "Motion Detection Alarm", **changes}
+
+
+async def test_a_motion_picture_is_saved_in_the_media_folder(hass: HomeAssistant, client: FakeClient, tmp_path) -> None:
+    hass.config.media_dirs = {"local": str(tmp_path / "media")}
+    entry = await setup(hass, client, {"save_detection_pictures": True})
+    saved = []
+    hass.bus.async_listen("ezviz_instant_bell_picture_saved", lambda event: saved.append(event.data))
+    rings = []
+    hass.bus.async_listen("state_changed", lambda e: rings.append(e) if e.data["entity_id"].startswith("event.") else None)
+    client.messages = [
+        motion_message("m-motion", 3),
+        motion_message("m-name", 2, deviceSerial=None, **{"from": "Tor"}, title="Human detected"),
+        motion_message("m-old", 600),  # older than two minutes: from before a restart
+        motion_message("m-other", 1, **{"from": "OTHER1"}),  # another camera of the account
+        motion_message("m-nopic", 1, pic=None),
+    ]
+    await poll_once(hass)
+    files = sorted((tmp_path / "media" / "ezviz_instant_bell" / "tor").rglob("*.jpg"))
+    assert [f.name.split("_", 1)[1] for f in files] == ["motion_detection_alarm.jpg", "human_detected.jpg"]
+    assert all(f.read_bytes() == b"JPEGDATA" for f in files)
+    assert sorted(e["message_id"] for e in saved) == ["m-motion", "m-name"]
+    info = next(e for e in saved if e["message_id"] == "m-motion")
+    assert info["serial"] == SERIAL and info["entry_id"] == entry.entry_id
+    assert info["media_content_id"].startswith("media-source://media_source/local/ezviz_instant_bell/tor/")
+    assert rings == []  # motion is not a ring
+
+
+async def test_rings_and_openings_are_not_saved_as_motion(hass: HomeAssistant, client: FakeClient, tmp_path) -> None:
+    hass.config.media_dirs = {"local": str(tmp_path / "media")}
+    await setup(hass, client, {"save_detection_pictures": True})
+    client.messages = [ring_message("m-ring", 2), motion_message("m-unlock", 1, subType=0, title="EZVIZ app unlock the lock")]
+    await poll_once(hass)
+    assert not (tmp_path / "media").exists()
+
+
+async def test_no_motion_picture_is_saved_unless_the_option_is_on(hass: HomeAssistant, client: FakeClient, tmp_path) -> None:
+    hass.config.media_dirs = {"local": str(tmp_path / "media")}
+    await setup(hass, client)
+    client.messages = [motion_message("m-motion", 2)]
+    await poll_once(hass)
+    assert not (tmp_path / "media").exists()
+
+
 # --- reconfigure ----------------------------------------------------------------------
 
 
@@ -1516,7 +1678,7 @@ async def test_opening_from_home_assistant_is_announced_with_the_user(hass: Home
     seen = []
     hass.bus.async_listen("ezviz_instant_bell_door_opened", lambda event: seen.append(event))
     await hass.services.async_call(
-        "button", "press", {"entity_id": "button.ezviz_cpd5_be0000001_be0000002_unlock_door"},
+        "button", "press", {"entity_id": legacy_entity(hass, "button", "unlock_door")},
         blocking=True, context=Context(user_id=first.id),
     )
     await hass.services.async_call(DOMAIN, "unlock_gate", {}, blocking=True, context=Context(user_id=second.id))

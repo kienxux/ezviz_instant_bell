@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from custom_components.ezviz_instant_bell import live_camera as lc
+from custom_components.ezviz_instant_bell import live_io
 
 
 @pytest.fixture(autouse=True)
@@ -28,9 +28,9 @@ def thread_errors():
 
 
 def start_sender(stop: threading.Event, q: queue.Queue) -> tuple[threading.Thread, int, socket.socket]:
-    port = lc._free_local_port()
-    listener = lc._start_local_listener(port)
-    thread = threading.Thread(target=lc._sender_thread, args=(listener, q, stop, "audio"), daemon=True)
+    port = live_io._free_local_port()
+    listener = live_io._start_local_listener(port)
+    thread = threading.Thread(target=live_io._sender_thread, args=(listener, q, stop, "audio"), daemon=True)
     thread.start()
     return thread, port, listener
 
@@ -38,7 +38,7 @@ def start_sender(stop: threading.Event, q: queue.Queue) -> tuple[threading.Threa
 def test_ffmpeg_connecting_late_still_gets_the_data(thread_errors) -> None:
     """ffmpeg reaches the second input only after probing the first; that is not a failure."""
     stop, q = threading.Event(), queue.Queue()
-    with patch.object(lc, "INPUT_ACCEPT_POLL", 0.05):
+    with patch.object(live_io, "INPUT_ACCEPT_POLL", 0.05):
         thread, port, _ = start_sender(stop, q)
         time.sleep(0.3)  # several accept polls pass before ffmpeg connects
         with socket.create_connection(("127.0.0.1", port), timeout=2) as ffmpeg:
@@ -52,7 +52,7 @@ def test_ffmpeg_connecting_late_still_gets_the_data(thread_errors) -> None:
 def test_session_ending_while_waiting_stops_quietly(thread_errors, caplog) -> None:
     """Closing the dialog before ffmpeg connected: no warning, no thread crash."""
     stop, q = threading.Event(), queue.Queue()
-    with patch.object(lc, "INPUT_ACCEPT_POLL", 0.05):
+    with patch.object(live_io, "INPUT_ACCEPT_POLL", 0.05):
         thread, _, _ = start_sender(stop, q)
         time.sleep(0.15)
         stop.set()
@@ -64,7 +64,7 @@ def test_session_ending_while_waiting_stops_quietly(thread_errors, caplog) -> No
 def test_listener_closed_under_a_waiting_sender_is_not_a_crash(thread_errors) -> None:
     """The teardown closes the listener while the thread sits in accept(): EBADF must not escape (#20)."""
     stop, q = threading.Event(), queue.Queue()
-    with patch.object(lc, "INPUT_ACCEPT_POLL", 1.0):  # the thread is inside accept() when it is closed
+    with patch.object(live_io, "INPUT_ACCEPT_POLL", 1.0):  # the thread is inside accept() when it is closed
         thread, _, listener = start_sender(stop, q)
         time.sleep(0.2)
         listener.close()
@@ -74,7 +74,7 @@ def test_listener_closed_under_a_waiting_sender_is_not_a_crash(thread_errors) ->
 
 def test_ffmpeg_never_connecting_ends_with_the_backstop(thread_errors, caplog) -> None:
     stop, q = threading.Event(), queue.Queue()
-    with patch.object(lc, "INPUT_ACCEPT_POLL", 0.05), patch.object(lc, "INPUT_ACCEPT_TIMEOUT", 0.3):
+    with patch.object(live_io, "INPUT_ACCEPT_POLL", 0.05), patch.object(live_io, "INPUT_ACCEPT_TIMEOUT", 0.3):
         thread, _, _ = start_sender(stop, q)
         thread.join(3)
     assert not thread.is_alive() and not thread_errors

@@ -9,7 +9,7 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import SOURCE_RECONFIGURE, ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.config_entries import SOURCE_RECONFIGURE, ConfigFlow, ConfigFlowResult, OptionsFlowWithReload
 from homeassistant.core import callback
 from homeassistant.helpers.selector import (
     NumberSelector,
@@ -40,6 +40,10 @@ from .const import (
     CONF_RELAY_PORT,
     CONF_REGION,
     CONF_SAVE_CLIPS,
+    CONF_DETECTION_PICTURE_DAYS,
+    CONF_SAVE_DETECTION_PICTURES,
+    DEFAULT_DETECTION_PICTURE_DAYS,
+    MAX_DETECTION_PICTURE_DAYS,
     CONF_STREAM_MODE,
     CONF_STREAM_QUALITY,
     CONF_STREAM_SOURCE,
@@ -59,6 +63,7 @@ from .const import (
     VIDEO_CODECS,
 )
 from .feature_code import resolve_feature_code
+from .keys import CONF_KEYS, kept_keys
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -307,11 +312,11 @@ class InstantBellConfigFlow(ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: Any) -> OptionsFlow:
+    def async_get_options_flow(config_entry: Any) -> OptionsFlowWithReload:
         return InstantBellOptionsFlow()
 
 
-class InstantBellOptionsFlow(OptionsFlow):
+class InstantBellOptionsFlow(OptionsFlowWithReload):
     """Ring check interval, indoor monitors, lock numbers and live video."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -322,6 +327,10 @@ class InstantBellOptionsFlow(OptionsFlow):
                 CONF_DOOR_LOCK_NO: int(user_input[CONF_DOOR_LOCK_NO]),
                 CONF_GATE_LOCK_NO: int(user_input[CONF_GATE_LOCK_NO]),
                 CONF_SAVE_CLIPS: bool(user_input.get(CONF_SAVE_CLIPS, False)),
+                CONF_SAVE_DETECTION_PICTURES: bool(user_input.get(CONF_SAVE_DETECTION_PICTURES, False)),
+                CONF_DETECTION_PICTURE_DAYS: int(
+                    user_input.get(CONF_DETECTION_PICTURE_DAYS) or DEFAULT_DETECTION_PICTURE_DAYS
+                ),
                 CONF_RELAY_PORT: int(user_input.get(CONF_RELAY_PORT) or 0),
                 CONF_RELAY_BIND: str(user_input.get(CONF_RELAY_BIND) or DEFAULT_RELAY_BIND).strip(),
                 CONF_AGGRESSIVE_MPEGTS: bool(user_input.get(CONF_AGGRESSIVE_MPEGTS, False)),
@@ -334,6 +343,7 @@ class InstantBellOptionsFlow(OptionsFlow):
             }
             if self.config_entry.options.get(CONF_CREATE_BUTTONS):
                 data[CONF_CREATE_BUTTONS] = True  # keeps the 0.1.0 buttons
+            data[CONF_KEYS] = kept_keys(self.config_entry.options, data[CONF_ENCRYPTION_KEY])
             return self.async_create_entry(data=data)
         opts = self.config_entry.options
         number = lambda low, high: NumberSelector(  # noqa: E731
@@ -360,6 +370,13 @@ class InstantBellOptionsFlow(OptionsFlow):
                         CONF_GATE_LOCK_NO, default=opts.get(CONF_GATE_LOCK_NO, DEFAULT_GATE_LOCK_NO)
                     ): number(1, 8),
                     vol.Required(CONF_SAVE_CLIPS, default=bool(opts.get(CONF_SAVE_CLIPS, False))): bool,
+                    vol.Required(
+                        CONF_SAVE_DETECTION_PICTURES, default=bool(opts.get(CONF_SAVE_DETECTION_PICTURES, False))
+                    ): bool,
+                    vol.Required(
+                        CONF_DETECTION_PICTURE_DAYS,
+                        default=int(opts.get(CONF_DETECTION_PICTURE_DAYS, DEFAULT_DETECTION_PICTURE_DAYS)),
+                    ): number(1, MAX_DETECTION_PICTURE_DAYS),
                     vol.Required(CONF_STREAM_SOURCE, default=opts.get(CONF_STREAM_SOURCE, "cloud")): choice(
                         STREAM_SOURCES
                     ),

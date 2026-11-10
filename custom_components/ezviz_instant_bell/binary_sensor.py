@@ -9,14 +9,24 @@ from typing import Any
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
 from . import InstantBellConfigEntry
-from .alarms import ALARM_KINDS, UNLOCK_KEYS, AlarmKind, extract_card_id, kinds_for, matches, resolve_card_name
-from .const import EVENT_UNLOCK, EVENT_UNLOCK_LEGACY, PULSE_SECONDS
+from .alarms import (
+    ALARM_KINDS,
+    KINDS_BY_KEY,
+    UNLOCK_KEYS,
+    AlarmKind,
+    extract_card_id,
+    kinds_for,
+    matches,
+    resolve_card_name,
+)
+from .const import DOMAIN, EVENT_UNLOCK, EVENT_UNLOCK_LEGACY, LEGACY_DOMAIN, PULSE_SECONDS
 from .coordinator import StatusCoordinator
 from .entity import StatusEntity
 from .hub import InstantBellHub
@@ -45,7 +55,13 @@ async def async_setup_entry(
     entities: list[BinarySensorEntity] = []
     for serial in hub.serials:
         entities.append(MotionBinary(hub, coordinator, serial))
-        entities.extend(AlarmBinary(hub, coordinator, serial, kind) for kind in ALARM_KINDS)
+        learned = hub.alarm_kinds.get(serial, set())
+        entities.extend(
+            AlarmBinary(hub, coordinator, serial, kind)
+            for kind in ALARM_KINDS
+            if not kind.learned or kind.key in learned
+        )
+        _remove_unreported(hass, serial, learned)
         reported = (coordinator.data or {}).get(serial, {})
         entities.extend(
             FeatureBinary(hub, coordinator, serial, data_key, key)
@@ -53,6 +69,30 @@ async def async_setup_entry(
             if reported.get(data_key) is not None
         )
     async_add_entities(entities)
+
+    @callback
+    def _new_kinds(serial: str, keys: list[str], pulse: tuple[float, dict[str, Any]] | None) -> None:
+        if serial in hub.serials:
+            async_add_entities(AlarmBinary(hub, coordinator, serial, KINDS_BY_KEY[key], pulse) for key in keys)
+
+    entry.async_on_unload(async_dispatcher_connect(hass, hub.signal_alarm_kind, _new_kinds))
+
+
+def _remove_unreported(hass: HomeAssistant, serial: str, learned: set[str]) -> None:
+    """Remove the sensors of model-dependent alarms this door station never reported.
+
+    Versions before 0.9.0 made them for every model; they would stay as
+    "no longer provided". A kind reported later gets its sensor back.
+    """
+    registry = er.async_get(hass)
+    for kind in ALARM_KINDS:
+        if not kind.learned or kind.key in learned:
+            continue
+        entity_id = registry.async_get_entity_id(
+            "binary_sensor", DOMAIN, f"{LEGACY_DOMAIN}_{serial}_alarm_{kind.key}"
+        )
+        if entity_id:
+            registry.async_remove(entity_id)
 
 
 class MotionBinary(StatusEntity, BinarySensorEntity):
@@ -94,10 +134,17 @@ class AlarmBinary(StatusEntity, BinarySensorEntity):
     """
 
     def __init__(
-        self, hub: InstantBellHub, coordinator: StatusCoordinator, serial: str, kind: AlarmKind
+        self,
+        hub: InstantBellHub,
+        coordinator: StatusCoordinator,
+        serial: str,
+        kind: AlarmKind,
+        pulse: tuple[float, dict[str, Any]] | None = None,
     ) -> None:
         super().__init__(hub, coordinator, serial, kind.key, unique_suffix=f"alarm_{kind.key}")
         self._kind = kind
+        # The alarm that made this sensor, shown once it is added.
+        self._first_pulse = pulse
         self._attr_icon = kind.icon
         self._on = False
         self._off_unsub: CALLBACK_TYPE | None = None
@@ -114,6 +161,11 @@ class AlarmBinary(StatusEntity, BinarySensorEntity):
         await super().async_added_to_hass()
         self.async_on_remove(async_dispatcher_connect(self.hass, self._hub.signal_event, self._handle_hub_event))
         self.async_on_remove(self._cancel_off)
+        if self._first_pulse is not None:
+            stamp, fields = self._first_pulse
+            self._first_pulse = None
+            if self._is_new(stamp):
+                self._trigger(fields)
 
     @callback
     def _cancel_off(self) -> None:

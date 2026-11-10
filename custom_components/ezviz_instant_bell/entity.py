@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -22,27 +24,67 @@ def model_of(hub: InstantBellHub, serial: str) -> str:
     return str(known or DEFAULT_MODEL)
 
 
+def door_name(hub: InstantBellHub, serial: str) -> str:
+    """Name of a door station: the one from the EZVIZ app, else model and serial."""
+    return hub.names.get(serial) or f"EZVIZ {model_of(hub, serial)} ({serial})"
+
+
+def monitor_name(hub: InstantBellHub, door_serial: str, monitor_serial: str) -> str:
+    """Name of an indoor monitor: the one from the EZVIZ app, else model and serial.
+
+    On some models the app gives the monitor the name of its door station; it
+    then gets "Monitor" added, so the two devices can be told apart.
+    """
+    name = hub.monitor_names.get(monitor_serial)
+    if not name:
+        return f"EZVIZ {model_of(hub, door_serial)} Monitor ({monitor_serial})"
+    if name == hub.names.get(door_serial):
+        return f"{name} Monitor"
+    return name
+
+
 def door_device_info(hub: InstantBellHub, serial: str) -> DeviceInfo:
-    """The device of a door station. Named like the earlier integration named it."""
-    model = model_of(hub, serial)
+    """The device of a door station."""
     return DeviceInfo(
         identifiers={(DOMAIN, serial)},
-        name=f"EZVIZ {model} ({serial})",
+        name=door_name(hub, serial),
         manufacturer="EZVIZ",
-        model=model,
+        model=model_of(hub, serial),
     )
 
 
 def monitor_device_info(hub: InstantBellHub, door_serial: str, monitor_serial: str) -> DeviceInfo:
-    """The device of an indoor monitor."""
-    model = f"{model_of(hub, door_serial)} Monitor"
+    """The device of an indoor monitor (linked to its door station by ``link_monitors``)."""
     return DeviceInfo(
         identifiers={(DOMAIN, monitor_serial)},
-        name=f"EZVIZ {model} ({monitor_serial})",
+        name=monitor_name(hub, door_serial, monitor_serial),
         manufacturer="EZVIZ",
-        model=model,
+        model=f"{model_of(hub, door_serial)} Monitor",
     )
 
+
+
+@callback
+def link_monitors(hass: HomeAssistant, hub: InstantBellHub) -> None:
+    """Show each indoor monitor as connected to its door station.
+
+    Done in the device registry, not with ``DeviceInfo``: its ``via_device``
+    is deprecated in newer Home Assistant and ``via_device_id`` is unknown to
+    older versions.
+    """
+    registry = dr.async_get(hass)
+    by_serial = {
+        serial: device
+        for device in dr.async_entries_for_config_entry(registry, hub.entry.entry_id)
+        for domain, serial in device.identifiers
+        if domain == DOMAIN
+    }
+    for door, monitors in hub.monitors.items():
+        parent = by_serial.get(door)
+        for monitor in monitors:
+            child = by_serial.get(monitor)
+            if parent is not None and child is not None and child.via_device_id != parent.id:
+                registry.async_update_device(child.id, via_device_id=parent.id)
 
 class InstantBellEntity(Entity):
     """Entity of one doorbell that is fed by events, not by polling."""

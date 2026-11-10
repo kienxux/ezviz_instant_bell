@@ -9,8 +9,10 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, STATUS_GRACE_CYCLES, UPDATE_INTERVAL
+from .parsing import MAX_EVENT_AGE, parse_local_time
 
 if TYPE_CHECKING:
     from .hub import InstantBellHub
@@ -103,7 +105,17 @@ class StatusCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self._hub.remember_models({s: str(v["model"]) for s, v in data.items() if v.get("model")})
         for serial, status in data.items():
             await self._add_alarm_detail(serial, status)
+            self._learn_alarm_kind(serial, status)
         return data
+
+    def _learn_alarm_kind(self, serial: str, status: dict[str, Any]) -> None:
+        """The latest alarm tells which model-dependent alarms this door station has (however old it is)."""
+        name, when = status.get("alarm_name"), status.get("last_alarm_time")
+        occurred = parse_local_time(when, dt_util.DEFAULT_TIME_ZONE)
+        pulse = None
+        if occurred is not None and dt_util.now() - occurred <= MAX_EVENT_AGE:
+            pulse = (occurred.timestamp(), {"alarm_name": name, "alarm_time": when})
+        self._hub.learn_alarm_kinds(serial, name, pulse=pulse)
 
     async def _add_alarm_detail(self, serial: str, status: dict[str, Any]) -> None:
         """Fetch the detailed record only when a new alarm has appeared."""

@@ -1,0 +1,447 @@
+"""The live stream relay without a door station or ffmpeg: retry limits, GOP cache, viewers, sources."""
+
+from __future__ import annotations
+
+import asyncio
+import errno
+import queue
+import threading
+import time
+from unittest.mock import patch
+
+import pytest
+
+from custom_components.ezviz_instant_bell import cpd7, live_relay
+from custom_components.ezviz_instant_bell.live_relay import (
+    DEAD_SUB_TIMEOUT,
+    LOCKOUT_BACKOFF,
+    MIN_RETRY_INTERVAL,
+    OFFLINE_MAX_BACKOFF,
+    StreamRelay,
+    _is_offline_error,
+)
+from custom_components.ezviz_instant_bell.live_sources import Cpd7LanSource, _PreStartedSource
+
+SERIAL = "BE0000001-BE0000002"
+SC4 = b"\x00\x00\x00\x01"
+SPS_PPS = SC4 + b"\x67\x42\x00\x1f" + SC4 + b"\x68\xce\x3c\x80"
+IDR = SC4 + b"\x65\x88\x84\x00"
+P = SC4 + b"\x41\x9a\x02\x00"
+HEVC_VPS = SC4 + b"\x40\x01\x0c\x01"
+
+
+class FakeApi:
+    def __init__(self, client: object | None = object()) -> None:
+        self.client = client
+
+
+class FakeSource:
+    """A cloud or LAN session: hands out ``payloads``, then ends (or waits for close if ``hold``)."""
+
+    def __init__(self, payloads: list[bytes] = (), hold: bool = False, fail_start: Exception | None = None):
+        self.payloads = list(payloads)
+        self.hold = hold
+        self.fail_start = fail_start
+        self.started = self.closed = 0
+        self._closed = threading.Event()
+
+    def start(self):
+        self.started += 1
+        if self.fail_start:
+            raise self.fail_start
+        return self
+
+    def iter_payloads(self):
+        yield from self.payloads
+        if self.hold:
+            self._closed.wait(5)
+
+    def close(self):
+        self.closed += 1
+        self._closed.set()
+
+
+def pes(stream_id: int, payload: bytes) -> bytes:
+    """One MPEG-PS PES packet with an empty optional header."""
+    body = b"\x80\x00\x00" + payload
+    return b"\x00\x00\x01" + bytes((stream_id, len(body) >> 8, len(body) & 0xFF)) + body
+
+
+def relay(**kwargs) -> StreamRelay:
+    return StreamRelay(kwargs.pop("api", FakeApi()), SERIAL, **kwargs)
+
+
+async def wait_for(condition, seconds: float = 5.0) -> None:
+    end = time.monotonic() + seconds
+    while not condition():
+        assert time.monotonic() < end, "condition not reached"
+        await asyncio.sleep(0.02)
+
+
+# --- what counts as "the door station is offline" ---------------------------------
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        TimeoutError(),
+        ConnectionRefusedError(),
+        ConnectionResetError(),
+        OSError(errno.EHOSTUNREACH, "No route to host"),
+        OSError(errno.ENETUNREACH, "unreachable"),
+        RuntimeError("Device is offline or unreachable"),
+        RuntimeError("Timed out waiting for VTM stream info"),
+        RuntimeError("No <Session> in InviteStream response"),
+    ],
+)
+def test_a_door_station_that_does_not_answer_is_offline(exc) -> None:
+    assert _is_offline_error(exc)
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        RuntimeError("EZVIZ session not available"),
+        ValueError("bad verification code"),
+        OSError(errno.EACCES, "Permission denied"),
+        KeyError("ssn"),
+    ],
+)
+def test_configuration_and_account_errors_are_not_offline(exc) -> None:
+    assert not _is_offline_error(exc)
+
+
+# --- the circuit breaker ---------------------------------------------------------
+
+
+def test_waiting_time_grows_into_the_lockout_after_three_failures() -> None:
+    r = relay()
+    r._last_error = "bad"
+    waits = []
+    for failures in (1, 2, 3, 4):
+        r._consecutive_failures = failures
+        waits.append(r._required_cooldown())
+    assert waits == [MIN_RETRY_INTERVAL, MIN_RETRY_INTERVAL, LOCKOUT_BACKOFF, LOCKOUT_BACKOFF]
+
+
+def test_an_offline_door_station_backs_off_gently_up_to_a_ceiling() -> None:
+    r = relay()
+    r._last_error, r._last_error_offline = "timed out", True
+    waits = {}
+    for failures in (1, 3, 4, 5, 7, 9, 11, 40):
+        r._consecutive_failures = failures
+        waits[failures] = r._required_cooldown()
+    assert waits == {1: 30, 3: 30, 4: 30, 5: 60, 7: 120, 9: 240, 11: OFFLINE_MAX_BACKOFF, 40: OFFLINE_MAX_BACKOFF}
+
+
+async def test_a_failed_start_is_counted_and_the_next_try_waits() -> None:
+    r = relay()
+    calls = []
+
+    def refuse(*args, **kwargs):
+        calls.append(args)
+        raise RuntimeError("stream refused")
+
+    with patch.object(live_relay, "open_cloud_stream", refuse):
+        await r.prewarm()
+        await r.prewarm()  # right away: rate-limited, the cloud is not asked again
+    assert len(calls) == 1
+    assert r._consecutive_failures == 1 and r._last_error == "stream refused" and not r._last_error_offline
+    assert 0 < r._seconds_until_next_attempt() <= MIN_RETRY_INTERVAL
+    assert r.active_source == "cloud" and r._shared_vtm is None
+
+
+async def test_three_failures_lock_the_relay_out_for_ten_minutes() -> None:
+    r = relay()
+    calls = []
+
+    def refuse(*args, **kwargs):
+        calls.append(args)
+        raise RuntimeError("stream refused")
+
+    with patch.object(live_relay, "open_cloud_stream", refuse):
+        for _ in range(3):
+            await r.prewarm()
+            r._last_attempt -= MIN_RETRY_INTERVAL + 1
+        await r.prewarm()
+        assert len(calls) == 3  # 31 s later is not enough any more
+        r._last_attempt -= LOCKOUT_BACKOFF
+        await r.prewarm()
+    assert len(calls) == 4
+
+
+async def test_an_offline_door_station_is_retried_without_the_lockout() -> None:
+    r = relay()
+    calls = []
+
+    def offline(*args, **kwargs):
+        calls.append(args)
+        raise TimeoutError("timed out")
+
+    with patch.object(live_relay, "open_cloud_stream", offline):
+        for _ in range(4):
+            await r.prewarm()
+            r._last_attempt -= MIN_RETRY_INTERVAL + 1
+    assert len(calls) == 4 and r._last_error_offline
+
+
+async def test_no_cloud_session_is_a_failure_without_asking_the_cloud() -> None:
+    r = relay(api=FakeApi(client=None))
+    with patch.object(live_relay, "open_cloud_stream") as opened:
+        await r.prewarm()
+    opened.assert_not_called()
+    assert r._consecutive_failures == 1 and "not available" in r._last_error
+
+
+# --- a running session --------------------------------------------------------------
+
+
+async def test_a_working_session_feeds_viewers_and_resets_itself_when_it_ends() -> None:
+    video = SPS_PPS + IDR
+    source = FakeSource([pes(0xE0, video), pes(0xC0, b"\xff\xf1AAC"), pes(0xE0, P)])
+    r = relay()
+    v_q, a_q = queue.Queue(), queue.Queue()
+    r._sub_v_qs.append(v_q)
+    r._sub_a_qs.append(a_q)
+    r._consecutive_failures, r._last_error = 2, "earlier failure"
+    with patch.object(live_relay, "open_cloud_stream", return_value=source):
+        await r.prewarm()
+        reader = r._shared_reader
+        await wait_for(lambda: r._shared_vtm is None)  # the source ended: the shared session is reset
+    reader.join(2)
+    assert not reader.is_alive()
+    assert r._consecutive_failures == 0 and r._last_error is None
+    assert r.detected_codec == "h264"
+    assert [v_q.get_nowait() for _ in range(3)] == [video, P, None]
+    assert [a_q.get_nowait() for _ in range(2)] == [b"\xff\xf1AAC", None]
+    assert source.closed and r._idle_handle is None
+    assert r._gop_snapshot() == [video + P]
+
+
+async def test_prewarm_while_a_session_runs_does_not_open_another() -> None:
+    source = FakeSource(hold=True)
+    r = relay()
+    with patch.object(live_relay, "open_cloud_stream", return_value=source) as opened:
+        await r.prewarm()
+        await r.prewarm()
+        assert opened.call_count == 1 and r.active_source == "cloud"
+        await r._shutdown_shared()
+    assert source.closed and r._shared_vtm is None and r._shared_reader is None
+
+
+class FakeLan(FakeSource):
+    """Stands in for the Cpd7LanSource class (the relay checks the type of its source)."""
+
+    made: list[FakeLan] = []
+    fail: Exception | None = None
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(hold=True, fail_start=FakeLan.fail)
+        FakeLan.made.append(self)
+
+
+@pytest.fixture
+def fake_lan():
+    FakeLan.made, FakeLan.fail = [], None
+    with patch.object(live_relay, "Cpd7LanSource", FakeLan):
+        yield FakeLan
+
+
+async def test_auto_prefers_the_local_network(fake_lan) -> None:
+    r = relay(stream_source="auto")
+    with patch.object(live_relay, "open_cloud_stream") as cloud:
+        await r.prewarm()
+        assert r.active_source == "local" and isinstance(r._shared_vtm, _PreStartedSource)
+        await r._shutdown_shared()
+    cloud.assert_not_called()
+    lan = fake_lan.made[0]
+    assert lan.started == 1 and lan.closed
+
+
+async def test_auto_falls_back_to_the_cloud_when_the_local_network_refuses(fake_lan) -> None:
+    fake_lan.fail = ConnectionRefusedError("refused")
+    cloud = FakeSource(hold=True)
+    r = relay(stream_source="auto")
+    with patch.object(live_relay, "open_cloud_stream", return_value=cloud):
+        await r.prewarm()
+        assert r.active_source == "cloud" and not r.has_lan_viewers
+        assert r._consecutive_failures == 0
+        await r._shutdown_shared()
+    assert cloud.closed
+
+
+# --- GOP cache --------------------------------------------------------------------------
+
+
+def test_nothing_is_replayed_before_the_first_keyframe() -> None:
+    r = relay()
+    r._gop_update(P)
+    r._gop_update(P)
+    assert r._gop_snapshot() == []
+
+
+def test_a_new_viewer_gets_the_stream_since_the_last_keyframe() -> None:
+    r = relay()
+    for chunk in (SPS_PPS + IDR, P, P, SPS_PPS + IDR, P):
+        r._gop_update(chunk)
+    assert r._gop_snapshot() == [SPS_PPS + IDR + P]
+
+
+def test_an_idr_without_parameter_sets_gets_the_last_ones_put_in_front() -> None:
+    r = relay()
+    r._gop_update(SPS_PPS + IDR)
+    r._gop_update(IDR)  # the firmware repeats IDRs more often than parameter sets
+    r._gop_update(P)
+    assert r._gop_snapshot() == [SPS_PPS + IDR + P]
+
+
+def test_an_idr_with_no_parameter_sets_at_all_is_not_replayed() -> None:
+    r = relay()
+    r._gop_update(IDR)
+    r._gop_update(P)
+    assert r._gop_snapshot() == []
+
+
+def test_an_oversized_gop_is_dropped_until_the_next_keyframe() -> None:
+    r = relay()
+    with patch.object(live_relay, "GOP_CACHE_MAX", 40):
+        r._gop_update(SPS_PPS + IDR)
+        for _ in range(5):
+            r._gop_update(P)
+        assert r._gop_snapshot() == []
+        r._gop_update(SPS_PPS + IDR)
+        assert r._gop_snapshot() == [SPS_PPS + IDR]
+
+
+def test_the_replay_comes_in_relay_sized_chunks() -> None:
+    r = relay()
+    r._gop_update(SPS_PPS + IDR + b"x" * 30)
+    with patch.object(live_relay, "RELAY_CHUNK", 16):
+        chunks = r._gop_snapshot()
+    assert all(len(c) <= 16 for c in chunks) and b"".join(chunks) == SPS_PPS + IDR + b"x" * 30
+
+
+# --- viewers ----------------------------------------------------------------------------
+
+
+def test_a_full_queue_loses_its_oldest_chunk() -> None:
+    r = relay()
+    q = queue.Queue(maxsize=2)
+    assert r._put_latest(q, b"1") and r._put_latest(q, b"2")
+    assert not r._put_latest(q, b"3")
+    assert [q.get_nowait(), q.get_nowait()] == [b"2", b"3"] and r._drops == 1
+
+
+def test_a_viewer_that_fell_behind_skips_to_the_next_keyframe() -> None:
+    r = relay()
+    q = queue.Queue(maxsize=2)
+    r._q_last_drain[id(q)] = time.monotonic()
+    q.put(b"old")
+    q.put(b"old")
+    r._fanout([q], P, video=True)  # saturates: the backlog goes
+    assert q.empty()
+    r._fanout([q], P, video=True)  # not decodable on its own: skipped
+    assert q.empty()
+    r._fanout([q], SPS_PPS + IDR, video=True)
+    r._fanout([q], P, video=True)
+    assert [q.get_nowait(), q.get_nowait()] == [SPS_PPS + IDR, P]
+
+
+def test_a_full_audio_queue_keeps_playing_without_a_resync() -> None:
+    r = relay()
+    q = queue.Queue(maxsize=1)
+    r._q_last_drain[id(q)] = time.monotonic()
+    r._fanout([q], b"a1")
+    r._fanout([q], b"a2")
+    r._fanout([q], b"a3")
+    assert q.get_nowait() == b"a3" and not r._q_resync
+
+
+def test_a_viewer_that_takes_nothing_for_too_long_is_dropped() -> None:
+    r = relay()
+    dead, alive = queue.Queue(maxsize=2), queue.Queue(maxsize=2)
+    dead.put(b"stale")
+    dead.put(b"stale")
+    subs = [dead, alive]
+    r._q_last_drain[id(dead)] = time.monotonic() - DEAD_SUB_TIMEOUT - 1
+    r._q_last_drain[id(alive)] = time.monotonic()
+    r._fanout(subs, b"chunk")
+    assert subs == [alive] and alive.get_nowait() == b"chunk"
+    assert dead.get_nowait() is None and dead.empty()  # the sentinel lands although the queue was full
+    assert id(dead) not in r._q_last_drain
+
+
+# --- local-network source ---------------------------------------------------------------
+
+
+class FakeLanApi:
+    def __init__(self, ip: str | None = "192.0.2.10") -> None:
+        self.ip = ip
+        self.invalidated: list[str] = []
+
+    def fetch_lan_aes_key(self, serial):
+        return b"k" * 16
+
+    def get_local_ip(self, serial):
+        return self.ip
+
+    def get_related_device(self, serial):
+        return "BE0000001"
+
+    def invalidate_lan_aes_key(self, serial):
+        self.invalidated.append(serial)
+
+
+def test_a_refused_local_session_drops_the_cached_key() -> None:
+    class Refusing:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def start(self):
+            raise RuntimeError("No <Session> in InviteStream response")
+
+    api = FakeLanApi()
+    with patch.object(cpd7, "Cpd7LanClient", Refusing), pytest.raises(RuntimeError):
+        Cpd7LanSource(api, SERIAL).start()
+    assert api.invalidated == [SERIAL]
+
+
+def test_a_door_station_without_a_local_address_is_not_tried() -> None:
+    with patch.object(cpd7, "Cpd7LanClient") as client, pytest.raises(RuntimeError, match="LAN IP"):
+        Cpd7LanSource(FakeLanApi(ip=None), SERIAL).start()
+    client.assert_not_called()
+
+
+def test_the_local_stream_tolerates_short_gaps_but_ends_on_silence() -> None:
+    class Client:
+        def __init__(self, reads):
+            self.reads = list(reads)
+
+        def read_chunk(self):
+            return self.reads.pop(0) if self.reads else b""
+
+    class Decoder:
+        def __init__(self):
+            self.fed = b""
+
+        def feed(self, buf):
+            self.fed += buf
+
+        def take(self):
+            out, self.fed = self.fed, b""
+            return out
+
+    source = Cpd7LanSource(FakeLanApi(), SERIAL)
+    source._client = Client([b"a", b"", b"", b"", b"b", b"", b"", b"", b"", b"never"])
+    source._decoder = Decoder()
+    assert list(source.iter_payloads()) == [b"a", b"b"]
+    assert source.streamssn == f"lan:{SERIAL}"
+
+
+def test_a_started_source_is_not_started_twice() -> None:
+    inner = FakeSource([b"x"])
+    wrapped = _PreStartedSource(inner)
+    assert wrapped.start() is inner and inner.started == 0
+    assert list(wrapped.iter_payloads()) == [b"x"]
+    wrapped.close()
+    assert inner.closed == 1 and wrapped.streamssn == "lan"

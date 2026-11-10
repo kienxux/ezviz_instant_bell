@@ -56,6 +56,8 @@ PICTURE_RETRY_DELAY = 2.0
 
 SIGNAL_EVENT = f"{DOMAIN}_event_{{entry_id}}"
 SIGNAL_PICTURE = f"{DOMAIN}_picture_{{entry_id}}"
+# A door station reported an alarm kind for the first time (its sensor is made now).
+SIGNAL_ALARM_KIND = f"{DOMAIN}_alarm_kind_{{entry_id}}"
 
 
 # -- live video (options of the entry) ---------------------------------------
@@ -122,6 +124,13 @@ SIGNAL_CLIP = f"{DOMAIN}_clip_{{entry_id}}"
 CLIP_SAVE_FIRST_WAIT = 20.0  # seconds after a ring before the SD-card list is looked at
 CLIP_SAVE_POLL = 15.0
 CLIP_SAVE_GIVE_UP = 240.0  # the recording of a ring is looked for this long
+
+# -- saving the pictures of motion and person events (option, off by default) ------
+CONF_SAVE_DETECTION_PICTURES = "save_detection_pictures"
+CONF_DETECTION_PICTURE_DAYS = "detection_picture_days"
+DEFAULT_DETECTION_PICTURE_DAYS = 30
+MAX_DETECTION_PICTURE_DAYS = 365
+EVENT_PICTURE_SAVED = f"{DOMAIN}_picture_saved"
 
 # -- working without the EZVIZ cloud --------------------------------------------
 CLOUD_RETRY_SECONDS = 300  # while the cloud is unreachable, try a new login this often

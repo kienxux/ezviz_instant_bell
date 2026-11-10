@@ -14,27 +14,40 @@ from typing import Any
 
 @dataclass(frozen=True)
 class AlarmKind:
-    """One kind of alarm that gets a binary sensor."""
+    """One kind of alarm that gets a binary sensor.
+
+    A ``learned`` kind depends on the model and its setup (card reader, face
+    camera, keypad, AI detection) and EZVIZ has no reliable flag for it, so its
+    sensor is made only once the door station has reported such an alarm.
+    """
 
     key: str
     names: tuple[str, ...]
     icon: str
+    learned: bool = False
 
 
 ALARM_KINDS: tuple[AlarmKind, ...] = (
-    AlarmKind("smart_detection_alarm", ("Smart Detection Alarm",), "mdi:run"),
-    AlarmKind("intelligent_detection_alarm", ("Intelligent Detection Alarm",), "mdi:account-search"),
+    AlarmKind("smart_detection_alarm", ("Smart Detection Alarm",), "mdi:run", learned=True),
+    AlarmKind("intelligent_detection_alarm", ("Intelligent Detection Alarm",), "mdi:account-search", learned=True),
     AlarmKind("doorbell_ringing", ("Your doorbell is ringing",), "mdi:doorbell"),
     AlarmKind("gate_open", ("EZVIZ app open the gate", "Monitor open the gate"), "mdi:gate-open"),
     # "The lock just opened" however it happened: app, monitor, card, face,
     # palm, code or exit button. The kinds below say how.
     AlarmKind("unlock_lock", ("unlock the lock",), "mdi:lock-open-variant"),
-    AlarmKind("unlock_rfid", ("RFID card unlock", "Unlock with RFID", "Card unlock"), "mdi:card-account-details"),
-    AlarmKind("unlock_face", ("Face recognition unlock", "Face unlock", "Unlock with face"), "mdi:face-recognition"),
-    AlarmKind("unlock_palm", ("Palm vein unlock", "Palm unlock", "Unlock with palm"), "mdi:hand-front-right"),
-    AlarmKind("unlock_code", ("Passcode unlock", "Code unlock", "Password unlock"), "mdi:dialpad"),
+    AlarmKind(
+        "unlock_rfid", ("RFID card unlock", "Unlock with RFID", "Card unlock"), "mdi:card-account-details", learned=True
+    ),
+    AlarmKind(
+        "unlock_face", ("Face recognition unlock", "Face unlock", "Unlock with face"), "mdi:face-recognition", learned=True
+    ),
+    AlarmKind("unlock_palm", ("Palm vein unlock", "Palm unlock", "Unlock with palm"), "mdi:hand-front-right", learned=True),
+    AlarmKind("unlock_code", ("Passcode unlock", "Code unlock", "Password unlock"), "mdi:dialpad", learned=True),
     AlarmKind("unlock_app", ("EZVIZ app unlock", "App unlock"), "mdi:cellphone"),
 )
+
+KINDS_BY_KEY = {k.key: k for k in ALARM_KINDS}
+LEARNED_KEYS = frozenset(k.key for k in ALARM_KINDS if k.learned)
 
 # Kinds that also fire the ``ezviz_instant_bell_unlock`` event.
 UNLOCK_KEYS = frozenset(
@@ -47,6 +60,24 @@ KIND_TO_ALARM = {
     "door_unlock": "unlock_lock",
     "gate_open": "gate_open",
 }
+
+
+# Kinds that are about the door, not about someone moving in front of it.
+DOOR_KEYS = UNLOCK_KEYS | {"doorbell_ringing"}
+# ``subType`` of list entries for a ring, a door and a gate opening.
+DOOR_SUBTYPES = frozenset({2701, 10242, 10243})
+
+
+def is_detection(title: Any, subtype: int | None) -> bool:
+    """True for a list entry about movement or a person: anything that is not a ring or an opening.
+
+    The motion and person entries are not matched by their own names, because
+    those differ between firmware and languages; a ring or an opening is
+    recognised reliably, so everything else is taken.
+    """
+    if subtype in DOOR_SUBTYPES:
+        return False
+    return not any(key in DOOR_KEYS for key in kinds_for(title))
 
 
 def matches(kind: AlarmKind, text: Any) -> bool:

@@ -19,6 +19,7 @@ from .api import async_setup_card
 from .const import DOMAIN
 from .keys import with_keys
 from .coordinator import StatusCoordinator
+from .entity import link_monitors
 from .hub import InstantBellHub
 from .parsing import same_device
 
@@ -131,6 +132,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 found[serial] = key
             if found:  # one update, so that the entry reloads once
                 hass.config_entries.async_update_entry(entry, options=with_keys(entry.options, found, len(hub.serials)))
+                hass.config_entries.async_schedule_reload(entry.entry_id)
                 _LOGGER.warning("Stored the camera key for %s; the entry reloads and decrypts the stream.", ", ".join(found))
 
     hass.services.async_register(DOMAIN, "unlock_door", unlock_door, SERVICE_SCHEMA)
@@ -175,15 +177,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: InstantBellConfigEntry) 
     entry.async_on_unload(async_dispatcher_connect(hass, hub.signal_event, _refresh_soon))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(_async_reload))
+    link_monitors(hass, hub)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: InstantBellConfigEntry) -> bool:
     """Unload the account."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
-
-async def _async_reload(hass: HomeAssistant, entry: InstantBellConfigEntry) -> None:
-    """Reload when the options change."""
-    await hass.config_entries.async_reload(entry.entry_id)

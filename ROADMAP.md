@@ -6,6 +6,7 @@ one to say what you need.
 
 ## Done
 
+- 0.9.0: pictures of motion and person events saved in the media folder (option); devices named as in the EZVIZ app, indoor monitors shown as connected to their door station; the live video code split into modules, with tests for the clip store, the media source and the stream relay
 - Local first, checked (November 2026): captures of the EZVIZ app at home (live view, door, gate, two rings) show that a CPD5 reports rings and receives door and gate commands only through the EZVIZ cloud, even with the phone on the same network. Its local broadcasts are a timed heartbeat, not events. Only the live video is local, and that already works. Owners of other HP7/CP7 models who see different behaviour are welcome to open an issue
 - Next release: starts and shows the local live video when the EZVIZ cloud is down
 - German translation (after 0.7.0)
@@ -21,17 +22,14 @@ one to say what you need.
 ## Later (ideas, no dates; built if someone asks)
 
 - Motion and person events as events or binary sensors
-- Live video through an authenticated Home Assistant view instead of the local relay socket
-- Optional PIN for the unlock button; more blueprint variants; schedules for Do Not Disturb. Home Assistant automations can already cover these.
-- Better naming and grouping with several door stations or indoor monitors
 - Two-way audio. The library only knows talk as a capability flag and has no way to send audio, so this needs protocol research with a real door station (see issue #15).
 
 ## Housekeeping
 
-- Split `live_camera.py` (about 2,200 lines) into relay, source and entity modules, when it next has to be changed, after tests exist
-- Tests for the clip store, the media source and the stream relay
 - Make the HACS, hassfest and test checks required
 
 ## Not planned
 
-Anything that opens the door without a deliberate action by a person.
+- Anything that opens the door without a deliberate action by a person.
+- A PIN for the unlock button (#8) and schedules for Do Not Disturb and privacy (#14). Home Assistant user rights and automations already cover these.
+- Live video through an authenticated Home Assistant view (#13). The relay listens only on this computer by default.

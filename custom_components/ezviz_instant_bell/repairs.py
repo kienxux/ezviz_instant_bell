@@ -64,6 +64,7 @@ class EncryptionOtpRepairFlow(RepairsFlow):
                     self.hass.config_entries.async_update_entry(
                         entry, options=with_keys(entry.options, {self._serial: key}, len(hub.serials))
                     )
+                    self.hass.config_entries.async_schedule_reload(entry.entry_id)
                     _LOGGER.warning("Stored the camera key for %s; the entry reloads and decrypts the stream.", self._serial)
                     return self.async_create_entry(title="", data={})
                 errors["code"] = "invalid_code"
