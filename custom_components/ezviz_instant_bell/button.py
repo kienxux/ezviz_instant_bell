@@ -9,8 +9,8 @@ from homeassistant.util import slugify
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import InstantBellConfigEntry
-from .const import CONF_CREATE_BUTTONS, DOMAIN
-from .entity import ActionEntity, InstantBellEntity
+from .const import CONF_CREATE_BUTTONS, DOMAIN, LEGACY_DOMAIN
+from .entity import ActionEntity, InstantBellEntity, remove_entities
 from .hub import InstantBellHub
 
 
@@ -21,6 +21,14 @@ async def async_setup_entry(
     registry = er.async_get(hass)
     entities: list[ButtonEntity] = []
     for serial in hub.serials:
+        if not hub.is_intercom(serial):
+            remove_entities(
+                hass,
+                "button",
+                [f"{LEGACY_DOMAIN}_{serial}_unlock_gate", f"{LEGACY_DOMAIN}_{serial}_unlock_door"]
+                + [f"{serial}_open_door", f"{serial}_open_gate"],
+            )
+            continue
         entities.append(UnlockButton(hub, serial, "unlock_gate", hub.gate_lock_no))
         entities.append(UnlockButton(hub, serial, "unlock_door", hub.door_lock_no))
         # Version 0.1.0 had optional buttons "Open door" / "Open gate". Phone

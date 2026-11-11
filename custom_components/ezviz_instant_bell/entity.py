@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -85,6 +85,20 @@ def link_monitors(hass: HomeAssistant, hub: InstantBellHub) -> None:
             child = by_serial.get(monitor)
             if parent is not None and child is not None and child.via_device_id != parent.id:
                 registry.async_update_device(child.id, via_device_id=parent.id)
+
+
+@callback
+def remove_entities(hass: HomeAssistant, platform: str, unique_ids: list[str]) -> None:
+    """Remove entities that earlier versions made for a device that cannot use them.
+
+    Earlier versions gave every chosen device the unlock buttons and the chime
+    controls; on a camera they would stay as "no longer provided".
+    """
+    registry = er.async_get(hass)
+    for unique_id in unique_ids:
+        if entity_id := registry.async_get_entity_id(platform, DOMAIN, unique_id):
+            registry.async_remove(entity_id)
+
 
 class InstantBellEntity(Entity):
     """Entity of one doorbell that is fed by events, not by polling."""

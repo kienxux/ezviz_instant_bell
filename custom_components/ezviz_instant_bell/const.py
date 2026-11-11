@@ -25,6 +25,11 @@ DEFAULT_POLL_INTERVAL = 5  # seconds between checks of the cloud message list
 MIN_POLL_INTERVAL = 2
 MAX_POLL_INTERVAL = 60  # a ring is announced up to this late; longer is not useful
 
+# EZVIZ device category of an HP7 / CP7 style door station. Only these get
+# the unlock buttons and the chime controls; other EZVIZ devices on the account
+# get what every EZVIZ device reports (events, pictures, recordings, live video).
+DOORBELL_CATEGORIES = {"BDoorBell"}
+
 # Lock numbers seen on an HP7: 2 opens the door, 1 opens the gate.
 DEFAULT_DOOR_LOCK_NO = 2
 DEFAULT_GATE_LOCK_NO = 1

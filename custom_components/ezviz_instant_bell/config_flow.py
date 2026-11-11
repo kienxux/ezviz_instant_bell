@@ -59,6 +59,7 @@ from .const import (
     DEFAULT_REGION,
     DEFAULT_RELAY_BIND,
     DOMAIN,
+    DOORBELL_CATEGORIES,
     MAX_POLL_INTERVAL,
     MIN_POLL_INTERVAL,
     REGIONS,
@@ -72,9 +73,6 @@ from .keys import CONF_KEYS, kept_keys
 from .stream_share import new_token, stream_addresses
 
 _LOGGER = logging.getLogger(__name__)
-
-# Device categories that are the door station of an HP7 / CP7 style intercom.
-DOORBELL_CATEGORIES = {"BDoorBell"}
 
 
 class InstantBellConfigFlow(ConfigFlow, domain=DOMAIN):

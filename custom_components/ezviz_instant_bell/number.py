@@ -10,9 +10,9 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import InstantBellConfigEntry
-from .const import DOMAIN
+from .const import DOMAIN, LEGACY_DOMAIN
 from .coordinator import StatusCoordinator
-from .entity import StatusEntity
+from .entity import StatusEntity, remove_entities
 from .hub import InstantBellHub
 
 
@@ -48,6 +48,10 @@ async def async_setup_entry(
     hub = entry.runtime_data
     entities: list[ChimeNumber] = []
     for serial in hub.serials:
+        if not hub.is_intercom(serial):
+            # Every slider is a chime setting, which only the intercom has.
+            remove_entities(hass, "number", [f"{LEGACY_DOMAIN}_{serial}_{d.key}" for d in DOOR_NUMBERS])
+            continue
         entities.extend(ChimeNumber(hub, hub.coordinator, serial, d) for d in DOOR_NUMBERS)
         for monitor in hub.monitors.get(serial, []):
             entities.extend(ChimeNumber(hub, hub.coordinator, serial, d, owner=monitor) for d in MONITOR_NUMBERS)

@@ -13,10 +13,10 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import InstantBellConfigEntry
-from .const import DOMAIN
+from .const import DOMAIN, LEGACY_DOMAIN
 from .coordinator import StatusCoordinator
 from .device_api import DeviceApi
-from .entity import StatusEntity
+from .entity import StatusEntity, remove_entities
 from .hub import InstantBellHub
 
 # The cloud needs a few seconds before its status shows a change. Until then
@@ -63,6 +63,8 @@ DEFENCE = SwitchDef("defence", _flat("defence_on"), lambda a, s, v: a.set_defenc
 LABEL_LIGHT = SwitchDef("label_light", _flat("label_light_on"), lambda a, s, v: a.set_label_light(s, v))
 
 DOOR_SWITCHES = (CHIME, DND, PRIVACY, DEFENCE, LABEL_LIGHT, CHIME_PIR)
+# Only an HP7 / CP7 style door station has a chime and a name-tag light.
+INTERCOM_SWITCHES = (CHIME, LABEL_LIGHT, CHIME_PIR)
 MONITOR_SWITCHES = (MONITOR_CHIME, MONITOR_CHIME_PIR)
 
 
@@ -72,7 +74,14 @@ async def async_setup_entry(
     hub = entry.runtime_data
     entities: list[ChimeSwitch] = []
     for serial in hub.serials:
-        entities.extend(ChimeSwitch(hub, hub.coordinator, serial, d) for d in DOOR_SWITCHES)
+        intercom = hub.is_intercom(serial)
+        if not intercom:
+            remove_entities(hass, "switch", [f"{LEGACY_DOMAIN}_{serial}_{d.key}" for d in INTERCOM_SWITCHES])
+        entities.extend(
+            ChimeSwitch(hub, hub.coordinator, serial, d)
+            for d in DOOR_SWITCHES
+            if intercom or d not in INTERCOM_SWITCHES
+        )
         for monitor in hub.monitors.get(serial, []):
             entities.extend(ChimeSwitch(hub, hub.coordinator, serial, d, owner=monitor) for d in MONITOR_SWITCHES)
     async_add_entities(entities)

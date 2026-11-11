@@ -32,7 +32,8 @@ A Home Assistant integration for the **EZVIZ HP7 and CP7 video intercoms**: the 
 | --- | --- |
 | **Made for** | EZVIZ video intercoms of the **HP7 and CP7 family**: a door station with an indoor monitor |
 | **Checked on real hardware** | CS-CPD5 door station with CS-CP5 monitor (EU account) |
-| **Not for** | Other EZVIZ cameras, doorbells and locks: use Home Assistant's own EZVIZ integration for those |
+| **Other EZVIZ devices** | Cameras and doorbells of the same account can be chosen too. They get what every EZVIZ device reports: events, pictures, SD-card recordings and the cloud live video. The unlock buttons and the chime and name-tag light controls are only made for an HP7 / CP7 door station (EZVIZ category `BDoorBell`). **Not tested on real hardware**: please report what works |
+| **Not for** | EZVIZ smart locks, and cameras you mainly want to control (pan and tilt, sirens, lights): Home Assistant's own EZVIZ integration covers those |
 
 The reading of the device's data is tested against an anonymised copy of a real device's answers. Door and gate buttons, chime sliders and switches use the documented EZVIZ calls; the live video is ported from open-source work (see Credits). If something does not work on your model, please [open an issue](https://github.com/kienxux/ezviz_instant_bell/issues/new/choose) and attach the diagnostics download (see [Troubleshooting](#troubleshooting)).
 

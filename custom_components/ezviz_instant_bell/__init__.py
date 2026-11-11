@@ -53,6 +53,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             if not isinstance(hub, InstantBellHub):
                 continue
             for serial in hub.serials:
+                if not hub.is_intercom(serial):
+                    continue  # a camera or doorbell without locks
                 if not wanted or serial == wanted or same_device(serial, wanted):
                     matches.append((hub, serial))
         if not matches:

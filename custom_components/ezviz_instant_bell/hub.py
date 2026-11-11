@@ -14,7 +14,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Context, HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady, HomeAssistantError
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady, HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
@@ -47,6 +47,7 @@ from .const import (
     DEFAULT_POLL_INTERVAL,
     DEFAULT_REGION,
     DOMAIN,
+    DOORBELL_CATEGORIES,
     HISTORY_MAX_PAGES,
     HISTORY_PAGE_SIZE,
     HISTORY_PAST_TTL,
@@ -107,6 +108,8 @@ class InstantBellHub:
         # Names given in the EZVIZ app: of the door stations, and of their indoor monitors.
         self.names: dict[str, str] = dict(entry.data.get(CONF_NAMES, {}))
         self.monitor_names: dict[str, str] = {}
+        # EZVIZ device category of each chosen device (BDoorBell for an HP7 / CP7 door station).
+        self.categories: dict[str, str] = {}
         self.signal_event = SIGNAL_EVENT.format(entry_id=entry.entry_id)
         self.signal_picture = SIGNAL_PICTURE.format(entry_id=entry.entry_id)
         self.signal_clip = SIGNAL_CLIP.format(entry_id=entry.entry_id)
@@ -170,6 +173,7 @@ class InstantBellHub:
         self._models = {str(k): str(v) for k, v in (stored.get("models") or {}).items()}
         self.names.update({str(k): str(v) for k, v in (stored.get("names") or {}).items() if k in self.serials})
         self.monitor_names = {str(k): str(v) for k, v in (stored.get("monitor_names") or {}).items()}
+        self.categories = {str(k): str(v) for k, v in (stored.get("categories") or {}).items() if k in self.serials}
         self.alarm_kinds = {
             str(k): {str(key) for key in v if key in LEARNED_KEYS}
             for k, v in (stored.get("alarm_kinds") or {}).items()
@@ -270,6 +274,15 @@ class InstantBellHub:
             self._unsub_cloud_retry()
             self._unsub_cloud_retry = None
 
+    def is_intercom(self, serial: str) -> bool:
+        """Whether a chosen device is an HP7 / CP7 style door station (with locks and a chime).
+
+        A device whose category was never read counts as one, so that an
+        update or a start without the cloud takes no entity away.
+        """
+        category = self.categories.get(serial)
+        return not category or category in DOORBELL_CATEGORIES
+
     def remembered_model(self, serial: str) -> str | None:
         return self._models.get(serial)
 
@@ -290,6 +303,7 @@ class InstantBellHub:
             "monitors": {k: list(v) for k, v in self.monitors.items()},
             "names": dict(self.names),
             "monitor_names": dict(self.monitor_names),
+            "categories": dict(self.categories),
             "alarm_kinds": {k: sorted(v) for k, v in self.alarm_kinds.items()},
         }
 
@@ -334,6 +348,8 @@ class InstantBellHub:
             self.monitors = {s: state.find_monitors(s, devices) for s in self.serials}
         # A name renamed in the EZVIZ app is taken over at the next start.
         for serial, info in devices.items():
+            if serial in self.serials and info.get("category"):
+                self.categories[serial] = str(info["category"])
             name = str(info.get("name") or "")
             if not name or name == serial:
                 continue
@@ -824,6 +840,8 @@ class InstantBellHub:
         ``context`` says who asked; a successful opening is announced with it.
         """
         self._require_cloud()
+        if not self.is_intercom(serial):
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="no_such_doorbell")
         key = (serial, lock_no)
         now = time.monotonic()
         if now - self._last_unlock.get(key, -UNLOCK_COOLDOWN) < UNLOCK_COOLDOWN:

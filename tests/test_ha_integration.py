@@ -756,6 +756,60 @@ async def test_options_flow_keeps_the_fetched_keys(hass: HomeAssistant, client: 
     assert entry.options["encryption_keys"] == {"AAA": "k1"}
 
 
+async def setup_as_camera(hass: HomeAssistant, client: FakeClient, entry: MockConfigEntry | None = None):
+    """The chosen device, reported by EZVIZ as a camera instead of a door station."""
+    if entry is None:
+        entry = make_entry()
+        entry.add_to_hass(hass)
+    camera = {**DEVICES, SERIAL: {"name": "Garden", "category": "IPC"}}
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
+        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=camera
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    return entry
+
+
+async def test_a_camera_gets_no_unlock_or_chime(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup_as_camera(hass, client)
+    assert not entry.runtime_data.is_intercom(SERIAL)
+    reg = er.async_get(hass)
+    for platform, suffix in (("button", "unlock_door"), ("button", "unlock_gate"), ("switch", "chime_sound"),
+                             ("switch", "label_light"), ("number", "chime_volume")):
+        assert reg.async_get_entity_id(platform, DOMAIN, f"{LEGACY_DOMAIN}_{SERIAL}_{suffix}") is None, suffix
+    # what every EZVIZ device has stays
+    assert reg.async_get_entity_id("switch", DOMAIN, f"{LEGACY_DOMAIN}_{SERIAL}_privacy")
+    assert reg.async_get_entity_id("event", DOMAIN, f"{SERIAL}_bell")
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(DOMAIN, "unlock_door", {"serial": SERIAL}, blocking=True)
+    assert client.unlocks == []
+
+
+async def test_unlock_and_chime_of_a_camera_are_removed_on_update(hass: HomeAssistant, client: FakeClient) -> None:
+    # Earlier versions made them for every chosen device.
+    entry = await setup(hass, client)
+    door = legacy_entity(hass, "button", "unlock_door")
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    await setup_as_camera(hass, client, entry)
+    reg = er.async_get(hass)
+    assert reg.async_get(door) is None
+    assert reg.async_get_entity_id("number", DOMAIN, f"{LEGACY_DOMAIN}_{SERIAL}_chime_volume") is None
+
+
+async def test_an_unknown_category_keeps_the_intercom_entities(hass: HomeAssistant, client: FakeClient) -> None:
+    # EZVIZ did not list the device (or an older install): nothing is taken away.
+    entry = make_entry()
+    entry.add_to_hass(hass)
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
+        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value={}
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    assert entry.runtime_data.is_intercom(SERIAL)
+    assert legacy_entity(hass, "button", "unlock_door")
+
+
 # --- live video -----------------------------------------------------------------
 
 
