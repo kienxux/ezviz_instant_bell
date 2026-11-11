@@ -12,7 +12,7 @@
   <a href="https://hacs.xyz"><img alt="HACS Default" src="https://img.shields.io/badge/HACS-Default-41BDF5"></a>
 </p>
 
-A Home Assistant integration for the **EZVIZ HP7 and CP7 video intercoms**: the door station at your gate or door and the indoor monitor inside. It shows everything the intercom reports, lets you change its settings, and adds what makes a video intercom worth having in a smart home: a ring notification **with the picture**, an **Open door** button on your phone, the **recordings on the SD card**, and the **live video**, all in Home Assistant.
+A Home Assistant integration for the **EZVIZ HP7 and CP7 video intercoms**: the door station at your gate or door and the indoor monitor inside. It shows everything the intercom reports, lets you change its settings, and adds what makes a video intercom worth having in a smart home: a ring notification **with the picture**, an **Open door** button on your phone, the **recordings on the SD card**, and the **live video**, in Home Assistant and for Frigate or go2rtc.
 
 > Independent project. Not affiliated with or endorsed by EZVIZ or Hikvision.
 
@@ -22,9 +22,29 @@ A Home Assistant integration for the **EZVIZ HP7 and CP7 video intercoms**: the 
 - **Open the door from the notification.** A ready-made blueprint sends the picture to every phone with an **Open door** button. The door only opens when someone taps it for that ring.
 - **Visitor log card.** One dashboard card with the rings and unlocks of the last days, their pictures and their SD-card videos, and an Open door button.
 - **Recordings of the SD card.** Browse and play what the door station recorded, by day, in the Media browser. No EZVIZ cloud plan needed.
-- **Live video.** Cloud or directly from your network, with sound in the Home Assistant stream mode.
+- **Live video.** Cloud or directly from your network, with sound in the Home Assistant stream mode, also when the door station encrypts it. The local live video keeps working when the EZVIZ cloud is down.
+- **Frigate and go2rtc.** Home Assistant hands the live video to other apps through an address with a token.
+- **Motion and person events.** As event types of the Doorbell entity, and their pictures saved in the media folder if you want.
 - **Everything the intercom reports.** Sensors, switches, chime volume and ringtones for the door station and every indoor monitor, and who unlocked the door (app, card, face, palm or code).
 - **Safe by design.** Opening the door is always a deliberate action. A failed unlock never tries a different lock.
+
+## Contents
+
+- [Which devices](#which-devices)
+- [Install and set up](#install-and-set-up)
+- [What you get](#what-you-get)
+- [Rings and notifications](#rings-and-notifications)
+- [Visitor log card](#visitor-log-card)
+- [Recordings and pictures](#recordings-and-pictures)
+- [Live video](#live-video)
+- [Frigate and go2rtc](#frigate-and-go2rtc)
+- [When the EZVIZ cloud is down](#when-the-ezviz-cloud-is-down)
+- [Events and actions for automations](#events-and-actions-for-automations)
+- [Options](#options)
+- [Troubleshooting](#troubleshooting)
+- [Privacy and security](#privacy-and-security)
+- [Roadmap and contributing](#roadmap-and-contributing)
+- [Credits and licence](#credits-and-licence)
 
 ## Which devices
 
@@ -35,11 +55,11 @@ A Home Assistant integration for the **EZVIZ HP7 and CP7 video intercoms**: the 
 | **Other EZVIZ devices** | Cameras and doorbells of the same account can be chosen too. They get what every EZVIZ device reports: events, pictures, SD-card recordings and the cloud live video. The unlock buttons and the chime and name-tag light controls are only made for an HP7 / CP7 door station (EZVIZ category `BDoorBell`). **Not tested on real hardware**: please report what works |
 | **Not for** | EZVIZ smart locks, and cameras you mainly want to control (pan and tilt, sirens, lights): Home Assistant's own EZVIZ integration covers those |
 
-The reading of the device's data is tested against an anonymised copy of a real device's answers. Door and gate buttons, chime sliders and switches use the documented EZVIZ calls; the live video is ported from open-source work (see Credits). If something does not work on your model, please [open an issue](https://github.com/kienxux/ezviz_instant_bell/issues/new/choose) and attach the diagnostics download (see [Troubleshooting](#troubleshooting)).
+The reading of the device's data is tested against an anonymised copy of a real device's answers. Door and gate buttons, chime sliders and switches use the documented EZVIZ calls; the live video is ported from open-source work (see [Credits](#credits-and-licence)). If something does not work on your model, please [open an issue](https://github.com/kienxux/ezviz_instant_bell/issues/new/choose) and attach the diagnostics download (see [Troubleshooting](#troubleshooting)).
 
-## Install
+## Install and set up
 
-### With HACS
+### Install with HACS
 
 1. Open HACS, search for **EZVIZ HP7 / CP7 Video Intercom** and open it. It is listed in the HACS default store, so no custom repository is needed.
 2. Install it and restart Home Assistant.
@@ -52,6 +72,8 @@ If the search finds nothing: HACS refreshes its store list every few hours, and 
 2. Log in with your EZVIZ account (and the verification code if EZVIZ sends one), then choose the door station. For an HP7 or CP7 it is the entry marked `BDoorBell`. The indoor monitor is found automatically.
 
 Logging in registers one new terminal named `Hassio` in your EZVIZ account. EZVIZ allows 10 terminals per account; the integration keeps a stable ID so that restarts and Docker do not fill the slots, and warns you before the limit is reached.
+
+To change the login, the region or the chosen door stations later, use **Reconfigure** in the three-dot menu of the integration. Everything else is in the [options](#options).
 
 ### First check
 
@@ -68,25 +90,61 @@ Logging in registers one new terminal named `Hassio` in your EZVIZ account. EZVI
 | **Open** | Buttons `Unlock Door` and `Unlock Gate`, and the actions `ezviz_instant_bell.unlock_door` / `unlock_gate` |
 | **Sensors** | Name, firmware, online status, WiFi signal, SSID, local and WAN IP, motion, last alarm and its type, seconds since last motion, update available, microphone volume |
 | **Binary sensors** | Motion; short pulses (3 s) for doorbell ringing, gate open, lock unlocked and app unlock. Card, face, palm and code unlock and the smart and intelligent detection alarms depend on the model, so each appears the first time the door station reports one. Read-only states of mute, loitering, stranger and human detection, when the device reports them |
-| **Switches** | Doorbell chime and motion sound alert (door station and indoor monitor), do not disturb, privacy, armed, name-tag light |
+| **Switches** | Doorbell chime and motion sound alert (door station and indoor monitor), do not disturb, privacy, armed, name-tag light, doorbell indicator (the light at the call button, when the door station has one) |
 | **Sliders** | Chime volume (0 to 7) and ringtones for the doorbell and the motion alert, on the door station and on every indoor monitor |
 | **Camera** | `Live`: the live video (cloud or local network). `Last Snapshot`: the picture of the latest alarm |
-| **Events** | `ezviz_instant_bell_unlock` (and `ezviz_hp7_unlock`, for automations written against the old name) with the way the lock was opened and the card holder's name; `ezviz_instant_bell_door_opened` when someone opens the door or gate from Home Assistant (with the user, and shown in the logbook); `ezviz_instant_bell_clip_saved` when a ring's video was saved; `ezviz_instant_bell_picture_saved` when the picture of a motion or person event was saved |
 | **Media** | *Recordings (SD card)* and *Pictures of events* in the Media browser |
 | **Dashboard** | The visitor log card |
 | **Account** | `Terminals in use`, and a repair notice before EZVIZ's 10-terminal limit is reached |
 
-## How the instant bell works
+Other EZVIZ cameras and doorbells get no unlock buttons, chime controls, name-tag light or doorbell indicator (see [Which devices](#which-devices)). The events and actions for automations are listed in [Events and actions for automations](#events-and-actions-for-automations).
+
+## Rings and notifications
+
+### How the instant bell works
 
 - **Unlock and gate events** arrive by EZVIZ push within seconds.
 - **Rings** are not pushed on these devices. The integration asks EZVIZ for new entries in your message list every 5 seconds (adjustable, minimum 2). The EZVIZ app has the same delay.
 - **Status** (sensors, switches, sliders) is read every 15 seconds, and straight away after a ring or unlock. A short cloud outage keeps the last values; a longer one makes the entities unavailable and tries a new login once.
 
+### Notification with an Open door button
+
+Import the blueprint, then create an automation from it:
+
+[![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkienxux%2Fezviz_instant_bell%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fezviz_instant_bell%2Fring_notification.yaml)
+
+Choose the doorbell event, the picture, the **Unlock Door** button and the notification service of each phone (for example `notify.mobile_app_my_phone`; add one entry per phone, and whoever taps **Open door** first opens it). It works with the Home Assistant companion app on Android and iPhone. The door opens only if you tap the button for that ring, within a time limit you set. Nothing opens by itself.
+
+### More notification blueprints
+
+Two variants of the ring blueprint, for when a phone notification is not enough. Neither opens the door.
+
+- **Persistent notification.** Shows the ring with its picture as a notification in Home Assistant, so it stays visible until you dismiss it (or until the time you set), even if you miss the phone notification.
+
+  [![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkienxux%2Fezviz_instant_bell%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fezviz_instant_bell%2Fring_persistent_notification.yaml)
+
+- **Speaker announcement.** A speaker announces the ring out loud, for example "Someone is at the door". Pick the speaker, a text-to-speech entity (its voice and language are used) and the words to say; you can also have it set the speaker volume first.
+
+  [![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkienxux%2Fezviz_instant_bell%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fezviz_instant_bell%2Fring_speaker_announcement.yaml)
+
+### Motion and person as events
+
+Switch on **Motion as an event of the Doorbell entity** and/or **Person as an event of the Doorbell entity** in the options (both off by default). The **Doorbell** event entity then also fires `motion` or `person`, with the message's text in `message`, so an automation can trigger on them like on a ring.
+
+- They come through the same message check as the rings, a few seconds after the door station reports them. Each check reads the newest 5 entries.
+- Motion and person are told apart by the name of the message (for example *Motion Detection Alarm*, *Human detected*, *Smart Detection Alarm*) and by its code. A message that is recognised as neither stays `other`, as before. The codes of the latest messages are in the diagnostics download (`recent_messages`); please attach it to an issue if your door station's messages land in the wrong type.
+- Their picture does not replace the **Last picture** of a ring. To keep it, see [Save the pictures of motion and people](#save-the-pictures-of-motion-and-people).
+- Which events the door station reports is set in the EZVIZ app.
+
 ## Visitor log card
 
 <p align="center"><img src="docs/visitor-log-card.png" width="360" alt="The visitor log card with rings, an unlock and a motion entry, each with its picture"><br><sub>The card with sample data</sub></p>
 
-A dashboard card that lists the rings, unlocks and other events of the last days, newest first, each with its picture and, when the door station recorded it, the video from the SD card. Tap a row to see the picture or play the video; the chips filter by kind. The integration adds the card by itself: it puts `/ezviz_instant_bell_static/ezviz-visitor-log-card.js` into *Settings > Dashboards > Resources*, keeps its version up to date and takes it out again when you remove the integration (reload the browser once after installing). If your resources are kept in YAML, it loads the card without touching them; a browser that stays open while Home Assistant restarts then needs a reload. Add it with *Edit dashboard > Add card > EZVIZ visitor log*, or in YAML:
+A dashboard card that lists the rings, unlocks and other events of the last days, newest first, each with its picture and, when the door station recorded it, the video from the SD card. Tap a row to see the picture or play the video; the chips filter by kind.
+
+The integration adds the card by itself: it puts `/ezviz_instant_bell_static/ezviz-visitor-log-card.js` into *Settings > Dashboards > Resources*, keeps its version up to date and takes it out again when you remove the integration (reload the browser once after installing). If your resources are kept in YAML, it loads the card without touching them; a browser that stays open while Home Assistant restarts then needs a reload.
+
+Add it with *Edit dashboard > Add card > EZVIZ visitor log*, or in YAML:
 
 ```yaml
 type: custom:ezviz-visitor-log-card
@@ -100,27 +158,9 @@ event_entity: event.front_door_doorbell   # optional: reload the moment a ring a
 
 The open button shows by default; set `show_unlock: false` to hide it, or `unlock: both` for a door and a gate button. With more than one door station, set `serial` so the button knows which one to open. The list refreshes every minute. Pictures and videos are served through signed links that expire after ten minutes.
 
-## Notification with an Open door button
+## Recordings and pictures
 
-Import the blueprint, then create an automation from it:
-
-[![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkienxux%2Fezviz_instant_bell%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fezviz_instant_bell%2Fring_notification.yaml)
-
-Choose the doorbell event, the picture, the **Unlock Door** button and the notification service of each phone (for example `notify.mobile_app_my_phone`; add one entry per phone, and whoever taps **Open door** first opens it). It works with the Home Assistant companion app on Android and iPhone. The door opens only if you tap the button for that ring, within a time limit you set. Nothing opens by itself.
-
-### More notification blueprints
-
-Two variants of the ring blueprint, for when a phone notification is not enough. Neither opens the door.
-
-- **Persistent notification.** Shows the ring with its picture link as a notification in Home Assistant, so it stays visible until you dismiss it (or until the time you set), even if you miss the phone notification.
-
-  [![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkienxux%2Fezviz_instant_bell%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fezviz_instant_bell%2Fring_persistent_notification.yaml)
-
-- **Speaker announcement.** A speaker announces the ring out loud, for example "Someone is at the door". Pick the speaker, a text-to-speech entity (its voice and language are used) and the words to say; you can also have it set the speaker volume first.
-
-  [![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkienxux%2Fezviz_instant_bell%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fezviz_instant_bell%2Fring_speaker_announcement.yaml)
-
-## Recordings of the SD card
+### Recordings of the SD card
 
 Open **Media** in the sidebar, choose **EZVIZ HP7 / CP7 Video Intercom**, your door station, **Recordings (SD card)** and a day. Each video is listed with its start time and length, newest first; the picture of the ring or motion event next to it is its thumbnail. The same list is reachable from dashboard cards and from automations (`media-source://ezviz_instant_bell/...`).
 
@@ -134,7 +174,7 @@ Open **Media** in the sidebar, choose **EZVIZ HP7 / CP7 Video Intercom**, your d
 
 Switch on **Save the video of every ring** in the options and the integration keeps the recording of each ring: after the ring it waits for the door station to finish recording, fetches the video like a played clip, and announces it with the event `ezviz_instant_bell_clip_saved` and the sensor **Last saved clip** (its attributes hold `media_content_id`, which a media player or an automation can play). It is off by default because it makes the door station send a video after every ring; it needs an SD card in the door station and video encryption off. Saved clips share the 500 MB of the clip folder.
 
-## Pictures of events
+### Pictures of events
 
 **Media > EZVIZ HP7 / CP7 Video Intercom > your door station > Pictures of events > a day** shows every event EZVIZ kept for that day with its picture: rings, door and gate openings, motion, for the last 14 days.
 
@@ -142,7 +182,7 @@ Switch on **Save the video of every ring** in the options and the integration ke
 - Pictures are fetched on demand and the last 100 are kept in memory; nothing is written to disk.
 - The first view of a day takes a moment (up to 4 requests of 50 entries); the list is then kept for a minute (today) or 15 minutes (older days).
 
-## Save the pictures of motion and people
+### Save the pictures of motion and people
 
 Switch on **Save the picture of every motion and person event** in the options. The integration then stores the picture of each motion and person event in the media folder of Home Assistant. No automation is needed. Find them under **Media > My media > ezviz_instant_bell > your door station > a day**, named like `14-03-12_motion_detection_alarm.jpg`.
 
@@ -153,23 +193,68 @@ Switch on **Save the picture of every motion and person event** in the options. 
 - Each saved picture fires `ezviz_instant_bell_picture_saved` with `path` and `media_content_id`, should you want a notification after all.
 - The folder is the `local` media folder: `/media` on Home Assistant OS and in the Docker image when it is mounted, otherwise `<config>/media`. Each check reads the newest 5 entries, so if more than 5 events happen within one check interval, the older ones are missed.
 
-## Motion and person as events
-
-Switch on **Motion as an event of the Doorbell entity** and/or **Person as an event of the Doorbell entity** in the options (both off by default). The **Doorbell** event entity then also fires `motion` or `person`, with the message's text in `message`, so an automation can trigger on them like on a ring.
-
-- They come through the same message check as the rings, a few seconds after the door station reports them. Each check reads the newest 5 entries.
-- Motion and person are told apart by the name of the message (for example *Motion Detection Alarm*, *Human detected*, *Smart Detection Alarm*) and by its code. A message that is recognised as neither stays `other`, as before. The codes of the latest messages are in the diagnostics download (`recent_messages`); please attach it to an issue if your door station's messages land in the wrong type.
-- Their picture does not replace the **Last picture** of a ring. To keep it, use the option above.
-- Which events the door station reports is set in the EZVIZ app.
-
 ## Live video
+
+The **Live** camera of each door station. Its settings are in the [options](#options):
 
 - **Source**: `cloud` (EZVIZ relay, the default), `local` (straight from the door station on your network; Home Assistant must be on the same network) or `auto` (local first, then cloud).
 - **Mode**: `auto` looks at the video once and picks: H.264 uses the Home Assistant stream (sound, low delay), HEVC uses motion JPEG (every browser, no sound). `webrtc` and `mjpeg` force one of them.
-- **Encrypted video.** Some firmware encrypts the video and offers no switch in the EZVIZ app. EZVIZ then e-mails a 4-digit code when the live view is opened; a repair notice asks for it, or use the action `fetch_encryption_key` (with `serial` when you have more than one door station). The 6-character code on the label does not work for this. The key decrypts picture and sound with both stream sources; sound that still cannot be read is played as silence. `set_video_encryption` turns the device's encryption on or off, and only when you call it. Both actions need an administrator.
-- **Other apps (go2rtc, Frigate).** Turn on *Let other apps read the live video* in the options. The options then show two addresses per door station, served by Home Assistant with a token: `/api/ezviz_instant_bell/live/<serial>?token=…` (MPEG-TS with sound) and `/api/ezviz_instant_bell/mjpeg/<serial>?token=…` (motion JPEG). It is off by default; *Make a new token* stops the addresses handed out so far, and a wrong token counts as a failed login.
-- **Relay.** The relay listens on `127.0.0.1` only. A fixed port and `0.0.0.0` still work for go2rtc or Frigate on another machine, but that socket has no password; the addresses with a token above are the safer way.
 - While someone watches the local stream, the status is read a quarter as often, because the door station's processor is small. A ring or unlock wakes the stream up, so the first picture is quick.
+
+### Encrypted video
+
+Some firmware encrypts the video and offers no switch in the EZVIZ app. EZVIZ then e-mails a 4-digit code when the live view is opened; a repair notice asks for it, or use the action `fetch_encryption_key` (with `serial` when you have more than one door station). The 6-character code on the label does not work for this. The key decrypts picture and sound with both stream sources; sound that still cannot be read is played as silence. `set_video_encryption` turns the device's encryption on or off, and only when you call it. Both actions need an administrator.
+
+### Relay
+
+The live video runs through a relay inside Home Assistant that listens on `127.0.0.1` only. A fixed port and `0.0.0.0` still work for go2rtc or Frigate on another machine, but that socket has no password; the [addresses with a token](#frigate-and-go2rtc) are the safer way.
+
+## Frigate and go2rtc
+
+Home Assistant can hand the live video to other apps, for example Frigate (detection and recording) or go2rtc, through two addresses per door station:
+
+| Address | What it serves |
+| --- | --- |
+| `/api/ezviz_instant_bell/live/<serial>?token=…` | MPEG-TS with sound: the video as the relay has it (H.264, or H.265 when the door station sends it and nothing converts it) |
+| `/api/ezviz_instant_bell/mjpeg/<serial>?token=…` | Motion JPEG, no sound |
+
+1. Switch on **Let other apps read the live video (go2rtc, Frigate)** in the options and save.
+2. Open the options again. Their description shows both addresses of each door station, with the address of your Home Assistant and the token.
+3. Use an address in the other app, for example as below.
+
+go2rtc:
+
+```yaml
+streams:
+  front_door:
+    - "ffmpeg:http://192.168.1.10:8123/api/ezviz_instant_bell/live/BE0000001?token=YOUR_TOKEN#video=copy#audio=copy"
+```
+
+Frigate, through the go2rtc that comes with it:
+
+```yaml
+go2rtc:
+  streams:
+    front_door:
+      - "ffmpeg:http://192.168.1.10:8123/api/ezviz_instant_bell/live/BE0000001?token=YOUR_TOKEN#video=copy#audio=copy"
+
+cameras:
+  front_door:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/front_door
+          input_args: preset-rtsp-restream
+          roles:
+            - detect
+            - record
+```
+
+These examples are not yet checked with a real Frigate or go2rtc: please report whether they work.
+
+- It is off by default. **Make a new token** stops the addresses handed out so far; the new ones show the next time you open the options.
+- Anyone with an address can watch, so keep it like a password. A wrong token counts as a failed login, so Home Assistant's IP ban applies. The right one never does: while Home Assistant starts or waits for the EZVIZ cloud, the app gets "503 Service Unavailable" and tries again.
+- Reading an address opens the live video, like opening the **Live** camera. An app that records around the clock keeps it open all the time; with the `local` source, the status is then read a quarter as often.
+- If the door station sends H.265 and a browser shows no picture, `#video=h264` instead of `#video=copy` makes go2rtc convert it, at the cost of processor time.
 
 ## When the EZVIZ cloud is down
 
@@ -180,21 +265,61 @@ Most of this integration works through the EZVIZ cloud, like the EZVIZ app does.
 - What still needs the cloud: rings, unlocking the door, settings, recordings and pictures. Unlocking says so instead of failing silently.
 - If the door station changes its local key (it may after a reboot), the stored key no longer fits until the cloud answers once.
 
+## Events and actions for automations
+
+The **Doorbell** event entity fires `ring`, `door_unlock` and `gate_open`, with the options also `motion` and `person`, and `other` for a message it does not recognise. Besides, the integration fires these events:
+
+| Event | When |
+| --- | --- |
+| `ezviz_instant_bell_unlock` | The door or gate was opened, with the way it was opened and the card holder's name. `ezviz_hp7_unlock` is fired as well, for automations written against the old name |
+| `ezviz_instant_bell_door_opened` | Someone opened the door or gate from Home Assistant, with the user; also shown in the logbook |
+| `ezviz_instant_bell_clip_saved` | The video of a ring was saved (option **Save the video of every ring**) |
+| `ezviz_instant_bell_picture_saved` | The picture of a motion or person event was saved, with `path` and `media_content_id` |
+
+Actions (`serial` is needed only when you have more than one door station):
+
+| Action | What it does |
+| --- | --- |
+| `ezviz_instant_bell.unlock_door` / `unlock_gate` | Opens the door or the gate |
+| `ezviz_instant_bell.fetch_encryption_key` | Gets the key for encrypted video: without `code`, EZVIZ e-mails a 4-digit code; call it again with that code. Administrators only |
+| `ezviz_instant_bell.set_video_encryption` | Turns the door station's video encryption on or off (`enable`, `verification_code`). Administrators only |
+
 ## Options
 
-Ring check interval (seconds), serial numbers of the indoor monitors (empty = automatic), the lock numbers for door (2) and gate (1) as seen on an HP7, whether to save the video of every ring, whether to save the pictures of motion and person events (and for how many days), whether motion and person fire the event entity, and the live video settings (source, mode, codec, quality, port, listen address, key). To change the login, region or chosen door stations, use **Reconfigure** in the three-dot menu of the integration.
+Open them with **Configure** on the integration. Saving reloads the integration, so the changes apply at once.
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| Ring check interval (seconds) | 5 | How often the EZVIZ message list is checked for rings, 2 to 60 |
+| Indoor monitor serial numbers | empty | Empty finds the monitors by itself |
+| Lock number of the door / of the gate | 2 / 1 | As seen on an HP7; swap them if **Unlock Door** opens the gate |
+| Save the video of every ring | off | See [Save the video of every ring](#save-the-video-of-every-ring) |
+| Save the picture of every motion and person event | off | See [Save the pictures of motion and people](#save-the-pictures-of-motion-and-people) |
+| Keep the saved pictures for (days) | 30 | 1 to 365 |
+| Motion / Person as an event of the Doorbell entity | off | See [Motion and person as events](#motion-and-person-as-events) |
+| Stream source | `cloud` | `cloud`, `local` or `auto`, see [Live video](#live-video) |
+| Live view delivery | `auto` | `auto`, `webrtc` or `mjpeg`, see [Live video](#live-video) |
+| Video codec | `auto` | `auto` detects it; `h264`; `hevc` converts H.265 to H.264 for the Home Assistant stream; `hevc_copy` passes H.265 through untouched (weak hosts, Frigate, Safari) |
+| LAN stream quality | `main` | `sub` asks the local source for the door station's small picture, which is far cheaper to decode on a weak host |
+| Let other apps read the live video (go2rtc, Frigate) | off | See [Frigate and go2rtc](#frigate-and-go2rtc) |
+| Make a new token | | Stops the addresses handed out so far |
+| Fixed TCP port / listen host of the relay | 0 / `127.0.0.1` | See [Relay](#relay) |
+| Aggressive MPEG-TS compatibility | off | Repeats the stream headers before every keyframe; switch it on if the log shows "Immediate exit requested" |
+| Encryption key | empty | See [Encrypted video](#encrypted-video) |
+| Diagnostic dumps | off | Writes the start of the stream to two `.bin` files in the config folder, for a video bug report only |
 
 ## Troubleshooting
 
 - **Download diagnostics** from *Settings > Devices & services > EZVIZ HP7 / CP7 Video Intercom > three dots* and attach the file to your issue. It contains no password, account name, serial numbers, addresses or keys.
-- Switch on debug logging for `custom_components.ezviz_instant_bell` and look for "StreamRelay" (video) lines. Remove passwords, keys and serial numbers before sharing logs.
+- Switch on debug logging for `custom_components.ezviz_instant_bell` and look for "StreamRelay" (video) lines, and "Shared stream" lines for the addresses for other apps. Remove passwords, keys, tokens and serial numbers before sharing logs.
 - A setup that fails with an unknown value from the device is a bug in this integration: please report it.
 
 ## Privacy and security
 
-- Your EZVIZ login is stored by Home Assistant like for any integration. Nothing is sent anywhere except to EZVIZ (and, for the local stream, to your own door station).
-- Pictures are kept only in memory (the latest one, and up to 100 from the history browser). Recordings you play are stored as MP4 files in the `.storage` folder, up to 500 MB.
+- Your EZVIZ login is stored by Home Assistant like for any integration. Nothing is sent anywhere except to EZVIZ (and, for the local stream, to your own door station), and the live video to the apps you give a stream address.
+- Pictures are kept only in memory (the latest one, and up to 100 from the history browser), unless you switch on saving the pictures of motion and person events. Recordings you play are stored as MP4 files in the `.storage` folder, up to 500 MB.
 - For the live video without the cloud, the door station's local key and address are stored in the `.storage` folder, next to the EZVIZ login that Home Assistant keeps there anyway.
+- The addresses for other apps are off by default. Their token is kept in the options and hidden in the diagnostics; a wrong token counts as a failed login.
 - The administrator-only actions are the ones that change video encryption or fetch its key. The door can be opened by every Home Assistant user who may press the button, so give guests a dashboard without it. Every opening from Home Assistant is recorded with the user in the logbook (event `ezviz_instant_bell_door_opened`).
 - The ring blueprint uses a random ID per ring for its Open door button.
 
