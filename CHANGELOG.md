@@ -2,6 +2,12 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 0.12.0
+
+- New switch **Doorbell Indicator** for the light at the call button of the door station (the "Doorbell indicator" of the EZVIZ app, EZVIZ switch 3). It is made only when the door station reports this setting (#22).
+- The diagnostics download lists the numbers of the settings (switches) each door station reports. A control the integration does not know yet, such as the keyboard backlight of the HP7 Pro, can be added from them.
+- The README is reorganised: a table of contents, a section on Frigate and go2rtc with examples, the events and actions for automations, and the options as a table.
+
 ## 0.11.0
 
 - New option **Let other apps read the live video (go2rtc, Frigate)**, off by default. Home Assistant then serves the live video of each door station at `/api/ezviz_instant_bell/live/<serial>?token=…` (MPEG-TS with sound) and `/api/ezviz_instant_bell/mjpeg/<serial>?token=…` (motion JPEG). The options show both addresses; **Make a new token** stops the addresses handed out so far. A wrong token counts as a failed login, so Home Assistant's IP ban applies. The relay socket without a password (`0.0.0.0`) still works but is no longer the recommended way. The diagnostics download hides the token.
