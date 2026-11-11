@@ -14,6 +14,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
+from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
@@ -1625,11 +1626,26 @@ async def test_the_card_is_added_to_the_frontend(hass: HomeAssistant, client: Fa
         captured[component] = cb
 
     with patch("custom_components.ezviz_instant_bell.api.async_when_setup", fake_when_setup):
-        await setup(hass, client)
+        entry = await setup(hass, client)
     assert "frontend" in captured  # the card waits for the frontend, in any start order
     hass.data[DATA_EXTRA_MODULE_URL] = set()
+    # Without dashboard resources kept by the UI the page loads the card.
     await captured["frontend"](hass, "frontend")
-    assert f"/{DOMAIN}_static/ezviz-visitor-log-card.js" in hass.data[DATA_EXTRA_MODULE_URL]
+    card = f"/{DOMAIN}_static/ezviz-visitor-log-card.js?v="
+    assert [url for url in hass.data[DATA_EXTRA_MODULE_URL] if url.startswith(card)]
+
+    # With them, the card goes into the resources instead.
+    hass.data[DATA_EXTRA_MODULE_URL] = set()
+    assert await async_setup_component(hass, "lovelace", {})
+    await captured["frontend"](hass, "frontend")
+    assert not hass.data[DATA_EXTRA_MODULE_URL]
+    resources = hass.data["lovelace"].resources
+    assert [item for item in resources.async_items() if item["url"].startswith(card)]
+
+    # Removing the account takes it out again.
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+    assert not [item for item in resources.async_items() if item["url"].startswith(card)]
 
 
 # --- a device value the library does not know (issue #1: CP5 reports sound mode 5) -----

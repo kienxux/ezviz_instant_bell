@@ -86,7 +86,7 @@ Logging in registers one new terminal named `Hassio` in your EZVIZ account. EZVI
 
 <p align="center"><img src="docs/visitor-log-card.png" width="360" alt="The visitor log card with rings, an unlock and a motion entry, each with its picture"><br><sub>The card with sample data</sub></p>
 
-A dashboard card that lists the rings, unlocks and other events of the last days, newest first, each with its picture and, when the door station recorded it, the video from the SD card. Tap a row to see the picture or play the video; the chips filter by kind. The integration adds the card by itself (reload the browser once after installing). Add it with *Edit dashboard > Add card > EZVIZ visitor log*, or in YAML:
+A dashboard card that lists the rings, unlocks and other events of the last days, newest first, each with its picture and, when the door station recorded it, the video from the SD card. Tap a row to see the picture or play the video; the chips filter by kind. The integration adds the card by itself: it puts `/ezviz_instant_bell_static/ezviz-visitor-log-card.js` into *Settings > Dashboards > Resources*, keeps its version up to date and takes it out again when you remove the integration (reload the browser once after installing). If your resources are kept in YAML, it loads the card without touching them; a browser that stays open while Home Assistant restarts then needs a reload. Add it with *Edit dashboard > Add card > EZVIZ visitor log*, or in YAML:
 
 ```yaml
 type: custom:ezviz-visitor-log-card

@@ -13,6 +13,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.http.auth import async_sign_path
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.loader import async_get_integration
 from homeassistant.setup import async_when_setup
 from homeassistant.util import dt as dt_util
 
@@ -36,15 +37,72 @@ async def async_setup_card(hass: HomeAssistant) -> None:
     register_views(hass)
     websocket_api.async_register_command(hass, ws_visitor_log)
     await hass.http.async_register_static_paths([StaticPathConfig(CARD_URL, str(CARD_FILE), False)])
+    # The version makes browsers fetch the new card after an update.
+    url = f"{CARD_URL}?v={(await async_get_integration(hass, DOMAIN)).version}"
 
     async def _add_to_frontend(hass: HomeAssistant, _component: str) -> None:
-        # Runs once the frontend is set up (or at once if it already is), so the
-        # card loads no matter the order the components start in.
+        # Runs once the frontend (and with it lovelace) is set up, or at once if
+        # it already is, so the card loads no matter the order the components
+        # start in.
+        if await _add_resource(hass, url):
+            return
+        # Dashboards in YAML mode: the page loads the card, but only pages
+        # loaded after this point (a page open during start needs a reload).
         from homeassistant.components.frontend import add_extra_js_url
 
-        add_extra_js_url(hass, CARD_URL)
+        add_extra_js_url(hass, url)
 
     async_when_setup(hass, "frontend", _add_to_frontend)
+
+
+def _resources(hass: HomeAssistant):
+    """The dashboard resources when they are kept by the UI, else None (YAML mode or an unknown layout)."""
+    data = hass.data.get("lovelace")
+    mode = getattr(data, "resource_mode", None) or getattr(data, "mode", None)
+    resources = getattr(data, "resources", None)
+    if mode != "storage" or not hasattr(resources, "async_create_item"):
+        return None
+    return resources
+
+
+def _own_items(resources) -> list[dict]:
+    return [item for item in resources.async_items() if str(item.get("url", "")).split("?")[0] == CARD_URL]
+
+
+async def _add_resource(hass: HomeAssistant, url: str) -> bool:
+    """Keep the card in the dashboard resources: each dashboard loads them when it opens.
+
+    The script added with add_extra_js_url is only in pages loaded after the
+    integration started; a browser open during a restart never gets it and
+    shows "Custom element doesn't exist" until it is reloaded.
+    """
+    try:
+        if (resources := _resources(hass)) is None:
+            return False
+        await resources.async_get_info()  # loads the list from storage
+        mine = _own_items(resources)
+        if not mine:
+            await resources.async_create_item({"res_type": "module", "url": url})
+        elif mine[0].get("url") != url:
+            await resources.async_update_item(mine[0]["id"], {"res_type": "module", "url": url})
+        for extra in mine[1:]:
+            await resources.async_delete_item(extra["id"])
+    except Exception:  # noqa: BLE001 - internal API of lovelace; fall back to the old way
+        _LOGGER.debug("Could not add the visitor log card to the dashboard resources", exc_info=True)
+        return False
+    return True
+
+
+async def async_remove_card(hass: HomeAssistant) -> None:
+    """Take the card out of the dashboard resources (the last account was removed)."""
+    try:
+        if (resources := _resources(hass)) is None:
+            return
+        await resources.async_get_info()
+        for item in _own_items(resources):
+            await resources.async_delete_item(item["id"])
+    except Exception:  # noqa: BLE001
+        _LOGGER.debug("Could not remove the visitor log card from the dashboard resources", exc_info=True)
 
 
 def _hubs(hass: HomeAssistant) -> list[InstantBellHub]:

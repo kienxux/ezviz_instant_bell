@@ -6,6 +6,7 @@ All notable changes. The newest version is first. Versions follow the `version` 
 
 - New option **Let other apps read the live video (go2rtc, Frigate)**, off by default. Home Assistant then serves the live video of each door station at `/api/ezviz_instant_bell/live/<serial>?token=…` (MPEG-TS with sound) and `/api/ezviz_instant_bell/mjpeg/<serial>?token=…` (motion JPEG). The options show both addresses; **Make a new token** stops the addresses handed out so far. A wrong token counts as a failed login, so Home Assistant's IP ban applies. The relay socket without a password (`0.0.0.0`) still works but is no longer the recommended way. The diagnostics download hides the token.
 - Other EZVIZ cameras and doorbells of the account no longer get the **Unlock Door / Unlock Gate** buttons, the chime switches and sliders or the name-tag light: only an HP7 / CP7 door station (EZVIZ category `BDoorBell`) has them. The unlock actions refuse such a device. Those entities made by earlier versions for a camera are removed after the update. A device whose category EZVIZ does not report keeps everything, as before.
+- The visitor log card is now put into *Settings > Dashboards > Resources* by the integration, so a browser that stayed open while Home Assistant restarted no longer shows "Custom element doesn't exist". Its address carries the version, so browsers load the new card after an update, and it is taken out again when the last account is removed. Resources kept in YAML are left alone; the card is then loaded as before.
 
 ## 0.10.4
 

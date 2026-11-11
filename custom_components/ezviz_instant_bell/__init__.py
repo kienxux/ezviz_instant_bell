@@ -15,7 +15,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
 
-from .api import async_setup_card
+from .api import async_remove_card, async_setup_card
 from .const import DOMAIN
 from .keys import with_keys
 from .coordinator import StatusCoordinator
@@ -188,3 +188,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: InstantBellConfigEntry) 
 async def async_unload_entry(hass: HomeAssistant, entry: InstantBellConfigEntry) -> bool:
     """Unload the account."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: InstantBellConfigEntry) -> None:
+    """Remove the card from the dashboard resources with the last account."""
+    if not [other for other in hass.config_entries.async_entries(DOMAIN) if other.entry_id != entry.entry_id]:
+        await async_remove_card(hass)
