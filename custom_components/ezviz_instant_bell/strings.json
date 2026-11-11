@@ -62,8 +62,10 @@
           "door_lock_no": "Lock number of the door",
           "gate_lock_no": "Lock number of the gate",
           "monitor_serials": "Indoor monitor serial numbers",
+          "share_stream": "Let other apps read the live video (go2rtc, Frigate)",
+          "new_stream_token": "Make a new token",
           "relay_port": "Fixed TCP port for the live relay (0 = random, suggested 8554 for go2rtc / mediamtx)",
-          "relay_bind": "Relay listen host (127.0.0.1 = local-only, safe default; 0.0.0.0 exposes the UNAUTHENTICATED raw stream to other hosts, e.g. Frigate — trusted networks only, requires a fixed port)",
+          "relay_bind": "Relay listen host (127.0.0.1 = local-only, safe default; 0.0.0.0 exposes the UNAUTHENTICATED raw stream to other hosts — trusted networks only, requires a fixed port. For go2rtc or Frigate, prefer the addresses with a token above)",
           "aggressive_mpegts": "Aggressive MPEG-TS compatibility (enable if you see 'Immediate exit requested' in logs; safe to leave OFF by default)",
           "video_codec": "Video codec (auto = detect; hevc transcodes H.265 to H.264 for WebRTC; hevc_copy passes H.265 through untouched for low-power hosts / Frigate / Safari)",
           "stream_source": "Stream source (cloud = EZVIZ VTM relay; local = direct LAN, bypasses the cloud and fixes 'no live' on firmware that won't push to the cloud — needs HA on the same network as the doorbell; auto = try local then cloud)",
@@ -86,9 +88,11 @@
           "save_detection_pictures": "Off by default. The pictures appear under Media > My media > ezviz_instant_bell, one folder per door station and day, about 5 to 12 seconds after the event; each one is announced by the event ezviz_instant_bell_picture_saved. Rings and door openings are not saved here. Which events the door station reports (motion, human detection) is set in the EZVIZ app.",
           "detection_picture_days": "Older day folders are deleted. Only the integration's own folder is touched.",
           "motion_events": "Off by default. The event entity then also fires motion, a few seconds after the door station reports it (it comes from the message list, like a ring). Which events the door station reports is set in the EZVIZ app.",
-          "person_events": "Off by default. Like motion, for human detection. Motion and person are told apart by the name of the message; an unrecognised one stays Other."
+          "person_events": "Off by default. Like motion, for human detection. Motion and person are told apart by the name of the message; an unrecognised one stays Other.",
+          "share_stream": "Off by default. Other apps then read the live video from the addresses above, through Home Assistant's web server: the first one is MPEG-TS with sound, the second motion JPEG. Anyone with an address can watch, so keep it like a password. A wrong token counts as a failed login. Reading an address opens the live video, like opening the Live camera.",
+          "new_stream_token": "The addresses handed out so far stop working; the new ones are shown the next time you open these options."
         },
-        "description": "Live video options apply after the integration reloads."
+        "description": "Live video options apply after the integration reloads.\n\nAddresses for other apps (they work while the option below is on):\n{stream_addresses}"
       }
     }
   },

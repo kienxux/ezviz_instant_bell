@@ -22,6 +22,7 @@ from .coordinator import StatusCoordinator
 from .entity import link_monitors
 from .hub import InstantBellHub
 from .parsing import same_device
+from .stream_share import register_share_views
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -153,6 +154,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async_register_admin_service(
         hass, DOMAIN, "fetch_encryption_key", fetch_encryption_key, vol.Schema({vol.Optional("code"): cv.string, vol.Optional("serial"): cv.string})
     )
+    register_share_views(hass)
     await async_setup_card(hass)
     return True
 

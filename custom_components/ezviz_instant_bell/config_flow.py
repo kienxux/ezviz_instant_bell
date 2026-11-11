@@ -40,6 +40,9 @@ from .const import (
     CONF_RELAY_PORT,
     CONF_REGION,
     CONF_SAVE_CLIPS,
+    CONF_NEW_STREAM_TOKEN,
+    CONF_SHARE_STREAM,
+    CONF_STREAM_TOKEN,
     CONF_DETECTION_PICTURE_DAYS,
     CONF_SAVE_DETECTION_PICTURES,
     CONF_MOTION_EVENTS,
@@ -66,6 +69,7 @@ from .const import (
 )
 from .feature_code import resolve_feature_code
 from .keys import CONF_KEYS, kept_keys
+from .stream_share import new_token, stream_addresses
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -321,7 +325,12 @@ class InstantBellConfigFlow(ConfigFlow, domain=DOMAIN):
 class InstantBellOptionsFlow(OptionsFlowWithReload):
     """Ring check interval, indoor monitors, lock numbers and live video."""
 
+    _token = ""
+
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        # The addresses in the form already show the token that is saved with it.
+        if not self._token:
+            self._token = self.config_entry.options.get(CONF_STREAM_TOKEN) or new_token()
         if user_input is not None:
             data: dict[str, Any] = {
                 CONF_POLL_INTERVAL: int(user_input[CONF_POLL_INTERVAL]),
@@ -337,6 +346,8 @@ class InstantBellOptionsFlow(OptionsFlowWithReload):
                 CONF_PERSON_EVENTS: bool(user_input.get(CONF_PERSON_EVENTS, False)),
                 CONF_RELAY_PORT: int(user_input.get(CONF_RELAY_PORT) or 0),
                 CONF_RELAY_BIND: str(user_input.get(CONF_RELAY_BIND) or DEFAULT_RELAY_BIND).strip(),
+                CONF_SHARE_STREAM: bool(user_input.get(CONF_SHARE_STREAM, False)),
+                CONF_STREAM_TOKEN: new_token() if user_input.get(CONF_NEW_STREAM_TOKEN) else self._token,
                 CONF_AGGRESSIVE_MPEGTS: bool(user_input.get(CONF_AGGRESSIVE_MPEGTS, False)),
                 CONF_VIDEO_CODEC: user_input[CONF_VIDEO_CODEC],
                 CONF_STREAM_SOURCE: user_input[CONF_STREAM_SOURCE],
@@ -350,6 +361,7 @@ class InstantBellOptionsFlow(OptionsFlowWithReload):
             data[CONF_KEYS] = kept_keys(self.config_entry.options, data[CONF_ENCRYPTION_KEY])
             return self.async_create_entry(data=data)
         opts = self.config_entry.options
+        serials = list(getattr(getattr(self.config_entry, "runtime_data", None), "serials", None) or [])
         number = lambda low, high: NumberSelector(  # noqa: E731
             NumberSelectorConfig(min=low, max=high, step=1, mode=NumberSelectorMode.BOX)
         )
@@ -395,6 +407,8 @@ class InstantBellOptionsFlow(OptionsFlowWithReload):
                     vol.Required(CONF_STREAM_QUALITY, default=opts.get(CONF_STREAM_QUALITY, "main")): choice(
                         STREAM_QUALITIES
                     ),
+                    vol.Required(CONF_SHARE_STREAM, default=bool(opts.get(CONF_SHARE_STREAM, False))): bool,
+                    vol.Required(CONF_NEW_STREAM_TOKEN, default=False): bool,
                     vol.Required(CONF_RELAY_PORT, default=int(opts.get(CONF_RELAY_PORT) or 0)): number(0, 65535),
                     vol.Required(CONF_RELAY_BIND, default=opts.get(CONF_RELAY_BIND, DEFAULT_RELAY_BIND)): TextSelector(),
                     vol.Required(
@@ -408,4 +422,5 @@ class InstantBellOptionsFlow(OptionsFlowWithReload):
                     ): bool,
                 }
             ),
+            description_placeholders={"stream_addresses": stream_addresses(self.hass, serials, self._token)},
         )

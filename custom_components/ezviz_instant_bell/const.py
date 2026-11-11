@@ -68,6 +68,12 @@ CONF_RELAY_PORT = "relay_port"
 # another machine (Frigate) read it. There is no password on this socket.
 CONF_RELAY_BIND = "relay_bind"
 DEFAULT_RELAY_BIND = "127.0.0.1"
+# Hand the live video to other apps through Home Assistant's web server, with a
+# token (see stream_share). Off by default; the token is kept in the options.
+CONF_SHARE_STREAM = "share_stream"
+CONF_STREAM_TOKEN = "stream_token"
+# Form field only: replace the token, so that addresses handed out stop working.
+CONF_NEW_STREAM_TOKEN = "new_stream_token"
 # Repeat SPS/PPS before every keyframe (helps firmware that sends them once).
 CONF_AGGRESSIVE_MPEGTS = "aggressive_mpegts"
 # Video codec of the doorbell: auto looks at the stream.

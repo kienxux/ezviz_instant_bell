@@ -62,8 +62,10 @@
           "door_lock_no": "Schlossnummer der Tür",
           "gate_lock_no": "Schlossnummer des Tors",
           "monitor_serials": "Seriennummern der Innenmonitore",
+          "share_stream": "Andere Apps dürfen das Live-Video lesen (go2rtc, Frigate)",
+          "new_stream_token": "Neuen Token erzeugen",
           "relay_port": "Fester TCP-Port für das Live-Relay (0 = zufällig, 8554 empfohlen für go2rtc / mediamtx)",
-          "relay_bind": "Listen-Adresse des Relays (127.0.0.1 = nur lokal, sicherer Standard; 0.0.0.0 gibt den UNGESCHÜTZTEN Rohstream für andere Rechner frei, z. B. Frigate – nur in vertrauenswürdigen Netzen, braucht einen festen Port)",
+          "relay_bind": "Listen-Adresse des Relays (127.0.0.1 = nur lokal, sicherer Standard; 0.0.0.0 gibt den UNGESCHÜTZTEN Rohstream für andere Rechner frei – nur in vertrauenswürdigen Netzen, braucht einen festen Port. Für go2rtc oder Frigate besser die Adressen mit Token oben verwenden)",
           "aggressive_mpegts": "Aggressive MPEG-TS-Kompatibilität (aktivieren, wenn im Log 'Immediate exit requested' steht; standardmäßig besser aus)",
           "video_codec": "Video-Codec (auto = erkennen; hevc wandelt H.265 für WebRTC in H.264 um; hevc_copy reicht H.265 unverändert durch, für schwache Rechner / Frigate / Safari)",
           "stream_source": "Stream-Quelle (cloud = EZVIZ-VTM-Relay; local = direkt im LAN, umgeht die Cloud und behebt 'kein Live-Bild' bei Firmware, die nicht in die Cloud sendet – HA muss im selben Netz wie die Türklingel sein; auto = erst lokal, dann Cloud)",
@@ -86,9 +88,11 @@
           "save_detection_pictures": "Standardmäßig aus. Die Bilder erscheinen unter Medien > Meine Medien > ezviz_instant_bell, ein Ordner pro Türstation und Tag, etwa 5 bis 12 Sekunden nach dem Ereignis; jedes wird durch das Ereignis ezviz_instant_bell_picture_saved gemeldet. Klingeln und Türöffnungen werden hier nicht gespeichert. Welche Ereignisse die Türstation meldet (Bewegung, Personenerkennung), wird in der EZVIZ-App eingestellt.",
           "detection_picture_days": "Ältere Tagesordner werden gelöscht. Nur der eigene Ordner der Integration wird angefasst.",
           "motion_events": "Standardmäßig aus. Die Ereignis-Entität meldet dann auch Bewegung, einige Sekunden nachdem die Türstation sie meldet (sie kommt wie ein Klingeln aus der Nachrichtenliste). Welche Ereignisse die Türstation meldet, wird in der EZVIZ-App eingestellt.",
-          "person_events": "Standardmäßig aus. Wie Bewegung, für die Personenerkennung. Bewegung und Person werden am Namen der Nachricht unterschieden; eine nicht erkannte bleibt Sonstiges."
+          "person_events": "Standardmäßig aus. Wie Bewegung, für die Personenerkennung. Bewegung und Person werden am Namen der Nachricht unterschieden; eine nicht erkannte bleibt Sonstiges.",
+          "share_stream": "Standardmäßig aus. Andere Apps lesen das Live-Video dann über den Webserver von Home Assistant von den Adressen oben: die erste liefert MPEG-TS mit Ton, die zweite Motion-JPEG. Wer eine Adresse kennt, kann zusehen; behandle sie wie ein Passwort. Ein falscher Token zählt als fehlgeschlagene Anmeldung. Das Lesen einer Adresse öffnet das Live-Video wie die Kamera 'Live'.",
+          "new_stream_token": "Die bisher weitergegebenen Adressen funktionieren dann nicht mehr; die neuen stehen hier, wenn du die Optionen das nächste Mal öffnest."
         },
-        "description": "Optionen für das Live-Video gelten nach dem Neuladen der Integration."
+        "description": "Optionen für das Live-Video gelten nach dem Neuladen der Integration.\n\nAdressen für andere Apps (sie funktionieren, solange die Option unten eingeschaltet ist):\n{stream_addresses}"
       }
     }
   },

@@ -797,6 +797,99 @@ async def test_stream_options_reach_the_relay(hass: HomeAssistant, client: FakeC
     assert relay._configured_key == "ABC123"
 
 
+async def options_with(hass: HomeAssistant, client: FakeClient, entry, **values) -> dict:
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
+        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
+    ):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {"poll_interval": 3, "monitor_serials": "", "door_lock_no": 2, "gate_lock_no": 1, **values},
+        )
+        await hass.async_block_till_done()
+    return result
+
+
+async def test_sharing_the_stream_is_off_and_keeps_its_token(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    result = await options_with(hass, client, entry)
+    token = entry.options["stream_token"]
+    assert entry.options["share_stream"] is False and len(token) > 30
+    # the form shows the address with the token that is saved
+    assert f"/api/{DOMAIN}/live/{SERIAL}?token={token}" in result["description_placeholders"]["stream_addresses"]
+    await options_with(hass, client, entry, share_stream=True)
+    assert entry.options["share_stream"] is True and entry.options["stream_token"] == token
+    await options_with(hass, client, entry, share_stream=True, new_stream_token=True)
+    assert entry.options["stream_token"] != token
+
+
+async def test_shared_stream_needs_the_option_and_the_token(
+    hass: HomeAssistant, client: FakeClient, hass_client_no_auth
+) -> None:
+    async def fake_relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        writer.write(b"MPEG-TS")
+        await writer.drain()
+        writer.close()
+
+    server = await asyncio.start_server(fake_relay, "127.0.0.1", 0)
+    entry = await setup(hass, client, {"stream_token": "secret-token"})
+    relay = entry.runtime_data.live_relays[SERIAL]
+    http = await hass_client_no_auth()
+    url = f"/api/{DOMAIN}/live/{SERIAL}"
+    assert (await http.get(f"{url}?token=secret-token")).status == 403  # off by default
+
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "share_stream": True})
+    assert (await http.get(f"{url}?token=wrong")).status == 401
+    assert (await http.get(url)).status == 401
+    with patch.object(relay, "_port", server.sockets[0].getsockname()[1]):
+        response = await http.get(f"{url}?token=secret-token")
+        assert response.status == 200 and response.content_type == "video/mp2t"
+        assert await response.read() == b"MPEG-TS"
+    server.close()
+    await server.wait_closed()
+
+
+async def test_the_right_token_is_never_a_failed_login(
+    hass: HomeAssistant, client: FakeClient, hass_client_no_auth
+) -> None:
+    # go2rtc and Frigate keep trying while Home Assistant starts or the cloud is down.
+    entry = await setup(hass, client, {"stream_token": "secret-token", "share_stream": True})
+    http = await hass_client_no_auth()
+    with patch("custom_components.ezviz_instant_bell.stream_share.process_wrong_login") as wrong_login:
+        assert (await http.get(f"/api/{DOMAIN}/live/OTHER123?token=secret-token")).status == 404
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+        assert (await http.get(f"/api/{DOMAIN}/live/{SERIAL}?token=secret-token")).status == 503
+        assert not wrong_login.called
+        assert (await http.get(f"/api/{DOMAIN}/live/{SERIAL}?token=wrong")).status == 401
+        assert wrong_login.called
+
+
+async def test_shared_mjpeg_reads_the_relay(hass: HomeAssistant, client: FakeClient, hass_client_no_auth) -> None:
+    from aiohttp import web
+
+    entry = await setup(hass, client, {"stream_token": "secret-token", "share_stream": True})
+    relay = entry.runtime_data.live_relays[SERIAL]
+    http = await hass_client_no_auth()
+    url = f"/api/{DOMAIN}/mjpeg/{SERIAL}"
+    with patch.object(relay, "prewarm") as prewarm, patch(
+        "custom_components.ezviz_instant_bell.mjpeg.serve_mjpeg", return_value=web.Response(text="frames")
+    ) as serve:
+        assert (await http.get(f"{url}?token=wrong")).status == 401
+        assert not serve.called
+        response = await http.get(f"{url}?token=secret-token")
+        assert response.status == 200 and await response.text() == "frames"
+    prewarm.assert_awaited_once()
+    assert serve.call_args.kwargs["upstream_url"] == relay.stream_url
+
+
+async def test_diagnostics_hide_the_stream_token(hass: HomeAssistant, client: FakeClient) -> None:
+    from custom_components.ezviz_instant_bell.diagnostics import async_get_config_entry_diagnostics
+
+    entry = await setup(hass, client, {"stream_token": "secret-token"})
+    assert "secret-token" not in json.dumps(await async_get_config_entry_diagnostics(hass, entry), default=str)
+
+
 async def test_ring_wakes_up_the_stream(hass: HomeAssistant, client: FakeClient) -> None:
     entry = await setup(hass, client)
     relay = entry.runtime_data.live_relays[SERIAL]

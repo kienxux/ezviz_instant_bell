@@ -2,6 +2,10 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## Unreleased
+
+- New option **Let other apps read the live video (go2rtc, Frigate)**, off by default. Home Assistant then serves the live video of each door station at `/api/ezviz_instant_bell/live/<serial>?token=…` (MPEG-TS with sound) and `/api/ezviz_instant_bell/mjpeg/<serial>?token=…` (motion JPEG). The options show both addresses; **Make a new token** stops the addresses handed out so far. A wrong token counts as a failed login, so Home Assistant's IP ban applies. The relay socket without a password (`0.0.0.0`) still works but is no longer the recommended way. The diagnostics download hides the token.
+
 ## 0.10.4
 
 - Still images of the live camera (dashboard pictures, thumbnails, cards that refresh every second) are now made from the latest keyframe the running live stream already has: encoded once per keyframe and shared by all requests. Each request used to start its own ffmpeg that read the stream like a viewer, which took about 10 seconds with the local stream source and showed nothing while the stream gave nothing (#22).
