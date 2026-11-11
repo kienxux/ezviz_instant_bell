@@ -2,13 +2,14 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
-## Unreleased
+## 1.0.0
 
+- First stable version. From now on the entity IDs, events, actions and options stay as they are; a change that breaks them would come with 2.0.0. Nothing was removed for it: the old event name `ezviz_hp7_unlock`, the buttons of 0.1.0 and the relay socket for other machines keep working.
 - The options are grouped in sections: *Rings, recordings and pictures*, *Live video*, *Other apps (go2rtc, Frigate)* and *Troubleshooting*. The older live video options got short names, with the explanation below each field instead of inside the name, in English and German. Saved options stay as they are.
 - A repair notice appears while the **Relay listen host** is not this computer (for example `0.0.0.0`): that socket has no password, and the addresses with a token are the safer way for go2rtc and Frigate. It goes away when the host is set back to `127.0.0.1`.
 - The action `set_video_encryption` no longer says that encryption blocks the local live stream; the camera key decrypts both stream sources.
 - The tests now also run on Home Assistant 2025.9.0, the oldest version the integration supports, besides a current one.
-- The roadmap is up to date, with what is left for 1.0.0.
+- The roadmap is up to date.
 
 ## 0.12.1
 

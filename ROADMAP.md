@@ -3,18 +3,14 @@
 Where this integration is heading. Items are ideas and plans, not promises: only *Next* is planned, everything
 under *Later* has no date. Each item has an issue; add a 👍 there or open a new one to say what you need.
 
-## Next: 1.0.0
+## Next
 
-1.0.0 promises that entity IDs, events, actions and options stay as they are; a change that breaks them would
-need 2.0. Nothing is removed for it: the old event name `ezviz_hp7_unlock` and the buttons of 0.1.0 stay.
-
-- Options grouped in sections, with short labels and descriptions; a repair notice while the relay listens beyond this computer without a password (done, not released yet)
-- Tests on the oldest Home Assistant the integration supports (2025.9.0) as well as on a current one (done, not released yet)
 - The keyboard backlight of the HP7 Pro, once its setting is found in the diagnostics (#25)
 - Check the motion/person mapping against real messages (diagnostics `recent_messages`)
 
 ## Done
 
+- 1.0.0: first stable version: entity IDs, events, actions and options stay as they are, and a change that breaks them would need 2.0 (nothing was removed for it: the old event name `ezviz_hp7_unlock` and the buttons of 0.1.0 stay); options grouped in sections, with short labels and descriptions; a repair notice while the relay listens beyond this computer without a password; tests on the oldest supported Home Assistant (2025.9.0) and on a current one
 - 0.12.x: switch **Doorbell Indicator** (#22); the diagnostics list each setting (switch) of a door station with its state, to find settings the integration does not know yet (#25); the README reorganised, with Frigate and go2rtc examples checked with a real door station
 - 0.11.0: live video for other apps (go2rtc, Frigate) through Home Assistant, behind a token (#13); unlock and chime controls only on HP7 / CP7 door stations; the visitor log card in the dashboard resources
 - 0.10.1 to 0.10.4: encrypted live video of HP7 firmware 5.4, picture and sound, with both stream sources (#22); still images from the running live stream
