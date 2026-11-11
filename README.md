@@ -220,14 +220,14 @@ Home Assistant can hand the live video to other apps, for example Frigate (detec
 
 1. Switch on **Let other apps read the live video (go2rtc, Frigate)** in the options and save.
 2. Open the options again. Their description shows both addresses of each door station, with the address of your Home Assistant and the token.
-3. Use an address in the other app, for example as below.
+3. Use the MPEG-TS address in the other app, as it is, for example as below. The motion JPEG address is for apps that take only MJPEG.
 
 go2rtc:
 
 ```yaml
 streams:
   front_door:
-    - "ffmpeg:http://192.168.1.10:8123/api/ezviz_instant_bell/live/BE0000001?token=YOUR_TOKEN#video=copy#audio=copy"
+    - "http://192.168.1.10:8123/api/ezviz_instant_bell/live/BE0000001?token=YOUR_TOKEN"
 ```
 
 Frigate, through the go2rtc that comes with it:
@@ -236,7 +236,7 @@ Frigate, through the go2rtc that comes with it:
 go2rtc:
   streams:
     front_door:
-      - "ffmpeg:http://192.168.1.10:8123/api/ezviz_instant_bell/live/BE0000001?token=YOUR_TOKEN#video=copy#audio=copy"
+      - "http://192.168.1.10:8123/api/ezviz_instant_bell/live/BE0000001?token=YOUR_TOKEN"
 
 cameras:
   front_door:
@@ -249,12 +249,12 @@ cameras:
             - record
 ```
 
-These examples are not yet checked with a real Frigate or go2rtc: please report whether they work.
+Checked with go2rtc 1.9.15 and a test stream (H.264 and H.265, with sound): its RTSP output can be decoded and recorded the way Frigate reads it. Not yet checked with Frigate itself and a real door station: please report whether it works for you.
 
 - It is off by default. **Make a new token** stops the addresses handed out so far; the new ones show the next time you open the options.
 - Anyone with an address can watch, so keep it like a password. A wrong token counts as a failed login, so Home Assistant's IP ban applies. The right one never does: while Home Assistant starts or waits for the EZVIZ cloud, the app gets "503 Service Unavailable" and tries again.
 - Reading an address opens the live video, like opening the **Live** camera. An app that records around the clock keeps it open all the time; with the `local` source, the status is then read a quarter as often.
-- If the door station sends H.265 and a browser shows no picture, `#video=h264` instead of `#video=copy` makes go2rtc convert it, at the cost of processor time.
+- If the door station sends H.265 and a browser shows no picture, let go2rtc convert it, at the cost of processor time: `"ffmpeg:http://…/live/BE0000001?token=YOUR_TOKEN#video=h264#audio=aac"`. Keep `#audio=aac`: with `#audio=copy` the stream does not start, because ffmpeg cannot pass this sound on to RTSP unchanged.
 
 ## When the EZVIZ cloud is down
 
