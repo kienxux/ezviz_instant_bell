@@ -304,6 +304,8 @@ Open them with **Configure** on the integration. Saving reloads the integration,
 | Video codec | `auto` | `auto` detects it; `h264`; `hevc` converts H.265 to H.264 for the Home Assistant stream; `hevc_copy` passes H.265 through untouched (weak hosts, Frigate, Safari) |
 | Picture size of the local stream | `main` | `sub` asks the local source for the door station's small picture, which is far cheaper to decode on a weak host |
 | Encryption key | empty | See [Encrypted video](#encrypted-video) |
+| Open the live video at a ring for (minutes) | 0 (off) | At a ring, and at motion or a person when those events are on, the live video opens at once and stays open this long, so it shows without waiting. 0 to 30 |
+| Keep the live video open all the time | off | Like Frigate: the live video stays open and shows at once. Only with the source `local`; with `cloud` or `auto` it is ignored, because the video would be uploaded all the time. Costs some CPU |
 | ***Other apps (go2rtc, Frigate)*** | | |
 | Let other apps read the live video (go2rtc, Frigate) | off | See [Frigate and go2rtc](#frigate-and-go2rtc) |
 | Make a new token | | Stops the addresses handed out so far |

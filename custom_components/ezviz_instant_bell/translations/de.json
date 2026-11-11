@@ -95,14 +95,18 @@
               "stream_mode": "Ausgabe im Browser",
               "video_codec": "Video-Codec",
               "stream_quality": "Bildgröße des lokalen Streams",
-              "encryption_key": "Schlüssel für die Verschlüsselung"
+              "encryption_key": "Schlüssel für die Verschlüsselung",
+              "wake_stream_minutes": "Livebild beim Klingeln öffnen für (Minuten)",
+              "keep_stream_open": "Livebild dauerhaft offen halten"
             },
             "data_description": {
               "stream_source": "cloud: über das EZVIZ-Relay. local: direkt von der Türstation in deinem Netzwerk, auch wenn die EZVIZ-Cloud ausfällt; Home Assistant muss im selben Netzwerk sein. auto: erst lokal, dann Cloud.",
               "stream_mode": "auto prüft das Video einmal: H.264 nutzt den Home-Assistant-Stream (Ton, geringe Verzögerung), H.265 Motion-JPEG (jeder Browser, kein Ton). webrtc und mjpeg erzwingen eines davon.",
               "video_codec": "auto erkennt ihn. h264 für H.264-Firmware. hevc wandelt H.265 für den Home-Assistant-Stream in H.264 um; hevc_copy reicht H.265 unverändert durch (schwache Rechner, Frigate, Safari).",
               "stream_quality": "main: volle Größe. sub: das kleine Bild der Türstation, viel leichter zu dekodieren; nutze es, wenn das Video auf einem schwachen Rechner wie einem Raspberry Pi hinterherhinkt. Nur für die Quelle local.",
-              "encryption_key": "Nur nötig, wenn die Türstation ihr Video verschlüsselt und der Schlüssel nicht von EZVIZ geholt werden kann (siehe Reparaturhinweis oder die Aktion fetch_encryption_key). Meist der 6-stellige Bestätigungscode auf dem Etikett der Türstation. Er entschlüsselt das Video beider Quellen."
+              "encryption_key": "Nur nötig, wenn die Türstation ihr Video verschlüsselt und der Schlüssel nicht von EZVIZ geholt werden kann (siehe Reparaturhinweis oder die Aktion fetch_encryption_key). Meist der 6-stellige Bestätigungscode auf dem Etikett der Türstation. Er entschlüsselt das Video beider Quellen.",
+              "wake_stream_minutes": "0 = aus. Beim Klingeln (und bei Bewegung oder Person, wenn diese Ereignisse an sind) wird das Livebild sofort geöffnet und so lange offen gehalten, damit es ohne Warten erscheint. Geht mit jeder Quelle; über die Cloud kostet es Upload, solange es offen ist.",
+              "keep_stream_open": "Standardmäßig aus. Das Livebild bleibt dann Tag und Nacht offen, so wie Frigate es hält, und erscheint sofort. Nur mit der Quelle local; bei cloud oder auto wird es ignoriert, weil das Video sonst ständig zu EZVIZ hochgeladen würde. Kostet etwas CPU in Home Assistant, mehr bei verschlüsseltem Video."
             }
           },
           "other_apps": {

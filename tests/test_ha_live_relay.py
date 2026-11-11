@@ -14,6 +14,7 @@ import pytest
 from custom_components.ezviz_instant_bell import cpd7, live_relay
 from custom_components.ezviz_instant_bell.live_relay import (
     DEAD_SUB_TIMEOUT,
+    PREWARM_IDLE_TIMEOUT,
     LOCKOUT_BACKOFF,
     MIN_RETRY_INTERVAL,
     OFFLINE_MAX_BACKOFF,
@@ -228,6 +229,53 @@ async def test_prewarm_while_a_session_runs_does_not_open_another() -> None:
         assert opened.call_count == 1 and r.active_source == "cloud"
         await r._shutdown_shared()
     assert source.closed and r._shared_vtm is None and r._shared_reader is None
+
+
+async def test_a_held_session_outlives_the_idle_timeout() -> None:
+    source = FakeSource(hold=True)
+    r = relay()
+    with patch.object(live_relay, "open_cloud_stream", return_value=source), patch.object(
+        live_relay, "KEEP_OPEN_CHECK", 0.01
+    ):
+        r.hold(600)
+        await wait_for(lambda: r._shared_vtm is not None)
+        delay = r._idle_handle.when() - asyncio.get_running_loop().time()
+        assert 590 < delay <= 600 and r._held()
+        r._idle_handle.cancel()
+        r._idle_expired()  # an early timer does not close a held session
+        await asyncio.sleep(0.05)
+        assert r._shared_vtm is not None
+        await r.stop()
+        await r._shutdown_shared()
+    assert r._keeper is None and not r._held() and source.closed
+
+
+async def test_without_a_hold_the_usual_idle_timeout_applies() -> None:
+    r = relay()
+    with patch.object(live_relay, "open_cloud_stream", return_value=FakeSource(hold=True)):
+        await r.prewarm()
+        delay = r._idle_handle.when() - asyncio.get_running_loop().time()
+        assert PREWARM_IDLE_TIMEOUT - 5 < delay <= PREWARM_IDLE_TIMEOUT
+        await r._shutdown_shared()
+
+
+async def test_keep_open_reopens_a_local_session_that_ended(fake_lan) -> None:
+    r = relay(stream_source="local", keep_open=True)
+    assert r._keep_open
+    with patch.object(live_relay, "KEEP_OPEN_CHECK", 0.01), patch.object(live_relay, "MIN_RETRY_INTERVAL", 0):
+        r._start_keeper()
+        await wait_for(lambda: r._shared_vtm is not None)
+        assert r._idle_handle is None  # nothing times it out
+        fake_lan.made[0].close()  # the door station ends the session
+        await wait_for(lambda: len(fake_lan.made) == 2 and r._shared_vtm is not None)
+        await r.stop()
+        await r._shutdown_shared()
+    assert r._keeper is None
+
+
+def test_keep_open_is_ignored_for_the_cloud() -> None:
+    assert not relay(stream_source="cloud", keep_open=True)._keep_open
+    assert not relay(stream_source="auto", keep_open=True)._keep_open
 
 
 class FakeLan(FakeSource):

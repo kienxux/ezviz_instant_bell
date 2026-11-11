@@ -30,6 +30,7 @@ from .const import (
     CONF_POLL_INTERVAL,
     CONF_REGION,
     CONF_SAVE_CLIPS,
+    CONF_WAKE_STREAM_MINUTES,
     CONF_DETECTION_PICTURE_DAYS,
     CONF_SAVE_DETECTION_PICTURES,
     CONF_MOTION_EVENTS,
@@ -559,6 +560,11 @@ class InstantBellHub:
             self.entry.async_create_background_task(
                 self.hass, self._async_load_picture(event), f"{DOMAIN}_picture"
             )
+        # Open the live video now, so it shows at once when someone looks.
+        minutes = int(self.entry.options.get(CONF_WAKE_STREAM_MINUTES) or 0)
+        relay = self.live_relays.get(serial)
+        if minutes and relay is not None and event.kind in (KIND_RING, *DETECTION_KINDS):
+            relay.hold(minutes * 60)
         if event.kind == KIND_RING and self.entry.options.get(CONF_SAVE_CLIPS):
             self.entry.async_create_background_task(
                 self.hass, self._async_save_ring_clip(event, serial), f"{DOMAIN}_ring_clip"

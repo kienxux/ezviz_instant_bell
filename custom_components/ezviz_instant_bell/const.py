@@ -112,6 +112,13 @@ STREAM_QUALITIES = [STREAM_QUALITY_MAIN, STREAM_QUALITY_SUB]
 CONF_DIAGNOSTIC_DUMPS = "diagnostic_dumps"
 # Key that decrypts the video when Image/Video Encryption is on.
 CONF_ENCRYPTION_KEY = "encryption_key"
+# Open the live video at a ring (and at motion or a person, if those events are
+# on) and keep it open this many minutes, so it shows at once. 0 = off.
+CONF_WAKE_STREAM_MINUTES = "wake_stream_minutes"
+MAX_WAKE_STREAM_MINUTES = 30
+# Keep the live video open all the time, like Frigate does. Only with the local
+# source: through the cloud it would upload the video day and night.
+CONF_KEEP_STREAM_OPEN = "keep_stream_open"
 
 # -- history browser (Media > EZVIZ HP7 / CP7 Video Intercom) ---------------------------
 HISTORY_DAYS = 14  # how many days back the browser offers

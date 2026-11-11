@@ -910,6 +910,17 @@ async def test_stream_options_reach_the_relay(hass: HomeAssistant, client: FakeC
     relay = entry.runtime_data.live_relays[SERIAL]
     assert relay._stream_source == "local" and relay._stream_quality == "sub"
     assert relay._configured_key == "ABC123"
+    assert relay._keep_open is False
+
+
+async def test_keep_open_needs_the_local_source(hass: HomeAssistant, client: FakeClient) -> None:
+    with patch("custom_components.ezviz_instant_bell.live_relay.StreamRelay._start_keeper"):
+        entry = await setup(hass, client, {"stream_source": "local", "keep_stream_open": True})
+        assert entry.runtime_data.live_relays[SERIAL]._keep_open is True
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+        entry = await setup(hass, client, {"stream_source": "cloud", "keep_stream_open": True})
+        assert entry.runtime_data.live_relays[SERIAL]._keep_open is False
 
 
 async def options_with(hass: HomeAssistant, client: FakeClient, entry, **values) -> dict:
@@ -1905,6 +1916,27 @@ async def test_a_pushed_motion_is_motion_only_when_switched_on(hass: HomeAssista
     push_alert(client, "Motion Detection Alarm", msg_id=8)
     await hass.async_block_till_done(wait_background_tasks=True)
     assert hass.states.get(bell).attributes["event_type"] == "motion"
+
+
+async def test_a_ring_opens_the_live_video_when_switched_on(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client, {"wake_stream_minutes": 5})
+    relay = entry.runtime_data.live_relays[SERIAL]
+    with patch.object(relay, "hold") as hold:
+        push_unlock(client)  # opening the door does not
+        await hass.async_block_till_done(wait_background_tasks=True)
+        hold.assert_not_called()
+        push_alert(client, "Someone is ringing", code=2701, msg_id=9)
+        await hass.async_block_till_done(wait_background_tasks=True)
+    hold.assert_called_once_with(300)
+
+
+async def test_a_ring_leaves_the_live_video_alone_by_default(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    relay = entry.runtime_data.live_relays[SERIAL]
+    with patch.object(relay, "hold") as hold:
+        push_alert(client, "Someone is ringing", code=2701, msg_id=9)
+        await hass.async_block_till_done(wait_background_tasks=True)
+    hold.assert_not_called()
 
 
 async def test_diagnostics_show_the_codes_of_recent_messages(hass: HomeAssistant, client: FakeClient) -> None:

@@ -143,6 +143,7 @@ async def async_setup_live_entities(
     from .const import (
         CONF_AGGRESSIVE_MPEGTS,
         CONF_DIAGNOSTIC_DUMPS,
+        CONF_KEEP_STREAM_OPEN,
         CONF_RELAY_BIND,
         CONF_RELAY_PORT,
         CONF_STREAM_MODE,
@@ -169,6 +170,7 @@ async def async_setup_live_entities(
             stream_quality=str(options.get(CONF_STREAM_QUALITY) or "main"),
             diagnostic_dumps=bool(options.get(CONF_DIAGNOSTIC_DUMPS, False)),
             encryption_key=key_for(options, serial),
+            keep_open=bool(options.get(CONF_KEEP_STREAM_OPEN, False)),
             hass=hass,
         )
         await relay.start()

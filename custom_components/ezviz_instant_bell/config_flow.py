@@ -32,6 +32,8 @@ from .const import (
     CONF_DEVICES,
     CONF_DIAGNOSTIC_DUMPS,
     CONF_ENCRYPTION_KEY,
+    CONF_KEEP_STREAM_OPEN,
+    CONF_WAKE_STREAM_MINUTES,
     CONF_DOOR_LOCK_NO,
     CONF_GATE_LOCK_NO,
     CONF_MONITOR_SERIALS,
@@ -50,6 +52,7 @@ from .const import (
     CONF_PERSON_EVENTS,
     DEFAULT_DETECTION_PICTURE_DAYS,
     MAX_DETECTION_PICTURE_DAYS,
+    MAX_WAKE_STREAM_MINUTES,
     CONF_STREAM_MODE,
     CONF_STREAM_QUALITY,
     CONF_STREAM_SOURCE,
@@ -366,6 +369,8 @@ class InstantBellOptionsFlow(OptionsFlowWithReload):
                 CONF_STREAM_MODE: user_input[CONF_STREAM_MODE],
                 CONF_STREAM_QUALITY: user_input[CONF_STREAM_QUALITY],
                 CONF_ENCRYPTION_KEY: str(user_input.get(CONF_ENCRYPTION_KEY) or "").strip(),
+                CONF_WAKE_STREAM_MINUTES: int(user_input.get(CONF_WAKE_STREAM_MINUTES) or 0),
+                CONF_KEEP_STREAM_OPEN: bool(user_input.get(CONF_KEEP_STREAM_OPEN, False)),
                 CONF_DIAGNOSTIC_DUMPS: bool(user_input.get(CONF_DIAGNOSTIC_DUMPS, False)),
             }
             if self.config_entry.options.get(CONF_CREATE_BUTTONS):
@@ -438,6 +443,12 @@ class InstantBellOptionsFlow(OptionsFlowWithReload):
                                     CONF_ENCRYPTION_KEY,
                                     description={"suggested_value": opts.get(CONF_ENCRYPTION_KEY, "")},
                                 ): TextSelector(),
+                                vol.Required(
+                                    CONF_WAKE_STREAM_MINUTES, default=int(opts.get(CONF_WAKE_STREAM_MINUTES) or 0)
+                                ): number(0, MAX_WAKE_STREAM_MINUTES),
+                                vol.Required(
+                                    CONF_KEEP_STREAM_OPEN, default=bool(opts.get(CONF_KEEP_STREAM_OPEN, False))
+                                ): bool,
                             }
                         ),
                         {"collapsed": True},

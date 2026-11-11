@@ -130,6 +130,10 @@ OFFLINE_MAX_BACKOFF = 300.0
 # (sub-second first frame), short enough that we don't leave a cloud session
 # open all day after a stray motion event.
 PREWARM_IDLE_TIMEOUT = 120.0
+# While the session is held open (a ring, or the keep-open option), this often
+# the relay looks whether it is still up and reopens it. A failed reopen still
+# waits out the retry limits above.
+KEEP_OPEN_CHECK = 15.0
 
 
 async def _viewer_left(reader: asyncio.StreamReader) -> None:
@@ -197,6 +201,7 @@ class StreamRelay:
         diagnostic_dumps: bool = False,
         encryption_key: str = "",
         hass: Any = None,
+        keep_open: bool = False,
     ) -> None:
         self._hass = hass
         self._api = api
@@ -322,6 +327,18 @@ class StreamRelay:
         self._active_lan: bool = False
         self._idle_handle: Optional[asyncio.TimerHandle] = None
         self._active_clients: int = 0
+        # Keep the session open without a viewer: all the time (option, local
+        # source only, since through the cloud it would upload the video day
+        # and night), or until _hold_until after a ring or motion.
+        self._keep_open = bool(keep_open) and self._stream_source == "local"
+        if keep_open and not self._keep_open:
+            _LOGGER.warning(
+                "StreamRelay: 'keep the live video open' only works with the "
+                "local source; the %s source opens it on demand (serial=%s)",
+                self._stream_source, serial,
+            )
+        self._hold_until: float = 0.0
+        self._keeper: Optional[asyncio.Task] = None
 
     @property
     def port(self) -> int:
@@ -926,6 +943,8 @@ class StreamRelay:
                 raise
         sock = self._server.sockets[0]
         self._port = int(sock.getsockname()[1])
+        if self._keep_open:
+            self._start_keeper()
         _LOGGER.debug(
             "StreamRelay listening on tcp://%s:%d "
             "(serial=%s aggressive_mpegts=%s video_codec=%s)",
@@ -950,6 +969,11 @@ class StreamRelay:
     async def stop(self) -> None:
         if self._still_task is not None:
             self._still_task.cancel()
+        self._keep_open = False
+        self._hold_until = 0.0
+        if self._keeper is not None:
+            self._keeper.cancel()
+            self._keeper = None
         if self._server is None:
             return
         self._server.close()
@@ -1069,19 +1093,46 @@ class StreamRelay:
         if self._idle_handle is not None:
             self._idle_handle.cancel()
             self._idle_handle = None
-        if self._active_clients > 0:
+        if self._active_clients > 0 or self._keep_open:
             # Don't tear down while clients are connected — they cover us.
             return
         loop = asyncio.get_event_loop()
         self._idle_handle = loop.call_later(
-            PREWARM_IDLE_TIMEOUT, self._idle_expired
+            max(PREWARM_IDLE_TIMEOUT, self._hold_until - time.monotonic()),
+            self._idle_expired,
         )
 
     def _idle_expired(self) -> None:
         self._idle_handle = None
-        if self._active_clients > 0:
+        if self._active_clients > 0 or self._held():
             return
         asyncio.create_task(self._shutdown_shared())
+
+    def _held(self) -> bool:
+        """Whether the session stays open even without a viewer."""
+        return self._keep_open or time.monotonic() < self._hold_until
+
+    def hold(self, seconds: float) -> None:
+        """Open the session now and keep it open for ``seconds`` (a ring or motion)."""
+        self._hold_until = max(self._hold_until, time.monotonic() + seconds)
+        _LOGGER.debug(
+            "StreamRelay: live video held open for %.0fs (serial=%s)",
+            seconds, self._serial,
+        )
+        self._start_keeper()
+
+    def _start_keeper(self) -> None:
+        if self._keeper is None or self._keeper.done():
+            self._keeper = asyncio.get_event_loop().create_task(self._keep())
+
+    async def _keep(self) -> None:
+        """Reopen the session while it is held; prewarm() keeps the retry limits."""
+        while self._held():
+            try:
+                await self.prewarm()
+            except Exception as exc:  # noqa: BLE001
+                _LOGGER.debug("StreamRelay: keep-open prewarm failed: %s", exc)
+            await asyncio.sleep(KEEP_OPEN_CHECK)
 
     async def _shutdown_shared(self) -> None:
         async with self._shared_lock:

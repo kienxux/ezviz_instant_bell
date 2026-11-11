@@ -95,14 +95,18 @@
               "stream_mode": "Delivery to the browser",
               "video_codec": "Video codec",
               "stream_quality": "Picture size of the local stream",
-              "encryption_key": "Encryption key"
+              "encryption_key": "Encryption key",
+              "wake_stream_minutes": "Open the live video at a ring for (minutes)",
+              "keep_stream_open": "Keep the live video open all the time"
             },
             "data_description": {
               "stream_source": "cloud: through the EZVIZ relay. local: straight from the door station on your network, also when the EZVIZ cloud is down; Home Assistant must be on the same network. auto: local first, then cloud.",
               "stream_mode": "auto looks at the video once: H.264 uses the Home Assistant stream (sound, low delay), H.265 uses motion JPEG (every browser, no sound). webrtc and mjpeg force one of them.",
               "video_codec": "auto finds it out. h264 for H.264 firmware. hevc converts H.265 to H.264 for the Home Assistant stream; hevc_copy passes H.265 through unchanged (weak hosts, Frigate, Safari).",
               "stream_quality": "main: full size. sub: the door station's small picture, far cheaper to decode; use it if the video falls behind on a weak host such as a Raspberry Pi. Only for the local source.",
-              "encryption_key": "Only needed when the door station encrypts its video and the key cannot be fetched from EZVIZ (see the repair notice or the action fetch_encryption_key). Usually the 6-character verification code on the door station's label. It decrypts the video of both sources."
+              "encryption_key": "Only needed when the door station encrypts its video and the key cannot be fetched from EZVIZ (see the repair notice or the action fetch_encryption_key). Usually the 6-character verification code on the door station's label. It decrypts the video of both sources.",
+              "wake_stream_minutes": "0 = off. At a ring (and at motion or a person, if those events are on) the live video is opened at once and kept open this long, so it shows without waiting when you look. Works with every source; through the cloud it uses upload while it is open.",
+              "keep_stream_open": "Off by default. The live video then stays open day and night, like Frigate keeps it, and shows at once. Only works with the source local; with cloud or auto it is ignored, because the video would be uploaded to EZVIZ all the time. Costs some CPU in Home Assistant, more when the video is encrypted."
             }
           },
           "other_apps": {

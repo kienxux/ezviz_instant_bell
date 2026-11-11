@@ -2,6 +2,11 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 1.1.0
+
+- New option **Open the live video at a ring for (minutes)**: at a ring, and at motion or a person when those events are on, the live video is opened straight away and kept open for that many minutes, so the picture shows at once when you look. Off (0) by default.
+- New option **Keep the live video open all the time**: the live video stays open day and night, as it does when Frigate reads it, and shows at once. Only with the source `local`; with `cloud` or `auto` it is ignored and the log says so. Off by default.
+
 ## 1.0.0
 
 - First stable version. From now on the entity IDs, events, actions and options stay as they are; a change that breaks them would come with 2.0.0. Nothing was removed for it: the old event name `ezviz_hp7_unlock`, the buttons of 0.1.0 and the relay socket for other machines keep working.
