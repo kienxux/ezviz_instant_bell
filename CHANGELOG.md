@@ -2,6 +2,10 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 1.1.1
+
+- Fixed: a viewer that joined a local live video that was already running got no picture. ffmpeg received the end of the previous frame first, without a time stamp, and stopped. That is what Frigate ran into with **Keep the live video open all the time**, and it could also hit a viewer opening the live video after a ring. Such a viewer now starts on the keyframe itself.
+
 ## 1.1.0
 
 - New option **Open the live video at a ring for (minutes)**: at a ring, and at motion or a person when those events are on, the live video is opened straight away and kept open for that many minutes, so the picture shows at once when you look. Off (0) by default.

@@ -87,6 +87,12 @@ def _has_keyframe(payload: bytes) -> bool:
     return any(m in payload for m in _KEYFRAME_MARKERS)
 
 
+def _first_keyframe(payload: bytes) -> int:
+    """Offset of the first parameter set or random-access NAL, -1 if there is none."""
+    found = [i for i in (payload.find(m) for m in _KEYFRAME_MARKERS) if i >= 0]
+    return min(found) if found else -1
+
+
 def _has_param_sets(payload: bytes) -> bool:
     return any(m in payload for m in _PARAM_SET_MARKERS)
 

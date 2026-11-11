@@ -21,6 +21,8 @@ from custom_components.ezviz_instant_bell.live_relay import (
     StreamRelay,
     _is_offline_error,
 )
+from custom_components.ezviz_instant_bell._pes import ps_from_keyframe
+from custom_components.ezviz_instant_bell.live_nal import _first_keyframe
 from custom_components.ezviz_instant_bell.live_sources import Cpd7LanSource, _PreStartedSource
 
 SERIAL = "BE0000001-BE0000002"
@@ -368,6 +370,50 @@ def test_the_replay_comes_in_relay_sized_chunks() -> None:
     with patch.object(live_relay, "RELAY_CHUNK", 16):
         chunks = r._gop_snapshot()
     assert all(len(c) <= 16 for c in chunks) and b"".join(chunks) == SPS_PPS + IDR + b"x" * 30
+
+
+def pes_pts(stream_id: int, payload: bytes) -> bytes:
+    """A PES packet with a time stamp, as the first packet of a frame has."""
+    body = b"\x80\x80\x05" + b"\x21\x00\x01\x00\x01" + payload
+    return b"\x00\x00\x01" + bytes((stream_id, len(body) >> 8, len(body) & 0xFF)) + body
+
+
+def test_a_local_keyframe_packet_is_cut_to_start_on_the_keyframe() -> None:
+    # The packet carries the end of the frame before and then the keyframe (a viewer joining a running session).
+    chunk = PACK + pes_pts(0xE0, P + SPS_PPS + IDR) + pes(0xC0, b"\xff\xf1AAC")
+    assert ps_from_keyframe(chunk, _first_keyframe(chunk)) == PACK + pes_pts(0xE0, SPS_PPS + IDR) + pes(0xC0, b"\xff\xf1AAC")
+
+
+def test_parameter_sets_go_inside_the_keyframe_packet() -> None:
+    chunk = PACK + pes_pts(0xE0, P + IDR)
+    assert ps_from_keyframe(chunk, _first_keyframe(chunk), SPS_PPS) == PACK + pes_pts(0xE0, SPS_PPS + IDR)
+
+
+def test_a_keyframe_packet_without_a_time_stamp_is_not_used() -> None:
+    chunk = PACK + pes(0xE0, P + SPS_PPS + IDR)
+    assert ps_from_keyframe(chunk, _first_keyframe(chunk)) is None
+
+
+def test_a_late_local_viewer_gets_the_gop_from_the_keyframe_packet() -> None:
+    r = relay()
+    r._active_lan = True
+    r._gop_update(PACK + pes_pts(0xE0, SPS_PPS + IDR))
+    r._gop_update(PACK + pes_pts(0xE0, P + IDR))  # this IDR comes without parameter sets
+    r._gop_update(PACK + pes_pts(0xE0, P))
+    assert r._gop_snapshot() == [PACK + pes_pts(0xE0, SPS_PPS + IDR) + PACK + pes_pts(0xE0, P)]
+
+
+def test_a_local_viewer_resumes_on_the_keyframe_packet() -> None:
+    r = relay()
+    r._active_lan = True
+    q = queue.Queue()
+    r._sub_raw_qs.append(q)
+    r._q_resync.add(id(q))
+    r._fanout(r._sub_raw_qs, PACK + pes_pts(0xE0, P), video=True)
+    assert q.empty()
+    r._fanout(r._sub_raw_qs, PACK + pes_pts(0xE0, P + SPS_PPS + IDR), video=True)
+    r._fanout(r._sub_raw_qs, PACK + pes_pts(0xE0, P), video=True)
+    assert [q.get_nowait() for _ in range(2)] == [PACK + pes_pts(0xE0, SPS_PPS + IDR), PACK + pes_pts(0xE0, P)]
 
 
 # --- viewers ----------------------------------------------------------------------------

@@ -56,13 +56,13 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any, List, Optional
 
-from ._pes import PesParser, cut_to_packet_start, keep_clear_video_pes
+from ._pes import PesParser, cut_to_packet_start, keep_clear_video_pes, ps_from_keyframe
 from pyezvizapi.cloud_stream import open_cloud_stream
 
 from .const import DOMAIN
 from .live_aac import SETTLE_FRAMES, AacDecryptor
 from .live_io import _free_local_port, _mk_drain, _put_sentinel, _sender_thread, _start_local_listener
-from .live_nal import _extract_param_sets, _has_keyframe, _has_param_sets, _sniff_video_codec
+from .live_nal import _extract_param_sets, _first_keyframe, _has_keyframe, _has_param_sets, _sniff_video_codec
 from .live_sources import Cpd7LanSource, _PreStartedSource
 
 if TYPE_CHECKING:
@@ -424,17 +424,21 @@ class StreamRelay:
         kf = video and _has_keyframe(item)
         for q in list(qs):
             qid = id(q)
+            put = item
             if video and qid in self._q_resync:
                 # Saturated earlier: skip everything until a keyframe so the
                 # decoder resumes on a decodable boundary instead of being
                 # handed a stream with holes punched mid-GOP (which freezes
                 # the picture on the last good frame while audio, carried on
                 # its own queue, keeps playing normally).
-                if not kf:
+                if kf and qs is self._sub_raw_qs:
+                    # Local MPEG-PS: start on the keyframe's own packet.
+                    put = self._lan_entry(item)
+                if not kf or put is None:
                     self._drops += 1
                     continue
                 self._q_resync.discard(qid)
-            if not self._put_latest(q, item) and video:
+            if not self._put_latest(q, put) and video:
                 if not self._warned_saturation:
                     self._warned_saturation = True
                     _LOGGER.warning(
@@ -587,12 +591,34 @@ class StreamRelay:
             params = self._param_sets
         if not buf or not _has_keyframe(buf):
             return []
+        if self._active_lan:
+            # MPEG-PS: the parameter sets go inside the keyframe's packet.
+            entry = self._lan_entry(buf, params)
+            return [entry[i:i + RELAY_CHUNK] for i in range(0, len(entry), RELAY_CHUNK)] if entry else []
         if not _has_param_sets(buf):
             if not params:
                 # An IDR with no parameter sets anywhere is not decodable.
                 return []
             buf = params + buf
         return [buf[i:i + RELAY_CHUNK] for i in range(0, len(buf), RELAY_CHUNK)]
+
+    def _lan_entry(self, chunk: bytes, params: Optional[bytes] = None) -> Optional[bytes]:
+        """``chunk`` of the local MPEG-PS cut to start on its keyframe, or None.
+
+        Where a viewer that joins a running local session starts: the cached
+        GOP, or after a gap the first chunk with a keyframe (see
+        ps_from_keyframe).
+        """
+        at = _first_keyframe(chunk)
+        if at < 0:
+            return None
+        if _has_param_sets(chunk):
+            params = b""
+        else:
+            params = self._param_sets if params is None else params
+            if not params:
+                return None  # an IDR with no parameter sets anywhere is not decodable
+        return ps_from_keyframe(chunk, at, params)
 
     def _es_config(self) -> str:
         """The video codec setting the cloud path works with: "h264", "hevc" or "hevc_copy"."""
@@ -1459,6 +1485,10 @@ class StreamRelay:
                     raw_q.put_nowait(chunk)
                 except queue.Full:
                     break
+            if not gop and self._kf_markers_seen:
+                # Joining a running session without a usable GOP: start at
+                # the next keyframe rather than in the middle of a frame.
+                self._q_resync.add(id(raw_q))
             now0 = time.monotonic()
             self._q_last_drain[id(raw_q)] = now0
             self._q_last_drain[id(a_q)] = now0

@@ -221,6 +221,42 @@ def keep_clear_video_pes(original: bytes, decrypted: bytes) -> bytes:
 PACK_START = b"\x00\x00\x01\xba"
 
 
+def ps_from_keyframe(buf: bytes, keyframe_at: int, params: bytes = b"") -> bytes | None:
+    """MPEG-PS that starts with the video packet of a keyframe.
+
+    A viewer that joins a running local session gets the stream from the last
+    keyframe on. The chunk with the keyframe can begin with the end of the
+    frame before it, in a packet whose time stamp belongs to the keyframe;
+    ffmpeg then reads a first frame without a time stamp and stops ("first pts
+    and dts value must be set"), so Frigate showed nothing. This keeps the pack
+    header, drops everything before the keyframe's video packet and the start
+    of that packet's payload up to ``keyframe_at``, and puts ``params``
+    (parameter sets the keyframe lacks) in front of the keyframe. None when the
+    keyframe's packet has no time stamp or is not found.
+    """
+    h = buf.rfind(b"\x00\x00\x01", 0, keyframe_at)
+    while h >= 0 and not 0xE0 <= buf[h + 3] <= 0xEF:
+        h = buf.rfind(b"\x00\x00\x01", 0, h)
+    if h < 0 or h + 9 > len(buf) or not buf[h + 7] & 0x80:
+        return None
+    payload_start = h + 9 + buf[h + 8]
+    if keyframe_at < payload_start:
+        return None
+    length = (buf[h + 4] << 8) | buf[h + 5]
+    if length:
+        if keyframe_at >= h + 6 + length:
+            return None
+        length += len(params) - (keyframe_at - payload_start)
+        if length > 0xFFFF:
+            return None
+    pack = b""
+    if buf.startswith(PACK_START) and len(buf) >= 14:
+        end = 14 + (buf[13] & 0x07)
+        if end <= h:
+            pack = buf[:end]
+    return pack + buf[h:h + 4] + bytes((length >> 8, length & 0xFF)) + buf[h + 6:payload_start] + params + buf[keyframe_at:]
+
+
 def cut_to_packet_start(buf: bytearray, stalled: bool = False) -> bytes:
     """Remove and return the bytes in front of the first MPEG-PS packet (#22).
 
