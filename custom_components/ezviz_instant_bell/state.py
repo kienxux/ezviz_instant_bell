@@ -207,14 +207,14 @@ def read_extra_states(info: dict[str, Any]) -> dict[str, Any]:
         if dnd is not None:
             out["dnd_on"] = dnd
 
-    types = []
+    switches: dict[int, bool | None] = {}
     for item in _switch_list(info):
         try:
             kind = int(item.get("type", -1))
         except (TypeError, ValueError):
             continue
-        types.append(kind)
         value = coerce_bool(item.get("enable"))
+        switches[kind] = value
         if value is None:
             continue
         if kind == PRIVACY_SWITCH_TYPE:
@@ -223,9 +223,10 @@ def read_extra_states(info: dict[str, Any]) -> dict[str, Any]:
             out["label_light_on"] = value
         elif kind == INDICATOR_LIGHT_SWITCH_TYPE:
             out["indicator_light_on"] = value
-    if types:
-        # For the diagnostics: which settings a model has (lights still unknown here).
-        out["switch_types"] = sorted(set(types))
+    if switches:
+        # For the diagnostics: which settings a model has and their state, so a
+        # setting can be found by switching it in the app between two downloads.
+        out["switches"] = dict(sorted(switches.items()))
 
     night = read_night_light(info)
     if night is not None:

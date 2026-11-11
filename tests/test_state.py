@@ -47,7 +47,7 @@ def test_privacy_and_lights_from_switch_list():
     info = {"SWITCH": [{"type": 7, "enable": True}, {"type": 611, "enable": False}, {"type": 99, "enable": True},
                        {"type": 3, "enable": True}]}
     out = state.read_extra_states(info)
-    assert out == {"privacy_on": True, "label_light_on": False, "indicator_light_on": True, "switch_types": [3, 7, 99, 611]}
+    assert out == {"privacy_on": True, "label_light_on": False, "indicator_light_on": True, "switches": {3: True, 7: True, 99: True, 611: False}}
 
 
 def test_switch_list_in_other_shapes():

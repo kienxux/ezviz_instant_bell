@@ -390,12 +390,12 @@ async def test_doorbell_indicator_is_switch_3(hass: HomeAssistant, client: FakeC
     assert ("switch", SERIAL, 3, True) in client.calls
 
 
-async def test_diagnostics_list_the_switch_types(hass: HomeAssistant, client: FakeClient) -> None:
+async def test_diagnostics_list_the_switches(hass: HomeAssistant, client: FakeClient) -> None:
     from custom_components.ezviz_instant_bell.diagnostics import async_get_config_entry_diagnostics
 
     entry = await setup(hass, client)
     door = (await async_get_config_entry_diagnostics(hass, entry))["doors"]["door_1"]
-    assert 3 in door["status"]["switch_types"] and 611 in door["status"]["switch_types"]
+    assert door["status"]["switches"][3] is False and door["status"]["switches"][611] is False
 
 
 async def test_label_light_falls_back_to_switch_611(hass: HomeAssistant, client: FakeClient) -> None:

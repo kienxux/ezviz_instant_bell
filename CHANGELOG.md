@@ -2,6 +2,10 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## Unreleased
+
+- The diagnostics download shows each setting (switch) of a door station with its state, on or off, instead of only its number. A setting the integration does not know yet is found by switching it in the EZVIZ app between two downloads (#25).
+
 ## 0.12.0
 
 - New switch **Doorbell Indicator** for the light at the call button of the door station (the "Doorbell indicator" of the EZVIZ app, EZVIZ switch 3). It is made only when the door station reports this setting (#22).

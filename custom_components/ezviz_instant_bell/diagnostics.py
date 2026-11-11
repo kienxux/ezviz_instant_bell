@@ -23,7 +23,7 @@ TO_REDACT = {"username", "password", CONF_KEY, CONF_KEYS, CONF_MONITOR_SERIALS, 
 # Status values that say nothing about the people or the network.
 SAFE_STATUS = {
     "model", "version", "upgrade_available", "status", "pir_status", "motion",
-    "seconds_last_trigger", "last_alarm_time", "switch_types",
+    "seconds_last_trigger", "last_alarm_time", "switches",
 }  # fmt: skip
 
 
