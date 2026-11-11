@@ -141,6 +141,9 @@ class DeviceApi:
     def set_defence(self, serial: str, enable: bool) -> None:
         self._get_client().set_camera_defence(serial, int(bool(enable)))
 
+    def set_indicator_light(self, serial: str, enable: bool) -> None:
+        self._get_client().switch_status(serial, state.INDICATOR_LIGHT_SWITCH_TYPE, bool(enable))
+
     def set_label_light(self, serial: str, enable: bool) -> None:
         """The name-plate light: IoT feature first (newer models), else switch 611."""
         client = self._get_client()

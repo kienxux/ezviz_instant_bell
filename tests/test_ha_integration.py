@@ -381,6 +381,23 @@ async def test_other_switches_call_the_right_api(hass: HomeAssistant, client: Fa
     assert ("iot", SERIAL, "NightLightEnable", {"value": True}) in client.calls
 
 
+async def test_doorbell_indicator_is_switch_3(hass: HomeAssistant, client: FakeClient) -> None:
+    # The door station of the fixture reports switch 3; the indoor monitor does not.
+    await setup(hass, client)
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": legacy_entity(hass, "switch", "indicator_light")}, blocking=True
+    )
+    assert ("switch", SERIAL, 3, True) in client.calls
+
+
+async def test_diagnostics_list_the_switch_types(hass: HomeAssistant, client: FakeClient) -> None:
+    from custom_components.ezviz_instant_bell.diagnostics import async_get_config_entry_diagnostics
+
+    entry = await setup(hass, client)
+    door = (await async_get_config_entry_diagnostics(hass, entry))["doors"]["door_1"]
+    assert 3 in door["status"]["switch_types"] and 611 in door["status"]["switch_types"]
+
+
 async def test_label_light_falls_back_to_switch_611(hass: HomeAssistant, client: FakeClient) -> None:
     await setup(hass, client)
     def refuse(*args, **kwargs):

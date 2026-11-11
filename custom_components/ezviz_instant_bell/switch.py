@@ -1,4 +1,4 @@
-"""Switches: chime, do not disturb, privacy, armed, name-tag light, motion sound alert."""
+"""Switches: chime, do not disturb, privacy, armed, name-tag light, doorbell indicator, motion sound alert."""
 
 from __future__ import annotations
 
@@ -61,10 +61,13 @@ DND = SwitchDef("dnd", _flat("dnd_on"), lambda a, s, v: a.set_dnd(s, v))
 PRIVACY = SwitchDef("privacy", _flat("privacy_on"), lambda a, s, v: a.set_privacy(s, v))
 DEFENCE = SwitchDef("defence", _flat("defence_on"), lambda a, s, v: a.set_defence(s, v))
 LABEL_LIGHT = SwitchDef("label_light", _flat("label_light_on"), lambda a, s, v: a.set_label_light(s, v))
+INDICATOR_LIGHT = SwitchDef(
+    "indicator_light", _flat("indicator_light_on"), lambda a, s, v: a.set_indicator_light(s, v)
+)
 
 DOOR_SWITCHES = (CHIME, DND, PRIVACY, DEFENCE, LABEL_LIGHT, CHIME_PIR)
 # Only an HP7 / CP7 style door station has a chime and a name-tag light.
-INTERCOM_SWITCHES = (CHIME, LABEL_LIGHT, CHIME_PIR)
+INTERCOM_SWITCHES = (CHIME, LABEL_LIGHT, CHIME_PIR, INDICATOR_LIGHT)
 MONITOR_SWITCHES = (MONITOR_CHIME, MONITOR_CHIME_PIR)
 
 
@@ -82,6 +85,9 @@ async def async_setup_entry(
             for d in DOOR_SWITCHES
             if intercom or d not in INTERCOM_SWITCHES
         )
+        # Made only when the door station reports the setting (not every model has it).
+        if intercom and "indicator_light_on" in (hub.coordinator.data or {}).get(serial, {}):
+            entities.append(ChimeSwitch(hub, hub.coordinator, serial, INDICATOR_LIGHT))
         for monitor in hub.monitors.get(serial, []):
             entities.extend(ChimeSwitch(hub, hub.coordinator, serial, d, owner=monitor) for d in MONITOR_SWITCHES)
     async_add_entities(entities)

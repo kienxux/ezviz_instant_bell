@@ -237,6 +237,9 @@
       "label_light": {
         "name": "Namensschild-Beleuchtung"
       },
+      "indicator_light": {
+        "name": "Klingel-Anzeigeleuchte"
+      },
       "chime_pir": {
         "name": "Bewegungs-Signalton"
       },

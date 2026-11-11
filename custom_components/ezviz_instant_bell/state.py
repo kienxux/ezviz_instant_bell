@@ -15,6 +15,8 @@ import json
 from typing import Any
 
 PRIVACY_SWITCH_TYPE = 7
+# The light at the call button ("Doorbell indicator" in the EZVIZ app).
+INDICATOR_LIGHT_SWITCH_TYPE = 3
 LABEL_LIGHT_SWITCH_TYPE = 611
 
 # Values of the ``ChimeMusic`` setting that are used when the device does not
@@ -205,11 +207,13 @@ def read_extra_states(info: dict[str, Any]) -> dict[str, Any]:
         if dnd is not None:
             out["dnd_on"] = dnd
 
+    types = []
     for item in _switch_list(info):
         try:
             kind = int(item.get("type", -1))
         except (TypeError, ValueError):
             continue
+        types.append(kind)
         value = coerce_bool(item.get("enable"))
         if value is None:
             continue
@@ -217,6 +221,11 @@ def read_extra_states(info: dict[str, Any]) -> dict[str, Any]:
             out["privacy_on"] = value
         elif kind == LABEL_LIGHT_SWITCH_TYPE:
             out["label_light_on"] = value
+        elif kind == INDICATOR_LIGHT_SWITCH_TYPE:
+            out["indicator_light_on"] = value
+    if types:
+        # For the diagnostics: which settings a model has (lights still unknown here).
+        out["switch_types"] = sorted(set(types))
 
     night = read_night_light(info)
     if night is not None:

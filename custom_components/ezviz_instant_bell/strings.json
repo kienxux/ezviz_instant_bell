@@ -237,6 +237,9 @@
       "label_light": {
         "name": "Name Tag Light"
       },
+      "indicator_light": {
+        "name": "Doorbell Indicator"
+      },
       "chime_pir": {
         "name": "Motion Sound Alert"
       },
