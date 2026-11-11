@@ -198,7 +198,7 @@ Switch on **Save the picture of every motion and person event** in the options. 
 The **Live** camera of each door station. Its settings are in the [options](#options):
 
 - **Source**: `cloud` (EZVIZ relay, the default), `local` (straight from the door station on your network; Home Assistant must be on the same network) or `auto` (local first, then cloud).
-- **Mode**: `auto` looks at the video once and picks: H.264 uses the Home Assistant stream (sound, low delay), HEVC uses motion JPEG (every browser, no sound). `webrtc` and `mjpeg` force one of them.
+- **Delivery to the browser**: `auto` looks at the video once and picks: H.264 uses the Home Assistant stream (sound, low delay), HEVC uses motion JPEG (every browser, no sound). `webrtc` and `mjpeg` force one of them.
 - While someone watches the local stream, the status is read a quarter as often, because the door station's processor is small. A ring or unlock wakes the stream up, so the first picture is quick.
 
 ### Encrypted video
@@ -207,7 +207,7 @@ Some firmware encrypts the video and offers no switch in the EZVIZ app. EZVIZ th
 
 ### Relay
 
-The live video runs through a relay inside Home Assistant that listens on `127.0.0.1` only. A fixed port and `0.0.0.0` still work for go2rtc or Frigate on another machine, but that socket has no password; the [addresses with a token](#frigate-and-go2rtc) are the safer way.
+The live video runs through a relay inside Home Assistant that listens on `127.0.0.1` only. A fixed port and `0.0.0.0` (options, section *Other apps*) still work for go2rtc or Frigate on another machine, but that socket has no password, and a repair notice says so while it is set; the [addresses with a token](#frigate-and-go2rtc) are the safer way.
 
 ## Frigate and go2rtc
 
@@ -218,7 +218,7 @@ Home Assistant can hand the live video to other apps, for example Frigate (detec
 | `/api/ezviz_instant_bell/live/<serial>?token=…` | MPEG-TS with sound: the video as the relay has it (H.264, or H.265 when the door station sends it and nothing converts it) |
 | `/api/ezviz_instant_bell/mjpeg/<serial>?token=…` | Motion JPEG, no sound |
 
-1. Switch on **Let other apps read the live video (go2rtc, Frigate)** in the options and save.
+1. Switch on **Let other apps read the live video (go2rtc, Frigate)** in the options (section *Other apps*) and save.
 2. Open the options again. Their description shows both addresses of each door station, with the address of your Home Assistant and the token.
 3. Use the MPEG-TS address in the other app, as it is, for example as below. The motion JPEG address is for apps that take only MJPEG.
 
@@ -286,27 +286,31 @@ Actions (`serial` is needed only when you have more than one door station):
 
 ## Options
 
-Open them with **Configure** on the integration. Saving reloads the integration, so the changes apply at once.
+Open them with **Configure** on the integration. Saving reloads the integration, so the changes apply at once. The first four are at the top of the form, the others in sections; *Live video*, *Other apps* and *Troubleshooting* start closed.
 
 | Option | Default | What it does |
 | --- | --- | --- |
 | Ring check interval (seconds) | 5 | How often the EZVIZ message list is checked for rings, 2 to 60 |
 | Indoor monitor serial numbers | empty | Empty finds the monitors by itself |
 | Lock number of the door / of the gate | 2 / 1 | As seen on an HP7; swap them if **Unlock Door** opens the gate |
+| ***Rings, recordings and pictures*** | | |
 | Save the video of every ring | off | See [Save the video of every ring](#save-the-video-of-every-ring) |
-| Save the picture of every motion and person event | off | See [Save the pictures of motion and people](#save-the-pictures-of-motion-and-people) |
+| Save the picture of every motion and person event in the media folder | off | See [Save the pictures of motion and people](#save-the-pictures-of-motion-and-people) |
 | Keep the saved pictures for (days) | 30 | 1 to 365 |
 | Motion / Person as an event of the Doorbell entity | off | See [Motion and person as events](#motion-and-person-as-events) |
-| Stream source | `cloud` | `cloud`, `local` or `auto`, see [Live video](#live-video) |
-| Live view delivery | `auto` | `auto`, `webrtc` or `mjpeg`, see [Live video](#live-video) |
+| ***Live video*** | | |
+| Source | `cloud` | `cloud`, `local` or `auto`, see [Live video](#live-video) |
+| Delivery to the browser | `auto` | `auto`, `webrtc` or `mjpeg`, see [Live video](#live-video) |
 | Video codec | `auto` | `auto` detects it; `h264`; `hevc` converts H.265 to H.264 for the Home Assistant stream; `hevc_copy` passes H.265 through untouched (weak hosts, Frigate, Safari) |
-| LAN stream quality | `main` | `sub` asks the local source for the door station's small picture, which is far cheaper to decode on a weak host |
+| Picture size of the local stream | `main` | `sub` asks the local source for the door station's small picture, which is far cheaper to decode on a weak host |
+| Encryption key | empty | See [Encrypted video](#encrypted-video) |
+| ***Other apps (go2rtc, Frigate)*** | | |
 | Let other apps read the live video (go2rtc, Frigate) | off | See [Frigate and go2rtc](#frigate-and-go2rtc) |
 | Make a new token | | Stops the addresses handed out so far |
-| Fixed TCP port / listen host of the relay | 0 / `127.0.0.1` | See [Relay](#relay) |
-| Aggressive MPEG-TS compatibility | off | Repeats the stream headers before every keyframe; switch it on if the log shows "Immediate exit requested" |
-| Encryption key | empty | See [Encrypted video](#encrypted-video) |
-| Diagnostic dumps | off | Writes the start of the stream to two `.bin` files in the config folder, for a video bug report only |
+| Fixed port of the relay / Relay listen host | 0 / `127.0.0.1` | See [Relay](#relay) |
+| ***Troubleshooting*** | | |
+| Repeat the stream headers before every keyframe | off | Switch it on if the log shows "Immediate exit requested" |
+| Write diagnostic dumps | off | Writes the start of the stream to two `.bin` files in the config folder, for a video bug report only |
 
 ## Troubleshooting
 

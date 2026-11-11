@@ -2,6 +2,14 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## Unreleased
+
+- The options are grouped in sections: *Rings, recordings and pictures*, *Live video*, *Other apps (go2rtc, Frigate)* and *Troubleshooting*. The older live video options got short names, with the explanation below each field instead of inside the name, in English and German. Saved options stay as they are.
+- A repair notice appears while the **Relay listen host** is not this computer (for example `0.0.0.0`): that socket has no password, and the addresses with a token are the safer way for go2rtc and Frigate. It goes away when the host is set back to `127.0.0.1`.
+- The action `set_video_encryption` no longer says that encryption blocks the local live stream; the camera key decrypts both stream sources.
+- The tests now also run on Home Assistant 2025.9.0, the oldest version the integration supports, besides a current one.
+- The roadmap is up to date, with what is left for 1.0.0.
+
 ## 0.12.1
 
 - The diagnostics download shows each setting (switch) of a door station with its state, on or off, instead of only its number. A setting the integration does not know yet is found by switching it in the EZVIZ app between two downloads (#25).
