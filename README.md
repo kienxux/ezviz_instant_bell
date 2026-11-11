@@ -249,7 +249,7 @@ cameras:
             - record
 ```
 
-Checked with go2rtc 1.9.15 and a test stream (H.264 and H.265, with sound): its RTSP output can be decoded and recorded the way Frigate reads it. Not yet checked with Frigate itself and a real door station: please report whether it works for you.
+Checked with Frigate and a real door station, and with go2rtc 1.9.15 and test streams in H.264 and H.265 with sound.
 
 - It is off by default. **Make a new token** stops the addresses handed out so far; the new ones show the next time you open the options.
 - Anyone with an address can watch, so keep it like a password. A wrong token counts as a failed login, so Home Assistant's IP ban applies. The right one never does: while Home Assistant starts or waits for the EZVIZ cloud, the app gets "503 Service Unavailable" and tries again.
