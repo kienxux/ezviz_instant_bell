@@ -2,7 +2,7 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
-## Unreleased
+## 0.12.1
 
 - The diagnostics download shows each setting (switch) of a door station with its state, on or off, instead of only its number. A setting the integration does not know yet is found by switching it in the EZVIZ app between two downloads (#25).
 
