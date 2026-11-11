@@ -154,4 +154,6 @@ class MjpegShareView(_ShareView):
             return web.Response(status=HTTPStatus.SERVICE_UNAVAILABLE)
         from .mjpeg import serve_mjpeg
 
-        return await serve_mjpeg(request, ffmpeg_path="ffmpeg", upstream_url=relay.stream_url)
+        return await serve_mjpeg(
+            request, ffmpeg_path="ffmpeg", upstream_url=relay.stream_url, probe_us=relay.viewer_probe
+        )

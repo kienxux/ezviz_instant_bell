@@ -108,6 +108,7 @@ class FakeClient:
         self.records: list[dict] = []
         self.record_calls: list[tuple] = []
         self.fail_records = False
+        self.picture = b"JPEGDATA"
 
     # -- live video: keys and encryption
     def get_cam_key(self, serial, smscode=None):
@@ -135,8 +136,9 @@ class FakeClient:
             return {"message": list(pages[kwargs.get("end_time", "")])}
         return {"message": list(self.messages)}
 
-    def download_alarm_image(self, url, serial=None):
-        return b"JPEGDATA"
+    def download_alarm_image(self, url, serial=None, *, decrypt=True):
+        assert decrypt is False  # the integration decrypts with its own key (no cloud request)
+        return self.picture
 
     def search_records(self, serial, channel, channel_serial, start, stop, size=20):
         self.record_calls.append((serial, channel, channel_serial, start, stop, size))
@@ -1044,6 +1046,40 @@ async def test_fetch_encryption_key_without_code_asks_for_one(hass: HomeAssistan
     key = await hass.async_add_executor_job(hub.stream.fetch_camera_key_with_code, SERIAL, "4321")
     assert key == "KEY999" and not hub.stream.key_needs_otp
     assert await hass.async_add_executor_job(hub.stream.get_camera_encryption_key, SERIAL) == "KEY999"
+
+
+async def test_an_encrypted_picture_is_decrypted_with_the_stored_key(hass: HomeAssistant, client: FakeClient) -> None:
+    # Opening the door made the library ask the cloud for the key for each picture,
+    # and EZVIZ mailed a security code every time.
+    entry = await setup(hass, client, {"encryption_key": "ABC123"})
+    client.picture = b"hikencodepicture" + b"x" * 32
+    client.cam_key_answers = []
+    with patch("pyezvizapi.utils.decrypt_image", return_value=b"JPEG") as decrypt:
+        data = await entry.runtime_data.async_download_picture("https://example.invalid/p", SERIAL)
+    assert data == b"JPEG" and decrypt.call_args.args == (client.picture, "ABC123")
+    assert client.cam_key_calls == []
+
+
+async def test_without_a_key_the_cloud_is_asked_once_per_half_hour(hass: HomeAssistant, client: FakeClient) -> None:
+    from pyezvizapi.exceptions import EzvizAuthVerificationCode
+
+    entry = await setup(hass, client)
+    hub = entry.runtime_data
+    client.picture = b"hikencodepicture" + b"x" * 32
+    client.cam_key_answers = [EzvizAuthVerificationCode("20002")] * 10
+    for _ in range(3):
+        assert await hub.async_download_picture("https://example.invalid/p", SERIAL) is None
+    assert len(client.cam_key_calls) == 2  # one request: the bare serial, then the full one
+    # asking for a new code on purpose still reaches the cloud
+    await hass.async_add_executor_job(hub.stream.get_camera_encryption_key, SERIAL, True)
+    assert len(client.cam_key_calls) == 4
+
+
+async def test_a_clear_picture_needs_no_key(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    client.cam_key_answers = []
+    assert await entry.runtime_data.async_download_picture("https://example.invalid/p", SERIAL) == b"JPEGDATA"
+    assert client.cam_key_calls == []
 
 
 async def test_encryption_repair_flow(hass: HomeAssistant, client: FakeClient) -> None:

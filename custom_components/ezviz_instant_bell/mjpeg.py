@@ -42,6 +42,7 @@ def _build_ffmpeg_cmd(
     width: int,
     height: int,
     quality: int,
+    probe_us: str = "10000000",
 ) -> list[str]:
     """ffmpeg that reads the relay's MPEG-TS, drops audio, decodes the
     video (H.264 or HEVC) and emits multipart MJPEG to stdout.
@@ -58,12 +59,15 @@ def _build_ffmpeg_cmd(
     size"). We must NOT use ``-fflags +nobuffer`` here: nobuffer forces
     analyzeduration to 0, so ffmpeg gives up before the first keyframe.
     These are a *ceiling*, not a fixed wait — ffmpeg starts emitting as
-    soon as it has decoded the parameter sets.
+    soon as it has decoded the parameter sets. Not quite: MPEG-TS can add
+    streams at any time, so ffmpeg probes for the whole analyzeduration,
+    10 s before the first picture. When the relay starts the viewer on its
+    cached GOP (keyframe and parameter sets first), ``probe_us`` shortens it.
     """
     return [
         ffmpeg_path,
         "-loglevel", "warning",
-        "-analyzeduration", "10000000",
+        "-analyzeduration", probe_us,
         "-probesize", "10000000",
         "-f", "mpegts",
         "-fflags", "+discardcorrupt",
@@ -87,6 +91,7 @@ async def serve_mjpeg(
     width: int = 1280,
     height: int = 720,
     quality: int = 5,
+    probe_us: str = "10000000",
 ) -> web.StreamResponse:
     """Stream a continuous MJPEG response back to the HTTP client.
 
@@ -95,7 +100,7 @@ async def serve_mjpeg(
     """
     cmd = _build_ffmpeg_cmd(
         ffmpeg_path, upstream_url,
-        fps=fps, width=width, height=height, quality=quality,
+        fps=fps, width=width, height=height, quality=quality, probe_us=probe_us,
     )
     started_at = time.monotonic()
     peer = request.remote

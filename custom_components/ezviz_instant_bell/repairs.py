@@ -50,7 +50,7 @@ class EncryptionOtpRepairFlow(RepairsFlow):
                 return self.async_abort(reason="no_device")
 
             if not code:
-                await self.hass.async_add_executor_job(hub.stream.get_camera_encryption_key, self._serial)
+                await self.hass.async_add_executor_job(hub.stream.get_camera_encryption_key, self._serial, True)
                 errors["code"] = "resent"
             else:
                 try:

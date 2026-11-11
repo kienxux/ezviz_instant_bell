@@ -112,6 +112,7 @@ class LiveCamera(Camera):
             request,
             ffmpeg_path=self._ffmpeg_path,
             upstream_url=self._relay.stream_url,
+            probe_us=self._relay.viewer_probe,
         )
 
     async def async_camera_image(

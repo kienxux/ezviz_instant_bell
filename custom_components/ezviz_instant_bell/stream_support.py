@@ -26,6 +26,9 @@ from requests import RequestException
 _LOGGER = logging.getLogger(__name__)
 
 LAN_AES_KEY_TTL = 3600.0
+# A mailed security code is valid about 30 minutes; a request without a key
+# within that time only mails another one.
+KEY_REQUEST_INTERVAL = 1800.0
 
 
 def bare_serial(serial: str) -> str:
@@ -53,6 +56,9 @@ class StreamSupport:
         self._lan_aes_cache: dict[str, tuple[bytes, float]] = {}
         self._lan_ip_cache: dict[str, str] = {}
         self._cam_key_cache: dict[str, str] = {}
+        # When the cloud was last asked for a camera key without getting one:
+        # each such request makes EZVIZ mail a security code.
+        self._cam_key_asked: dict[str, float] = {}
         # Serials for which the cloud asked for a one-time code (20002).
         self.key_needs_otp: set[str] = set()
 
@@ -237,11 +243,14 @@ class StreamSupport:
             raise last
         return None
 
-    def get_camera_encryption_key(self, serial: str) -> str | None:
+    def get_camera_encryption_key(self, serial: str, force: bool = False) -> str | None:
         """Camera encryption key, remembered for the session.
 
-        Needed to decrypt the video when Image/Video Encryption is on (firmware
-        from V5.3.6 on ships with it enabled and no switch in the app).
+        Needed to decrypt the video and the event pictures when Image/Video
+        Encryption is on (firmware from V5.3.6 on ships with it enabled and no
+        switch in the app). Every request the cloud answers without a key makes
+        EZVIZ mail a security code, so after one the cloud is not asked again
+        for KEY_REQUEST_INTERVAL, unless ``force`` (a new code was asked for).
         """
         from pyezvizapi.exceptions import EzvizAuthVerificationCode
 
@@ -252,6 +261,11 @@ class StreamSupport:
         client = self.client
         if client is None:
             return None
+        asked = self._cam_key_asked.get(bare)
+        if not force and asked is not None and time.monotonic() - asked < KEY_REQUEST_INTERVAL:
+            _LOGGER.debug("Camera key of %s not asked for again yet (the last request mailed a code)", bare)
+            return None
+        self._cam_key_asked[bare] = time.monotonic()
         needs_otp = False
         for candidate in (bare, serial):
             try:
@@ -268,6 +282,7 @@ class StreamSupport:
             if key:
                 self.key_needs_otp.discard(bare)
                 self._cam_key_cache[bare] = str(key)
+                self._cam_key_asked.pop(bare, None)
                 _LOGGER.info("Got camera encryption key for %s", candidate)
                 return str(key)
         if needs_otp:

@@ -826,3 +826,47 @@ async def test_a_viewer_that_leaves_before_any_output_stops_its_ffmpeg() -> None
         await asyncio.wait_for(r._handle_client(viewer, writer), timeout=10)
         await r._shutdown_shared()
     assert ffmpeg.runs[0][1].killed and writer.closed and r._active_clients == 0
+
+
+async def lan_viewer_cmd(r: StreamRelay, gop: bytes | None) -> tuple[str, ...]:
+    """The relay ffmpeg command of a local viewer, with ``gop`` cached when it joins."""
+    viewer = asyncio.StreamReader()
+    viewer.feed_eof()
+    ffmpeg = FakeExec(SilentFfmpeg)
+    with patch.object(live_relay.asyncio, "create_subprocess_exec", ffmpeg), patch.object(
+        live_relay, "_free_local_port", return_value=1
+    ), patch.object(live_relay, "_start_local_listener", return_value=FakeListener()):
+        await r.prewarm()
+        await asyncio.sleep(0.05)  # the session start empties the GOP cache
+        if gop:
+            r._gop_update(gop)
+        await asyncio.wait_for(r._handle_client(viewer, FakeWriter()), timeout=10)
+        await r._shutdown_shared()
+    return ffmpeg.runs[0][0]
+
+
+def probe_of(cmd: tuple[str, ...]) -> str:
+    return cmd[cmd.index("-analyzeduration") + 1]
+
+
+async def test_a_viewer_on_the_cached_gop_gets_a_short_probe(fake_lan) -> None:
+    # MPEG-PS made ffmpeg probe its whole analyzeduration: 10 s before the first picture.
+    r = relay(stream_source="local")
+    cmd = await lan_viewer_cmd(r, PACK + pes_pts(0xE0, SPS_PPS + IDR))
+    assert probe_of(cmd) == live_relay.LAN_PROBE_PRELOADED
+
+
+async def test_a_viewer_of_a_fresh_session_keeps_the_long_probe(fake_lan) -> None:
+    r = relay(stream_source="local")
+    assert probe_of(await lan_viewer_cmd(r, None)) == live_relay.LAN_PROBE_COLD
+
+
+def test_the_mjpeg_probe_follows_the_cached_gop() -> None:
+    from custom_components.ezviz_instant_bell.mjpeg import _build_ffmpeg_cmd
+
+    r = relay()
+    assert r.viewer_probe == live_relay.LAN_PROBE_COLD
+    r._gop_update(SPS_PPS + IDR)
+    assert r.viewer_probe == live_relay.LAN_PROBE_PRELOADED
+    cmd = _build_ffmpeg_cmd("ffmpeg", "tcp://x", fps=8, width=1, height=1, quality=5, probe_us=r.viewer_probe)
+    assert cmd[cmd.index("-analyzeduration") + 1] == live_relay.LAN_PROBE_PRELOADED

@@ -1,6 +1,7 @@
 """The parts of pyezvizapi that this integration reaches into: a library update that removes one fails here."""
 
 import importlib
+import inspect
 
 import pytest
 
@@ -15,6 +16,8 @@ def test_private_client_methods_still_exist():
                  "download_alarm_image", "get_mqtt_client", "get_dev_config", "switch_status",
                  "set_camera_defence", "do_not_disturb", "set_iot_feature", "set_video_enc"):
         assert hasattr(EzvizClient, name), name
+    # pictures are fetched without the library's own decryption (it asks the cloud for the key)
+    assert "decrypt" in inspect.signature(EzvizClient.download_alarm_image).parameters
     assert "_token" in EzvizClient.__init__.__code__.co_names or hasattr(EzvizClient("a", "b"), "_token")
 
 
@@ -30,6 +33,7 @@ def test_private_client_methods_still_exist():
         ("pyezvizapi.stream", "parse_stream_info_response"),
         ("pyezvizapi.stream", "VtmMessageCode"),
         ("pyezvizapi.camera", "EzvizCamera"),
+        ("pyezvizapi.utils", "decrypt_image"),
     ],
 )
 def test_library_names_still_exist(module, name):

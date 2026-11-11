@@ -2,6 +2,12 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 1.1.2
+
+- Fixed: with Image/Video Encryption on, opening the door made EZVIZ e-mail a security code each time. The picture of the event is encrypted, and pyezvizapi asked the EZVIZ cloud for the camera key for every picture, up to four times per event; each request mails a code. Event pictures are now decrypted with the key stored in the options, without asking the cloud.
+- Without a stored key the cloud is asked at most once per 30 minutes (about as long as a mailed code is valid). The repair form's "send a new code" still asks right away.
+- The local live video starts in about 2 seconds instead of about 11 when it is already open (with **Keep the live video open all the time**, after a ring, or while another viewer watches). Both ffmpeg steps waited out their whole 10-second probe before the first picture, because MPEG-PS and MPEG-TS can add streams at any time. A viewer that starts on the cached keyframe now gets a 1-second probe; a fresh session keeps the long one.
+
 ## 1.1.1
 
 - Fixed: a viewer that joined a local live video that was already running got no picture. ffmpeg received the end of the previous frame first, without a time stamp, and stopped. That is what Frigate ran into with **Keep the live video open all the time**, and it could also hit a viewer opening the live video after a ring. Such a viewer now starts on the keyframe itself.

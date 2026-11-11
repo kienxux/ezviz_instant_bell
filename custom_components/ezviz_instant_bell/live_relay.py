@@ -113,6 +113,11 @@ PROGRESS_LOG_SEC = 60.0
 # consumer left; evict it so its leaked ffmpeg stops competing for CPU (#44).
 DEAD_SUB_TIMEOUT = 30.0
 
+# How long the relay ffmpeg probes the local MPEG-PS (microseconds): a new
+# session, and a viewer that starts on the cached GOP.
+LAN_PROBE_COLD = "10000000"
+LAN_PROBE_PRELOADED = "1000000"
+
 MIN_RETRY_INTERVAL = 30.0
 LOCKOUT_THRESHOLD = 3
 LOCKOUT_BACKOFF = 600.0
@@ -347,6 +352,15 @@ class StreamRelay:
     @property
     def stream_url(self) -> str:
         return f"tcp://127.0.0.1:{self._port}"
+
+    @property
+    def viewer_probe(self) -> str:
+        """How long a viewer's ffmpeg may probe the relay's output (microseconds).
+
+        Short while the relay starts new viewers on its cached GOP, so their
+        first picture comes at once; the long one for a fresh session (#39).
+        """
+        return LAN_PROBE_PRELOADED if self._gop_snapshot() else LAN_PROBE_COLD
 
     @property
     def detected_codec(self) -> Optional[str]:
@@ -1554,6 +1568,12 @@ class StreamRelay:
                 # (a double decode+encode) and its decoder was the source of
                 # the "VPS 0 does not exist" errors on HPD7 (#39). Only the
                 # WebRTC path actually needs H.264, so gate the transcode on it.
+                # MPEG-PS can add streams at any time, so ffmpeg probes for the
+                # whole analyzeduration before it writes anything: 10 s of
+                # waiting. A viewer that starts on the cached GOP has the
+                # keyframe and its parameter sets in front, so a short probe
+                # is enough; a fresh session keeps the long one (#39).
+                lan_probe = LAN_PROBE_PRELOADED if gop else LAN_PROBE_COLD
                 lan_transcode = self._stream_mode == "webrtc" and (
                     self._video_codec == "hevc"
                     or (
@@ -1571,7 +1591,7 @@ class StreamRelay:
                     # #39 HPD7). A large analyzeduration/probesize is a ceiling,
                     # not a fixed wait — it starts as soon as params are known.
                     "-fflags", "+genpts", "-flags", "low_delay",
-                    "-analyzeduration", "10000000", "-probesize", "10000000",
+                    "-analyzeduration", lan_probe, "-probesize", "10000000",
                     # NO wall-clock re-timestamping on this input. It is a
                     # real MPEG-PS container that already carries correct
                     # timestamps; stamping by arrival instead collapses the

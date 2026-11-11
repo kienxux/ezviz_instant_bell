@@ -75,6 +75,7 @@ from .recordings import Recording, channel_serial, clip_id, day_window, recordin
 from .visitors import clip_for
 from .stream_support import StreamSupport
 from .feature_code import resolve_feature_code
+from .keys import key_for
 from .history import HistoryItem, day_text, item_from_message, items_from_answer
 from .parsing import (
     DETECTION_KINDS,
@@ -94,6 +95,9 @@ from .parsing import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Start of an event picture the door station encrypted (Image/Video Encryption on).
+ENCRYPTED_PICTURE = b"hikencodepicture"
 
 POLL_WARN_AFTER = 5  # consecutive poll failures before a warning is logged
 RECENT_MESSAGES = 20  # list entries kept for the diagnostics
@@ -438,8 +442,21 @@ class InstantBellHub:
             return self._client.get_device_messages_list(limit=5)
 
     def _download_picture(self, url: str, serial: str) -> bytes:
+        """Download an event picture, decrypted with the stored key when it is encrypted.
+
+        Left to itself, the library asks the cloud for the camera key for every
+        encrypted picture, and EZVIZ mails a security code for each request.
+        """
+        from pyezvizapi.utils import decrypt_image
+
         with self._call_lock:
-            return self._client.download_alarm_image(url, serial)
+            data = self._client.download_alarm_image(url, serial, decrypt=False)
+        if not data or ENCRYPTED_PICTURE not in data:
+            return data
+        key = key_for(self.entry.options, serial) or self.stream.get_camera_encryption_key(serial)
+        if not key:
+            raise HomeAssistantError("the picture is encrypted and the camera key is not known")
+        return decrypt_image(data, key)
 
     def _do_unlock(self, serial: str, lock_no: int) -> None:
         token = getattr(self._client, "_token", None) or {}
