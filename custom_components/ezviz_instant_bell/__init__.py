@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 
 import voluptuous as vol
@@ -10,13 +11,13 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
 
 from .api import async_remove_card, async_setup_card
-from .const import DOMAIN
+from .const import CONF_RELAY_BIND, DEFAULT_RELAY_BIND, DOMAIN, ISSUE_OPEN_RELAY
 from .keys import with_keys
 from .coordinator import StatusCoordinator
 from .entity import link_monitors
@@ -182,7 +183,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: InstantBellConfigEntry) 
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     link_monitors(hass, hub)
+    _warn_open_relay(hass, entry)
     return True
+
+
+def _is_loopback(host: str) -> bool:
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+@callback
+def _warn_open_relay(hass: HomeAssistant, entry: InstantBellConfigEntry) -> None:
+    """A repair notice while the relay, which has no password, listens beyond this computer."""
+    host = str(entry.options.get(CONF_RELAY_BIND) or DEFAULT_RELAY_BIND).strip() or DEFAULT_RELAY_BIND
+    issue_id = f"{ISSUE_OPEN_RELAY}_{entry.entry_id}"
+    if _is_loopback(host):
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+        return
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        issue_id,
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key=ISSUE_OPEN_RELAY,
+        translation_placeholders={"title": entry.title, "host": host},
+        learn_more_url="https://github.com/kienxux/ezviz_instant_bell#relay",
+    )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: InstantBellConfigEntry) -> bool:
@@ -192,5 +223,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: InstantBellConfigEntry)
 
 async def async_remove_entry(hass: HomeAssistant, entry: InstantBellConfigEntry) -> None:
     """Remove the card from the dashboard resources with the last account."""
+    ir.async_delete_issue(hass, DOMAIN, f"{ISSUE_OPEN_RELAY}_{entry.entry_id}")
     if not [other for other in hass.config_entries.async_entries(DOMAIN) if other.entry_id != entry.entry_id]:
         await async_remove_card(hass)

@@ -9,3 +9,12 @@ jobs:
         with: {python-version: "3.13"}
       - run: python -m pip install pytest-homeassistant-custom-component "pyezvizapi>=1.0.5.0,<1.1" PyTurboJPEG
       - run: python -m pytest -q tests
+  pytest-oldest:
+    # The oldest Home Assistant that hacs.json promises: 0.13.277 is the test package of 2025.9.0.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13"}
+      - run: python -m pip install "pytest-homeassistant-custom-component==0.13.277" "pyezvizapi>=1.0.5.0,<1.1" PyTurboJPEG
+      - run: python -m pytest -q tests

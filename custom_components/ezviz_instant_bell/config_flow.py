@@ -11,6 +11,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import SOURCE_RECONFIGURE, ConfigFlow, ConfigFlowResult, OptionsFlowWithReload
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import section
 from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
@@ -320,6 +321,14 @@ class InstantBellConfigFlow(ConfigFlow, domain=DOMAIN):
         return InstantBellOptionsFlow()
 
 
+# The options form groups its fields in these sections; the options are kept flat.
+SECTION_EVENTS = "events"
+SECTION_LIVE_VIDEO = "live_video"
+SECTION_OTHER_APPS = "other_apps"
+SECTION_TROUBLESHOOTING = "troubleshooting"
+OPTION_SECTIONS = (SECTION_EVENTS, SECTION_LIVE_VIDEO, SECTION_OTHER_APPS, SECTION_TROUBLESHOOTING)
+
+
 class InstantBellOptionsFlow(OptionsFlowWithReload):
     """Ring check interval, indoor monitors, lock numbers and live video."""
 
@@ -330,6 +339,11 @@ class InstantBellOptionsFlow(OptionsFlowWithReload):
         if not self._token:
             self._token = self.config_entry.options.get(CONF_STREAM_TOKEN) or new_token()
         if user_input is not None:
+            # Each section arrives as a dictionary of its own.
+            sections = [user_input.get(name) or {} for name in OPTION_SECTIONS]
+            user_input = {k: v for k, v in user_input.items() if k not in OPTION_SECTIONS}
+            for values in sections:
+                user_input.update(values)
             data: dict[str, Any] = {
                 CONF_POLL_INTERVAL: int(user_input[CONF_POLL_INTERVAL]),
                 CONF_MONITOR_SERIALS: str(user_input.get(CONF_MONITOR_SERIALS) or "").strip(),
@@ -383,41 +397,81 @@ class InstantBellOptionsFlow(OptionsFlowWithReload):
                     vol.Required(
                         CONF_GATE_LOCK_NO, default=opts.get(CONF_GATE_LOCK_NO, DEFAULT_GATE_LOCK_NO)
                     ): number(1, 8),
-                    vol.Required(CONF_SAVE_CLIPS, default=bool(opts.get(CONF_SAVE_CLIPS, False))): bool,
-                    vol.Required(
-                        CONF_SAVE_DETECTION_PICTURES, default=bool(opts.get(CONF_SAVE_DETECTION_PICTURES, False))
-                    ): bool,
-                    vol.Required(
-                        CONF_DETECTION_PICTURE_DAYS,
-                        default=int(opts.get(CONF_DETECTION_PICTURE_DAYS, DEFAULT_DETECTION_PICTURE_DAYS)),
-                    ): number(1, MAX_DETECTION_PICTURE_DAYS),
-                    vol.Required(CONF_MOTION_EVENTS, default=bool(opts.get(CONF_MOTION_EVENTS, False))): bool,
-                    vol.Required(CONF_PERSON_EVENTS, default=bool(opts.get(CONF_PERSON_EVENTS, False))): bool,
-                    vol.Required(CONF_STREAM_SOURCE, default=opts.get(CONF_STREAM_SOURCE, "cloud")): choice(
-                        STREAM_SOURCES
+                    vol.Required(SECTION_EVENTS): section(
+                        vol.Schema(
+                            {
+                                vol.Required(CONF_SAVE_CLIPS, default=bool(opts.get(CONF_SAVE_CLIPS, False))): bool,
+                                vol.Required(
+                                    CONF_SAVE_DETECTION_PICTURES,
+                                    default=bool(opts.get(CONF_SAVE_DETECTION_PICTURES, False)),
+                                ): bool,
+                                vol.Required(
+                                    CONF_DETECTION_PICTURE_DAYS,
+                                    default=int(opts.get(CONF_DETECTION_PICTURE_DAYS, DEFAULT_DETECTION_PICTURE_DAYS)),
+                                ): number(1, MAX_DETECTION_PICTURE_DAYS),
+                                vol.Required(
+                                    CONF_MOTION_EVENTS, default=bool(opts.get(CONF_MOTION_EVENTS, False))
+                                ): bool,
+                                vol.Required(
+                                    CONF_PERSON_EVENTS, default=bool(opts.get(CONF_PERSON_EVENTS, False))
+                                ): bool,
+                            }
+                        ),
+                        {"collapsed": False},
                     ),
-                    vol.Required(CONF_STREAM_MODE, default=opts.get(CONF_STREAM_MODE, "auto")): choice(
-                        STREAM_MODES
+                    vol.Required(SECTION_LIVE_VIDEO): section(
+                        vol.Schema(
+                            {
+                                vol.Required(
+                                    CONF_STREAM_SOURCE, default=opts.get(CONF_STREAM_SOURCE, "cloud")
+                                ): choice(STREAM_SOURCES),
+                                vol.Required(CONF_STREAM_MODE, default=opts.get(CONF_STREAM_MODE, "auto")): choice(
+                                    STREAM_MODES
+                                ),
+                                vol.Required(CONF_VIDEO_CODEC, default=opts.get(CONF_VIDEO_CODEC, "auto")): choice(
+                                    VIDEO_CODECS
+                                ),
+                                vol.Required(
+                                    CONF_STREAM_QUALITY, default=opts.get(CONF_STREAM_QUALITY, "main")
+                                ): choice(STREAM_QUALITIES),
+                                vol.Optional(
+                                    CONF_ENCRYPTION_KEY,
+                                    description={"suggested_value": opts.get(CONF_ENCRYPTION_KEY, "")},
+                                ): TextSelector(),
+                            }
+                        ),
+                        {"collapsed": True},
                     ),
-                    vol.Required(CONF_VIDEO_CODEC, default=opts.get(CONF_VIDEO_CODEC, "auto")): choice(
-                        VIDEO_CODECS
+                    vol.Required(SECTION_OTHER_APPS): section(
+                        vol.Schema(
+                            {
+                                vol.Required(
+                                    CONF_SHARE_STREAM, default=bool(opts.get(CONF_SHARE_STREAM, False))
+                                ): bool,
+                                vol.Required(CONF_NEW_STREAM_TOKEN, default=False): bool,
+                                vol.Required(
+                                    CONF_RELAY_PORT, default=int(opts.get(CONF_RELAY_PORT) or 0)
+                                ): number(0, 65535),
+                                vol.Required(
+                                    CONF_RELAY_BIND, default=opts.get(CONF_RELAY_BIND, DEFAULT_RELAY_BIND)
+                                ): TextSelector(),
+                            }
+                        ),
+                        {"collapsed": True},
                     ),
-                    vol.Required(CONF_STREAM_QUALITY, default=opts.get(CONF_STREAM_QUALITY, "main")): choice(
-                        STREAM_QUALITIES
+                    vol.Required(SECTION_TROUBLESHOOTING): section(
+                        vol.Schema(
+                            {
+                                vol.Required(
+                                    CONF_AGGRESSIVE_MPEGTS, default=bool(opts.get(CONF_AGGRESSIVE_MPEGTS, False))
+                                ): bool,
+                                vol.Required(
+                                    CONF_DIAGNOSTIC_DUMPS, default=bool(opts.get(CONF_DIAGNOSTIC_DUMPS, False))
+                                ): bool,
+                            }
+                        ),
+                        {"collapsed": True},
                     ),
-                    vol.Required(CONF_SHARE_STREAM, default=bool(opts.get(CONF_SHARE_STREAM, False))): bool,
-                    vol.Required(CONF_NEW_STREAM_TOKEN, default=False): bool,
-                    vol.Required(CONF_RELAY_PORT, default=int(opts.get(CONF_RELAY_PORT) or 0)): number(0, 65535),
-                    vol.Required(CONF_RELAY_BIND, default=opts.get(CONF_RELAY_BIND, DEFAULT_RELAY_BIND)): TextSelector(),
-                    vol.Required(
-                        CONF_AGGRESSIVE_MPEGTS, default=bool(opts.get(CONF_AGGRESSIVE_MPEGTS, False))
-                    ): bool,
-                    vol.Optional(
-                        CONF_ENCRYPTION_KEY, description={"suggested_value": opts.get(CONF_ENCRYPTION_KEY, "")}
-                    ): TextSelector(),
-                    vol.Required(
-                        CONF_DIAGNOSTIC_DUMPS, default=bool(opts.get(CONF_DIAGNOSTIC_DUMPS, False))
-                    ): bool,
                 }
             ),
             description_placeholders={"stream_addresses": stream_addresses(self.hass, serials, self._token)},

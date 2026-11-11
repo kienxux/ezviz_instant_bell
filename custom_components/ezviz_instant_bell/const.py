@@ -73,6 +73,8 @@ CONF_RELAY_PORT = "relay_port"
 # another machine (Frigate) read it. There is no password on this socket.
 CONF_RELAY_BIND = "relay_bind"
 DEFAULT_RELAY_BIND = "127.0.0.1"
+# Repair notice while the relay listens beyond this computer (it has no password).
+ISSUE_OPEN_RELAY = "open_relay"
 # Hand the live video to other apps through Home Assistant's web server, with a
 # token (see stream_share). Off by default; the token is kept in the options.
 CONF_SHARE_STREAM = "share_stream"

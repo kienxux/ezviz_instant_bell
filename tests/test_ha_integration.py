@@ -727,16 +727,65 @@ async def test_second_setup_of_same_account_is_refused(hass: HomeAssistant) -> N
     assert result["type"] == "abort" and result["reason"] == "already_configured"
 
 
+def options_form(result: dict, **values) -> dict:
+    """What the options form sends: the top fields, and every other field inside its section."""
+    from homeassistant.data_entry_flow import section
+
+    form: dict = {"poll_interval": 3, "monitor_serials": "", "door_lock_no": 2, "gate_lock_no": 1}
+    for key, validator in result["data_schema"].schema.items():
+        if isinstance(validator, section):
+            fields = {str(k) for k in validator.schema.schema}
+            form[str(key)] = {k: v for k, v in values.items() if k in fields}
+    inside = {k for part in form.values() if isinstance(part, dict) for k in part}
+    form.update({k: v for k, v in values.items() if k not in inside})
+    return form
+
+
+async def test_options_sections_are_saved_flat(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client)
+    from homeassistant.data_entry_flow import section
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    sections = [str(k) for k, v in result["data_schema"].schema.items() if isinstance(v, section)]
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
+        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
+    ):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            options_form(result, stream_source="local", motion_events=True, relay_port=8554, diagnostic_dumps=False),
+        )
+        await hass.async_block_till_done()
+    assert entry.options["stream_source"] == "local" and entry.options["motion_events"] is True
+    assert entry.options["relay_port"] == 8554 and entry.options["video_codec"] == "auto"
+    assert not {"events", "live_video", "other_apps", "troubleshooting"} & set(entry.options)
+    assert sections == ["events", "live_video", "other_apps", "troubleshooting"]
+
+
+async def test_open_relay_gets_a_repair_notice(hass: HomeAssistant, client: FakeClient) -> None:
+    entry = await setup(hass, client, {"relay_bind": "0.0.0.0"})
+    issues = ir.async_get(hass)
+    issue = issues.async_get_issue(DOMAIN, f"open_relay_{entry.entry_id}")
+    assert issue is not None and issue.translation_placeholders["host"] == "0.0.0.0"
+    await options_with(hass, client, entry, relay_bind="127.0.0.1")
+    assert issues.async_get_issue(DOMAIN, f"open_relay_{entry.entry_id}") is None
+
+
+async def test_local_relay_has_no_repair_notice(hass: HomeAssistant, client: FakeClient) -> None:
+    for host in ("127.0.0.1", "localhost", "::1", ""):
+        entry = await setup(hass, client, {"relay_bind": host} if host else None)
+        assert ir.async_get(hass).async_get_issue(DOMAIN, f"open_relay_{entry.entry_id}") is None, host
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.config_entries.async_remove(entry.entry_id)
+        await hass.async_block_till_done()
+
+
 async def test_options_flow(hass: HomeAssistant, client: FakeClient) -> None:
     entry = await setup(hass, client)
     result = await hass.config_entries.options.async_init(entry.entry_id)
     with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
         "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
     ):
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"],
-            {"poll_interval": 3, "monitor_serials": "", "door_lock_no": 2, "gate_lock_no": 1},
-        )
+        result = await hass.config_entries.options.async_configure(result["flow_id"], options_form(result))
         await hass.async_block_till_done()
     assert result["type"] == "create_entry"
     assert entry.options["poll_interval"] == 3
@@ -751,10 +800,7 @@ async def test_options_reload_without_update_listener(hass: HomeAssistant, clien
     with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
         "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
     ):
-        await hass.config_entries.options.async_configure(
-            result["flow_id"],
-            {"poll_interval": 3, "monitor_serials": "", "door_lock_no": 2, "gate_lock_no": 1},
-        )
+        await hass.config_entries.options.async_configure(result["flow_id"], options_form(result))
         await hass.async_block_till_done()
     assert entry.runtime_data is not hub
 
@@ -766,10 +812,7 @@ async def test_options_flow_keeps_the_fetched_keys(hass: HomeAssistant, client: 
     with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
         "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
     ):
-        await hass.config_entries.options.async_configure(
-            result["flow_id"],
-            {"poll_interval": 3, "monitor_serials": "", "door_lock_no": 2, "gate_lock_no": 1},
-        )
+        await hass.config_entries.options.async_configure(result["flow_id"], options_form(result))
         await hass.async_block_till_done()
     assert entry.options["encryption_keys"] == {"AAA": "k1"}
 
@@ -874,10 +917,7 @@ async def options_with(hass: HomeAssistant, client: FakeClient, entry, **values)
     with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
         "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=DEVICES
     ):
-        await hass.config_entries.options.async_configure(
-            result["flow_id"],
-            {"poll_interval": 3, "monitor_serials": "", "door_lock_no": 2, "gate_lock_no": 1, **values},
-        )
+        await hass.config_entries.options.async_configure(result["flow_id"], options_form(result, **values))
         await hass.async_block_till_done()
     return result
 

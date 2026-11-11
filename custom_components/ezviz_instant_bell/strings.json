@@ -57,42 +57,81 @@
     "step": {
       "init": {
         "title": "Options",
+        "description": "Saving reloads the integration, so changes apply at once.\n\nAddresses for other apps (they work while **Let other apps read the live video** is on, under *Other apps*):\n{stream_addresses}",
         "data": {
           "poll_interval": "Ring check interval (seconds)",
           "door_lock_no": "Lock number of the door",
           "gate_lock_no": "Lock number of the gate",
-          "monitor_serials": "Indoor monitor serial numbers",
-          "share_stream": "Let other apps read the live video (go2rtc, Frigate)",
-          "new_stream_token": "Make a new token",
-          "relay_port": "Fixed TCP port for the live relay (0 = random, suggested 8554 for go2rtc / mediamtx)",
-          "relay_bind": "Relay listen host (127.0.0.1 = local-only, safe default; 0.0.0.0 exposes the UNAUTHENTICATED raw stream to other hosts — trusted networks only, requires a fixed port. For go2rtc or Frigate, prefer the addresses with a token above)",
-          "aggressive_mpegts": "Aggressive MPEG-TS compatibility (enable if you see 'Immediate exit requested' in logs; safe to leave OFF by default)",
-          "video_codec": "Video codec (auto = detect; hevc transcodes H.265 to H.264 for WebRTC; hevc_copy passes H.265 through untouched for low-power hosts / Frigate / Safari)",
-          "stream_source": "Stream source (cloud = EZVIZ VTM relay; local = direct LAN, bypasses the cloud and fixes 'no live' on firmware that won't push to the cloud — needs HA on the same network as the doorbell; auto = try local then cloud)",
-          "stream_mode": "Live view delivery (auto = default: detects the codec and picks for you — H.264 → webrtc, HEVC → mjpeg; webrtc = HA Stream/go2rtc, has audio + low latency but can't show HEVC without transcoding; mjpeg = per-viewer ffmpeg to motion-JPEG, codec-agnostic and robust for HEVC/multi-viewer but no audio)",
-          "stream_quality": "LAN stream quality (main = full resolution; sub = the device's low-resolution substream, far cheaper to decode — use it if video accumulates delay on a weak host such as a Raspberry Pi. Applies to the 'local' source only)",
-          "encryption_key": "Encryption key (usually the device's 6-character verification code, from its label). Only needed if the doorbell encrypts the video and the cloud won't hand the key over: it is then used to decrypt the stream so the live view works without turning encryption off.",
-          "diagnostic_dumps": "Diagnostic dumps (writes two .bin files in /config capturing the start of the stream, for bitstream analysis when reporting a video problem. Leave OFF: not useful in normal operation)",
-          "save_clips": "Save the video of every ring (fetches the recording from the SD card after a ring and keeps it)",
-          "save_detection_pictures": "Save the picture of every motion and person event in the media folder",
-          "detection_picture_days": "Keep the saved pictures for (days)",
-          "motion_events": "Motion as an event of the Doorbell entity",
-          "person_events": "Person as an event of the Doorbell entity"
+          "monitor_serials": "Indoor monitor serial numbers"
         },
         "data_description": {
           "poll_interval": "How often EZVIZ is asked for new rings. Shorter means a quicker notification.",
           "door_lock_no": "Normally 2 on an HP7 / CP7.",
           "gate_lock_no": "Normally 1 on an HP7 / CP7.",
-          "monitor_serials": "Leave empty to find the monitor automatically. Otherwise list the serial numbers separated by commas (for a house with several monitors).",
-          "save_clips": "Off by default. A saved clip is announced by the event ezviz_instant_bell_clip_saved and the sensor Last saved clip. Needs an SD card in the door station and video encryption off; clips count towards the 500 MB the clip folder may use.",
-          "save_detection_pictures": "Off by default. The pictures appear under Media > My media > ezviz_instant_bell, one folder per door station and day, about 5 to 12 seconds after the event; each one is announced by the event ezviz_instant_bell_picture_saved. Rings and door openings are not saved here. Which events the door station reports (motion, human detection) is set in the EZVIZ app.",
-          "detection_picture_days": "Older day folders are deleted. Only the integration's own folder is touched.",
-          "motion_events": "Off by default. The event entity then also fires motion, a few seconds after the door station reports it (it comes from the message list, like a ring). Which events the door station reports is set in the EZVIZ app.",
-          "person_events": "Off by default. Like motion, for human detection. Motion and person are told apart by the name of the message; an unrecognised one stays Other.",
-          "share_stream": "Off by default. Other apps then read the live video from the addresses above, through Home Assistant's web server: the first one is MPEG-TS with sound, the second motion JPEG. Anyone with an address can watch, so keep it like a password. A wrong token counts as a failed login. Reading an address opens the live video, like opening the Live camera.",
-          "new_stream_token": "The addresses handed out so far stop working; the new ones are shown the next time you open these options."
+          "monitor_serials": "Leave empty to find the monitor automatically. Otherwise list the serial numbers separated by commas (for a house with several monitors)."
         },
-        "description": "Live video options apply after the integration reloads.\n\nAddresses for other apps (they work while the option below is on):\n{stream_addresses}"
+        "sections": {
+          "events": {
+            "name": "Rings, recordings and pictures",
+            "data": {
+              "save_clips": "Save the video of every ring",
+              "save_detection_pictures": "Save the picture of every motion and person event in the media folder",
+              "detection_picture_days": "Keep the saved pictures for (days)",
+              "motion_events": "Motion as an event of the Doorbell entity",
+              "person_events": "Person as an event of the Doorbell entity"
+            },
+            "data_description": {
+              "save_clips": "Off by default. After each ring the recording is fetched from the SD card and kept. A saved clip is announced by the event ezviz_instant_bell_clip_saved and the sensor Last saved clip. Needs an SD card in the door station and video encryption off; clips count towards the 500 MB the clip folder may use.",
+              "save_detection_pictures": "Off by default. The pictures appear under Media > My media > ezviz_instant_bell, one folder per door station and day, about 5 to 12 seconds after the event; each one is announced by the event ezviz_instant_bell_picture_saved. Rings and door openings are not saved here. Which events the door station reports (motion, human detection) is set in the EZVIZ app.",
+              "detection_picture_days": "Older day folders are deleted. Only the integration's own folder is touched.",
+              "motion_events": "Off by default. The event entity then also fires motion, a few seconds after the door station reports it (it comes from the message list, like a ring). Which events the door station reports is set in the EZVIZ app.",
+              "person_events": "Off by default. Like motion, for human detection. Motion and person are told apart by the name of the message; an unrecognised one stays Other."
+            }
+          },
+          "live_video": {
+            "name": "Live video",
+            "data": {
+              "stream_source": "Source",
+              "stream_mode": "Delivery to the browser",
+              "video_codec": "Video codec",
+              "stream_quality": "Picture size of the local stream",
+              "encryption_key": "Encryption key"
+            },
+            "data_description": {
+              "stream_source": "cloud: through the EZVIZ relay. local: straight from the door station on your network, also when the EZVIZ cloud is down; Home Assistant must be on the same network. auto: local first, then cloud.",
+              "stream_mode": "auto looks at the video once: H.264 uses the Home Assistant stream (sound, low delay), H.265 uses motion JPEG (every browser, no sound). webrtc and mjpeg force one of them.",
+              "video_codec": "auto finds it out. h264 for H.264 firmware. hevc converts H.265 to H.264 for the Home Assistant stream; hevc_copy passes H.265 through unchanged (weak hosts, Frigate, Safari).",
+              "stream_quality": "main: full size. sub: the door station's small picture, far cheaper to decode; use it if the video falls behind on a weak host such as a Raspberry Pi. Only for the local source.",
+              "encryption_key": "Only needed when the door station encrypts its video and the key cannot be fetched from EZVIZ (see the repair notice or the action fetch_encryption_key). Usually the 6-character verification code on the door station's label. It decrypts the video of both sources."
+            }
+          },
+          "other_apps": {
+            "name": "Other apps (go2rtc, Frigate)",
+            "data": {
+              "share_stream": "Let other apps read the live video (go2rtc, Frigate)",
+              "new_stream_token": "Make a new token",
+              "relay_port": "Fixed port of the relay",
+              "relay_bind": "Relay listen host"
+            },
+            "data_description": {
+              "share_stream": "Off by default. Other apps then read the live video from the addresses above, through Home Assistant's web server: the first one is MPEG-TS with sound, the second motion JPEG. Anyone with an address can watch, so keep it like a password. A wrong token counts as a failed login. Reading an address opens the live video, like opening the Live camera.",
+              "new_stream_token": "The addresses handed out so far stop working; the new ones are shown the next time you open these options.",
+              "relay_port": "0 picks a free port at each start. A fixed port is only needed to read the relay socket from another machine.",
+              "relay_bind": "127.0.0.1 (the default) keeps the relay on this computer. 0.0.0.0 lets other machines read the relay socket on the fixed port, without a password; a repair notice warns while it is set. The addresses with a token are the safer way."
+            }
+          },
+          "troubleshooting": {
+            "name": "Troubleshooting",
+            "data": {
+              "aggressive_mpegts": "Repeat the stream headers before every keyframe",
+              "diagnostic_dumps": "Write diagnostic dumps"
+            },
+            "data_description": {
+              "aggressive_mpegts": "Switch it on if the log shows 'Immediate exit requested'. Off by default.",
+              "diagnostic_dumps": "Writes the start of the stream to two .bin files in the config folder, for a video bug report. Leave it off otherwise."
+            }
+          }
+        }
       }
     }
   },
@@ -358,6 +397,10 @@
     "cloud_offline": {
       "title": "EZVIZ cannot be reached ({title})",
       "description": "EZVIZ did not answer when Home Assistant started, so this integration runs with the local connection only: the local live video works with the stored key, while rings, unlocking, settings, recordings and pictures wait for the cloud. A new login is tried every 5 minutes, and everything starts again by itself when EZVIZ answers. If this stays, check the internet connection of Home Assistant."
+    },
+    "open_relay": {
+      "title": "The live video relay is open to your network",
+      "description": "In the options of {title}, the **Relay listen host** is `{host}`. The relay has no password, so anyone who can reach this address can watch the live video of your door station. go2rtc and Frigate can read it through Home Assistant with a token instead: in the options under *Other apps*, switch on **Let other apps read the live video (go2rtc, Frigate)** and set the listen host back to `127.0.0.1`. This notice disappears when the relay listens on this computer only."
     }
   },
   "services": {
@@ -383,7 +426,7 @@
     },
     "set_video_encryption": {
       "name": "Set video encryption",
-      "description": "Turn the doorbell's Image/Video Encryption on or off. Encryption blocks the local live stream. This changes a security setting of the device.",
+      "description": "Turn the door station's Image/Video Encryption on or off. While it is on, the live video needs the camera key (see fetch_encryption_key) and the recordings of the SD card cannot be played. This changes a security setting of the device.",
       "fields": {
         "serial": {
           "name": "Serial number",
