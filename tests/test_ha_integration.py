@@ -704,6 +704,23 @@ async def test_config_flow_preselects_the_door_station(hass: HomeAssistant, clie
     assert schema_key.default() == [SERIAL]
 
 
+
+async def test_config_flow_preselects_the_monitor_without_a_door_station(
+    hass: HomeAssistant, client: FakeClient
+) -> None:
+    # The account lists the HP7 only as DBScreen (#27); a camera stays unticked.
+    devices = {MONITOR: {"name": "HP7", "category": "DBScreen"}, "CAM1": {"name": "Garden", "category": "IPC"}}
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
+        "custom_components.ezviz_instant_bell.ezviz.list_devices", return_value=devices
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"username": "user@example.com", "password": "pw", "region": "apiieu.ezvizlife.com"},
+        )
+    schema_key = next(k for k in result["data_schema"].schema if k == "devices")
+    assert schema_key.default() == [MONITOR]
+
 async def test_config_flow_wrong_password(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     with patch("custom_components.ezviz_instant_bell.ezviz.login", side_effect=ezviz.InvalidAuth("Incorrect Password.")):
@@ -882,6 +899,24 @@ async def test_an_unknown_category_keeps_the_intercom_entities(hass: HomeAssista
     assert entry.runtime_data.is_intercom(SERIAL)
     assert legacy_entity(hass, "button", "unlock_door")
 
+
+
+async def test_an_hp7_listed_only_as_its_monitor_gets_the_intercom_entities(
+    hass: HomeAssistant, client: FakeClient
+) -> None:
+    # Some accounts list the HP7 once, as DBScreen, and open the door through that serial (#27).
+    entry = make_entry()
+    entry.add_to_hass(hass)
+    with patch("custom_components.ezviz_instant_bell.ezviz.login", return_value=client), patch(
+        "custom_components.ezviz_instant_bell.ezviz.list_devices",
+        return_value={SERIAL: {"name": "HP7", "category": "DBScreen"}},
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    assert entry.runtime_data.is_intercom(SERIAL)
+    for platform, suffix in (("button", "unlock_door"), ("button", "unlock_gate"), ("switch", "chime_sound"),
+                             ("switch", "label_light"), ("number", "chime_volume")):
+        legacy_entity(hass, platform, suffix)
 
 # --- live video -----------------------------------------------------------------
 

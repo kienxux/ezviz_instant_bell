@@ -52,7 +52,7 @@ A Home Assistant integration for the **EZVIZ HP7 and CP7 video intercoms**: the 
 | --- | --- |
 | **Made for** | EZVIZ video intercoms of the **HP7 and CP7 family**: a door station with an indoor monitor |
 | **Checked on real hardware** | CS-CPD5 door station with CS-CP5 monitor (EU account) |
-| **Other EZVIZ devices** | Cameras and doorbells of the same account can be chosen too. They get what every EZVIZ device reports: events, pictures, SD-card recordings and the cloud live video. The unlock buttons and the chime and name-tag light controls are only made for an HP7 / CP7 door station (EZVIZ category `BDoorBell`). **Not tested on real hardware**: please report what works |
+| **Other EZVIZ devices** | Cameras and doorbells of the same account can be chosen too. They get what every EZVIZ device reports: events, pictures, SD-card recordings and the cloud live video. The unlock buttons and the chime and name-tag light controls are only made for an HP7 / CP7 door station (EZVIZ category `BDoorBell`, or `DBScreen` where the account lists the HP7 only as its monitor). **Not tested on real hardware**: please report what works |
 | **Not for** | EZVIZ smart locks, and cameras you mainly want to control (pan and tilt, sirens, lights): Home Assistant's own EZVIZ integration covers those |
 
 The reading of the device's data is tested against an anonymised copy of a real device's answers. Door and gate buttons, chime sliders and switches use the documented EZVIZ calls; the live video is ported from open-source work (see [Credits](#credits-and-licence)). If something does not work on your model, please [open an issue](https://github.com/kienxux/ezviz_instant_bell/issues/new/choose) and attach the diagnostics download (see [Troubleshooting](#troubleshooting)).
@@ -69,7 +69,7 @@ If the search finds nothing: HACS refreshes its store list every few hours, and 
 ### Set up
 
 1. **Settings > Devices & services > Add integration > EZVIZ HP7 / CP7 Video Intercom**.
-2. Log in with your EZVIZ account (and the verification code if EZVIZ sends one), then choose the door station. For an HP7 or CP7 it is the entry marked `BDoorBell`. The indoor monitor is found automatically.
+2. Log in with your EZVIZ account (and the verification code if EZVIZ sends one), then choose the door station. For an HP7 or CP7 it is the entry marked `BDoorBell`; if the account has none, the one marked `DBScreen`. The indoor monitor is found automatically.
 
 Logging in registers one new terminal named `Hassio` in your EZVIZ account. EZVIZ allows 10 terminals per account; the integration keeps a stable ID so that restarts and Docker do not fill the slots, and warns you before the limit is reached.
 

@@ -63,6 +63,7 @@ from .const import (
     DEFAULT_REGION,
     DEFAULT_RELAY_BIND,
     DOMAIN,
+    DOOR_STATION_CATEGORY,
     DOORBELL_CATEGORIES,
     MAX_POLL_INTERVAL,
     MIN_POLL_INTERVAL,
@@ -217,9 +218,12 @@ class InstantBellConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             for serial, info in self._devices.items()
         ]
-        default = [s for s in self._preselect if s in self._devices] or [
-            s for s, i in self._devices.items() if i["category"] in DOORBELL_CATEGORIES
-        ]
+        # The door station; the indoor monitor only where the account lists no door station (#27).
+        default = (
+            [s for s in self._preselect if s in self._devices]
+            or [s for s, i in self._devices.items() if i["category"] == DOOR_STATION_CATEGORY]
+            or [s for s, i in self._devices.items() if i["category"] in DOORBELL_CATEGORIES]
+        )
         return self.async_show_form(
             step_id="devices",
             data_schema=vol.Schema(

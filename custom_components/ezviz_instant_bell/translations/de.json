@@ -19,7 +19,7 @@
       },
       "devices": {
         "title": "Türklingel auswählen",
-        "description": "Wähle die Türstation. Bei einem HP7 oder CP7 ist das der mit BDoorBell markierte Eintrag. Der Innenmonitor wird automatisch gefunden. Andere EZVIZ-Kameras und -Türklingeln des Kontos lassen sich ebenfalls wählen: Sie bekommen Ereignisse, Bilder, Aufnahmen und Live-Video, aber keine Tasten zum Öffnen und keine Gong-Einstellungen (nicht auf echter Hardware getestet).",
+        "description": "Wähle die Türstation. Bei einem HP7 oder CP7 ist das der mit BDoorBell markierte Eintrag; gibt es keinen, der mit DBScreen markierte. Der Innenmonitor wird automatisch gefunden. Andere EZVIZ-Kameras und -Türklingeln des Kontos lassen sich ebenfalls wählen: Sie bekommen Ereignisse, Bilder, Aufnahmen und Live-Video, aber keine Tasten zum Öffnen und keine Gong-Einstellungen (nicht auf echter Hardware getestet).",
         "data": {
           "devices": "Türklingeln"
         }

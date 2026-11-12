@@ -2,6 +2,11 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 1.1.4
+
+- Fixed: an HP7 that the EZVIZ account lists only once, as its indoor monitor (category `DBScreen`, no `BDoorBell` entry), got no unlock buttons, chime controls or name-tag light since 0.11.0; they were removed as if it were a camera (#27). `DBScreen` now counts as an HP7 / CP7 too. The setup form ticks the `BDoorBell` entry, or the `DBScreen` one when the account has no `BDoorBell`. On such an account, leave **Indoor monitor serials** empty: the monitor is the device itself.
+- Fixed: downloading the diagnostics read the pyezvizapi version from disk on Home Assistant's event loop, which logged "Detected blocking call".
+
 ## 1.1.3
 
 - Fixed: with the source `local`, a viewer that joined a running live video got no picture on an HP7 since 1.1.1. Frigate, the camera card and the dashboard showed nothing, or kept the last picture from before the update. 1.1.1 waited for a keyframe whose own video packet has a time stamp and dropped everything else; a door station that puts each part of a frame in a packet of its own, with a time stamp only on the first, never sends one. Such a viewer now starts on the pack header in front of the keyframe. Parameter sets that come in packets of their own are kept too, so a keyframe without them can still be shown.

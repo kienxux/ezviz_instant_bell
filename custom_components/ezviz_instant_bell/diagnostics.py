@@ -53,7 +53,11 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: Instant
             "status": _status(data.get(serial, {})),
         }
     return {
-        "versions": {"pyezvizapi": _version("pyezvizapi"), "home_assistant": HA_VERSION},
+        # Reading the package metadata touches the disk: not on the event loop.
+        "versions": {
+            "pyezvizapi": await hass.async_add_executor_job(_version, "pyezvizapi"),
+            "home_assistant": HA_VERSION,
+        },
         "entry": {
             "data": async_redact_data(dict(entry.data), TO_REDACT),
             "options": async_redact_data(dict(entry.options), TO_REDACT),

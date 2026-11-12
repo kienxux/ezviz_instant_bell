@@ -19,7 +19,7 @@
       },
       "devices": {
         "title": "Choose your doorbell",
-        "description": "Select the door station. For an HP7 or CP7 this is the entry marked BDoorBell. The indoor monitor is found automatically. Other EZVIZ cameras and doorbells of the account can be chosen too: they get events, pictures, recordings and live video, but no unlock buttons or chime controls (not tested on real hardware).",
+        "description": "Select the door station. For an HP7 or CP7 this is the entry marked BDoorBell; if there is none, the one marked DBScreen. The indoor monitor is found automatically. Other EZVIZ cameras and doorbells of the account can be chosen too: they get events, pictures, recordings and live video, but no unlock buttons or chime controls (not tested on real hardware).",
         "data": {
           "devices": "Doorbells"
         }
