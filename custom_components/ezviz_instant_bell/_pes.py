@@ -278,3 +278,43 @@ def cut_to_packet_start(buf: bytearray, stalled: bool = False) -> bytes:
     head = bytes(buf[:start])
     del buf[:start]
     return head
+
+
+def ps_from_pack(buf: bytes, keyframe_at: int, params: bytes = b"") -> bytes | None:
+    """MPEG-PS from the pack header in front of a keyframe, or None.
+
+    For a keyframe ps_from_keyframe cannot cut out: the doorbell can give
+    every NAL a video packet of its own and a time stamp only to the first
+    packet of a frame, so the keyframe's own packet has none. The stream then
+    starts on the pack header, with the program stream map and the frame's
+    first video packet, which has to carry the time stamp. ``params`` go at
+    the start of that packet. None when there is no such pack header or
+    packet in ``buf``.
+    """
+    start = buf.rfind(PACK_START, 0, keyframe_at)
+    if start < 0:
+        return None
+    i = start
+    while True:
+        if i + 9 > len(buf) or buf[i:i + 3] != b"\x00\x00\x01":
+            return None
+        stream_id = buf[i + 3]
+        if stream_id == 0xBA:
+            if i + 14 > len(buf):
+                return None
+            i += 14 + (buf[i + 13] & 0x07)
+        elif 0xE0 <= stream_id <= 0xEF:
+            break
+        else:
+            i += 6 + ((buf[i + 4] << 8) | buf[i + 5])
+    if i > keyframe_at or not buf[i + 7] & 0x80:
+        return None
+    if not params:
+        return buf[start:]
+    payload_start = i + 9 + buf[i + 8]
+    length = (buf[i + 4] << 8) | buf[i + 5]
+    if length:
+        length += len(params)
+        if length > 0xFFFF:
+            return None
+    return buf[start:i + 4] + bytes((length >> 8, length & 0xFF)) + buf[i + 6:payload_start] + params + buf[payload_start:]

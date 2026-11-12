@@ -21,7 +21,7 @@ from custom_components.ezviz_instant_bell.live_relay import (
     StreamRelay,
     _is_offline_error,
 )
-from custom_components.ezviz_instant_bell._pes import ps_from_keyframe
+from custom_components.ezviz_instant_bell._pes import ps_from_keyframe, ps_from_pack
 from custom_components.ezviz_instant_bell.live_nal import _first_keyframe
 from custom_components.ezviz_instant_bell.live_sources import Cpd7LanSource, _PreStartedSource
 
@@ -415,6 +415,63 @@ def test_a_local_viewer_resumes_on_the_keyframe_packet() -> None:
     r._fanout(r._sub_raw_qs, PACK + pes_pts(0xE0, P), video=True)
     assert [q.get_nowait() for _ in range(2)] == [PACK + pes_pts(0xE0, SPS_PPS + IDR), PACK + pes_pts(0xE0, P)]
 
+
+# HP7: every NAL in a video packet of its own, only the first packet of a frame
+# with a time stamp, and a program stream map in front of a keyframe.
+PSM = b"\x00\x00\x01\xbc\x00\x04\xe0\xff\x00\x00"
+SPS = SC4 + b"\x67\x42\x00\x1f"
+PPS = SC4 + b"\x68\xce\x3c\x80"
+
+
+def hp7_keyframe(params: bool = True) -> bytes:
+    nals = [SPS, PPS, IDR] if params else [b"\x00\x00\x00\x01\x06\x05", IDR]
+    return PACK + PSM + pes_pts(0xE0, nals[0]) + b"".join(pes(0xE0, n) for n in nals[1:])
+
+
+def test_a_keyframe_packet_without_a_time_stamp_starts_on_the_pack_header() -> None:
+    chunk = PACK + pes_pts(0xE0, P) + hp7_keyframe(params=False)
+    at = _first_keyframe(chunk)
+    assert ps_from_keyframe(chunk, at) is None
+    start = chunk.rindex(PACK)
+    assert ps_from_pack(chunk, at) == chunk[start:]
+    # Parameter sets the keyframe lacks go into the frame's first video packet.
+    assert ps_from_pack(chunk, at, SPS_PPS) == PACK + PSM + pes_pts(0xE0, SPS_PPS + b"\x00\x00\x00\x01\x06\x05") + pes(0xE0, IDR)
+
+
+def test_parameter_sets_in_packets_of_their_own_are_kept() -> None:
+    r = relay()
+    r._active_lan = True
+    r._gop_update(hp7_keyframe())
+    assert r._param_sets == SPS + PPS
+
+
+def test_a_late_local_viewer_gets_a_gop_whose_keyframe_packet_has_no_time_stamp() -> None:
+    # 1.1.1 and 1.1.2 gave such a viewer nothing at all.
+    r = relay()
+    r._active_lan = True
+    r._gop_update(hp7_keyframe())
+    r._gop_update(PACK + pes_pts(0xE0, P))
+    r._gop_update(hp7_keyframe(params=False))
+    r._gop_update(PACK + pes_pts(0xE0, P))
+    gop = b"".join(r._gop_snapshot())
+    assert gop.startswith(PACK + PSM + pes_pts(0xE0, SPS + PPS + b"\x00\x00\x00\x01\x06\x05"))
+    assert gop.endswith(pes(0xE0, IDR) + PACK + pes_pts(0xE0, P))
+
+
+def test_a_local_viewer_resumes_on_a_pack_header_in_the_chunk_before() -> None:
+    r = relay()
+    r._active_lan = True
+    q = queue.Queue()
+    r._sub_raw_qs.append(q)
+    r._q_resync.add(id(q))
+    frame = hp7_keyframe()
+    for chunk in (PACK + pes_pts(0xE0, P), frame[:20], frame[20:]):
+        r._gop_update(chunk)
+        r._fanout(r._sub_raw_qs, chunk, video=True)
+    # The keyframe's packet has a time stamp: cut as in 1.1.1, from the pack header of the chunk before.
+    entry = PACK + frame[len(PACK) + len(PSM):]
+    assert q.get_nowait() == entry
+    assert b"".join(r._gop_snapshot()) == entry
 
 # --- viewers ----------------------------------------------------------------------------
 

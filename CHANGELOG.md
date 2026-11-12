@@ -2,6 +2,11 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 1.1.3
+
+- Fixed: with the source `local`, a viewer that joined a running live video got no picture on an HP7 since 1.1.1. Frigate, the camera card and the dashboard showed nothing, or kept the last picture from before the update. 1.1.1 waited for a keyframe whose own video packet has a time stamp and dropped everything else; a door station that puts each part of a frame in a packet of its own, with a time stamp only on the first, never sends one. Such a viewer now starts on the pack header in front of the keyframe. Parameter sets that come in packets of their own are kept too, so a keyframe without them can still be shown.
+- Fixed: with the door station's own serial entered as indoor monitor, setup stopped with "A device can not be its own via device" (#27). The monitor's controls now stay on the door station's device.
+
 ## 1.1.2
 
 - Fixed: with Image/Video Encryption on, opening the door made EZVIZ e-mail a security code each time. The picture of the event is encrypted, and pyezvizapi asked the EZVIZ cloud for the camera key for every picture, up to four times per event; each request mails a code. Event pictures are now decrypted with the key stored in the options, without asking the cloud.

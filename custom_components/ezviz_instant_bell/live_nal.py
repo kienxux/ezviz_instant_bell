@@ -97,22 +97,29 @@ def _has_param_sets(payload: bytes) -> bool:
     return any(m in payload for m in _PARAM_SET_MARKERS)
 
 
-def _extract_param_sets(payload: bytes) -> bytes:
-    """Return the parameter-set NALs in ``payload``, framing included.
+# Order a decoder wants the parameter sets in: HEVC VPS, SPS, PPS; H.264 SPS, PPS.
+PARAM_SET_ORDER = (0x40, 0x42, 0x44, 0x67, 0x68)
 
-    Slices from the first parameter set up to the start of the first NAL
-    that isn't one, so the result is a self-contained Annex B prefix a
-    decoder can be initialised with.
+
+def _param_set_nals(payload: bytes) -> dict[int, bytes]:
+    """The parameter-set NALs in ``payload`` by header byte, framing included.
+
+    Each one runs up to the next start code, so they are found also where
+    they do not follow each other: in the local MPEG-PS the doorbell can put
+    every NAL in a video packet of its own, with a packet header between the
+    VPS, the SPS and the PPS.
     """
-    spans = [(off, payload[hdr]) for off, hdr in _iter_nal_spans(payload)]
-    start = None
-    for off, hdr in spans:
-        is_ps = hdr in (0x40, 0x42, 0x44, 0x67, 0x68)
-        if is_ps and start is None:
-            start = off
-        elif not is_ps and start is not None:
-            return payload[start:off]
-    return payload[start:] if start is not None else b""
+    found: dict[int, bytes] = {}
+    spans = list(_iter_nal_spans(payload))
+    for k, (off, hdr) in enumerate(spans):
+        head = payload[hdr]
+        if head not in PARAM_SET_ORDER:
+            continue
+        if head < 0x60 and payload[hdr + 1:hdr + 2] != b"\x01":
+            continue
+        end = spans[k + 1][0] if k + 1 < len(spans) else len(payload)
+        found[head] = payload[off:end]
+    return found
 
 
 def _sniff_video_codec(payload: bytes) -> Optional[str]:

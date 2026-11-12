@@ -1,10 +1,10 @@
 """Finding keyframes and parameter sets in the live video, and telling H.264 from HEVC."""
 
 from live_nal import (
-    _extract_param_sets,
     _has_keyframe,
     _has_param_sets,
     _iter_nal_types,
+    _param_set_nals,
     _sniff_video_codec,
 )
 
@@ -67,17 +67,26 @@ def test_an_idr_alone_carries_no_parameter_sets() -> None:
     assert _has_param_sets(HEVC_IDR + HEVC_PPS)
 
 
+def params(payload: bytes) -> bytes:
+    return b"".join(_param_set_nals(payload).values())
+
+
 def test_parameter_sets_are_cut_out_with_their_framing() -> None:
-    assert _extract_param_sets(HEVC_VPS + HEVC_SPS + HEVC_PPS + HEVC_IDR + HEVC_TRAIL) == (
-        HEVC_VPS + HEVC_SPS + HEVC_PPS
-    )
-    assert _extract_param_sets(H264_P + H264_SPS + H264_PPS + H264_IDR) == H264_SPS + H264_PPS
+    assert params(HEVC_VPS + HEVC_SPS + HEVC_PPS + HEVC_IDR + HEVC_TRAIL) == HEVC_VPS + HEVC_SPS + HEVC_PPS
+    assert params(H264_P + H264_SPS + H264_PPS + H264_IDR) == H264_SPS + H264_PPS
 
 
 def test_parameter_sets_at_the_end_of_a_chunk_are_kept_whole() -> None:
-    assert _extract_param_sets(H264_P + H264_SPS + H264_PPS) == H264_SPS + H264_PPS
+    assert params(H264_P + H264_SPS + H264_PPS) == H264_SPS + H264_PPS
+
+
+def test_parameter_sets_in_packets_of_their_own_are_found() -> None:
+    # The local MPEG-PS can give each NAL a video packet of its own.
+    header = b"\x00\x00\x01\xe0\x00\x20\x80\x00\x00"
+    found = _param_set_nals(header + HEVC_VPS + header + HEVC_SPS + header + HEVC_PPS + header + HEVC_IDR)
+    assert found == {0x40: HEVC_VPS, 0x42: HEVC_SPS, 0x44: HEVC_PPS}
 
 
 def test_no_parameter_sets_gives_nothing() -> None:
-    assert _extract_param_sets(H264_IDR + H264_P) == b""
-    assert _extract_param_sets(b"") == b""
+    assert _param_set_nals(H264_IDR + H264_P) == {}
+    assert _param_set_nals(b"") == {}

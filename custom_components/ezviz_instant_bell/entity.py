@@ -83,7 +83,10 @@ def link_monitors(hass: HomeAssistant, hub: InstantBellHub) -> None:
         parent = by_serial.get(door)
         for monitor in monitors:
             child = by_serial.get(monitor)
-            if parent is not None and child is not None and child.via_device_id != parent.id:
+            # A monitor given with the serial of the door station itself is the same device (#27).
+            if parent is None or child is None or child.id == parent.id:
+                continue
+            if child.via_device_id != parent.id:
                 registry.async_update_device(child.id, via_device_id=parent.id)
 
 

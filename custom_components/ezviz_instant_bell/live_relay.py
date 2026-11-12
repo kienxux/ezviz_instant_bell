@@ -56,13 +56,20 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any, List, Optional
 
-from ._pes import PesParser, cut_to_packet_start, keep_clear_video_pes, ps_from_keyframe
+from ._pes import PACK_START, PesParser, cut_to_packet_start, keep_clear_video_pes, ps_from_keyframe, ps_from_pack
 from pyezvizapi.cloud_stream import open_cloud_stream
 
 from .const import DOMAIN
 from .live_aac import SETTLE_FRAMES, AacDecryptor
 from .live_io import _free_local_port, _mk_drain, _put_sentinel, _sender_thread, _start_local_listener
-from .live_nal import _extract_param_sets, _first_keyframe, _has_keyframe, _has_param_sets, _sniff_video_codec
+from .live_nal import (
+    PARAM_SET_ORDER,
+    _first_keyframe,
+    _has_keyframe,
+    _has_param_sets,
+    _param_set_nals,
+    _sniff_video_codec,
+)
 from .live_sources import Cpd7LanSource, _PreStartedSource
 
 if TYPE_CHECKING:
@@ -97,6 +104,10 @@ OUTPUT_STALL_TIMEOUT = 30.0
 # GOP exceeds this the cache is dropped for that GOP (new viewers fall back
 # to waiting for the next keyframe — the pre-cache behaviour).
 GOP_CACHE_MAX = 8 * 1024 * 1024
+# The local MPEG-PS since its last pack header, kept so that a keyframe in a
+# later chunk can be started on that header (HP7). A frame is far smaller;
+# past this the pack header is given up.
+LAN_TAIL_MAX = 1024 * 1024
 # The decryption buffer holds a run of video packets until the next audio
 # packet, normally well under a second. Past this size without anything to
 # decrypt it is stuck on a packet it cannot parse and skips to the next one.
@@ -321,6 +332,13 @@ class StreamRelay:
         # parameter sets, so a GOP that starts on an IDR still needs them
         # prepended before a decoder can use it (#51).
         self._param_sets: bytes = b""
+        # The same, one NAL per header byte: the local MPEG-PS can bring the
+        # VPS, SPS and PPS in separate packets or chunks.
+        self._param_nals: dict[int, bytes] = {}
+        # Local MPEG-PS from its last pack header on, and that tail as it was
+        # in front of the current keyframe chunk (see _gop_update).
+        self._lan_tail = bytearray()
+        self._lan_before = b""
         self._gop_lock = threading.Lock()
         # Counts restarts of the GOP cache, so a still image is encoded once
         # per keyframe and handed out until the next one (#22).
@@ -446,8 +464,9 @@ class StreamRelay:
                 # the picture on the last good frame while audio, carried on
                 # its own queue, keeps playing normally).
                 if kf and qs is self._sub_raw_qs:
-                    # Local MPEG-PS: start on the keyframe's own packet.
-                    put = self._lan_entry(item)
+                    # Local MPEG-PS: start on the keyframe's own packet, or
+                    # on the pack header in front of it.
+                    put = self._lan_entry(self._lan_before + item)
                 if not kf or put is None:
                     self._drops += 1
                     continue
@@ -571,13 +590,29 @@ class StreamRelay:
         """
         with self._gop_lock:
             if _has_param_sets(chunk):
-                extracted = _extract_param_sets(chunk)
-                if extracted:
-                    self._param_sets = extracted
-            if _has_keyframe(chunk):
+                self._param_nals.update(_param_set_nals(chunk))
+                self._param_sets = b"".join(
+                    self._param_nals[h] for h in PARAM_SET_ORDER if h in self._param_nals
+                )
+            keyframe = _has_keyframe(chunk)
+            before = b""
+            if self._active_lan:
+                # The pack header in front of a keyframe can be in an
+                # earlier chunk; the GOP and a resyncing viewer start there.
+                if keyframe and chunk.rfind(PACK_START, 0, _first_keyframe(chunk)) < 0:
+                    before = bytes(self._lan_tail)
+                self._lan_before = before
+                at = chunk.rfind(PACK_START)
+                if at >= 0:
+                    self._lan_tail = bytearray(chunk[at:])
+                elif len(self._lan_tail) + len(chunk) <= LAN_TAIL_MAX:
+                    self._lan_tail.extend(chunk)
+                else:
+                    self._lan_tail = bytearray()
+            if keyframe:
                 self._kf_markers_seen += 1
                 self._gop_serial += 1
-                self._gop_buf = bytearray(chunk)
+                self._gop_buf = bytearray(before + chunk)
             elif self._gop_buf:
                 if len(self._gop_buf) + len(chunk) > GOP_CACHE_MAX:
                     # Oversized GOP: drop and wait for the next keyframe —
@@ -621,7 +656,9 @@ class StreamRelay:
 
         Where a viewer that joins a running local session starts: the cached
         GOP, or after a gap the first chunk with a keyframe (see
-        ps_from_keyframe).
+        ps_from_keyframe). When the keyframe's packet has no time stamp, on
+        the pack header in front of it (ps_from_pack); before, such a viewer
+        never got a picture (HP7, 1.1.1 and 1.1.2).
         """
         at = _first_keyframe(chunk)
         if at < 0:
@@ -632,7 +669,7 @@ class StreamRelay:
             params = self._param_sets if params is None else params
             if not params:
                 return None  # an IDR with no parameter sets anywhere is not decodable
-        return ps_from_keyframe(chunk, at, params)
+        return ps_from_keyframe(chunk, at, params) or ps_from_pack(chunk, at, params)
 
     def _es_config(self) -> str:
         """The video codec setting the cloud path works with: "h264", "hevc" or "hevc_copy"."""
@@ -1241,6 +1278,9 @@ class StreamRelay:
         with self._gop_lock:
             self._gop_buf = bytearray()
             self._param_sets = b""
+            self._param_nals = {}
+            self._lan_tail = bytearray()
+            self._lan_before = b""
         self._es_dump_buf = bytearray()
         self._es_dump_done = False
         self._ps_dump_buf = bytearray()

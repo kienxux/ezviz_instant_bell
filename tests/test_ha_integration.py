@@ -661,6 +661,16 @@ async def test_unload(hass: HomeAssistant, client: FakeClient) -> None:
 async def test_monitor_can_be_given_by_hand(hass: HomeAssistant, client: FakeClient) -> None:
     await setup(hass, client, {"monitor_serials": "BE0000001, BE0000003"})
     legacy_entity(hass, "number", "chime_volume_monitor", "BE0000003")
+
+
+async def test_monitor_given_with_the_door_serial_does_not_stop_the_setup(
+    hass: HomeAssistant, client: FakeClient
+) -> None:
+    # Home Assistant refuses a device as its own via device (#27).
+    entry = await setup(hass, client, {"monitor_serials": SERIAL})
+    assert entry.state is ConfigEntryState.LOADED
+    device = device_of(dr.async_get(hass), {(DOMAIN, SERIAL)})
+    assert device.via_device_id is None
 # --- config flow -------------------------------------------------------------
 
 
