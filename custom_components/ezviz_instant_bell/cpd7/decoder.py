@@ -84,8 +84,14 @@ class StreamDecoder:
                 ffmpeg_stdin.write(mpeg_ps)
     """
 
-    def __init__(self, ecdh_priv) -> None:
+    def __init__(self, ecdh_priv, sync_on_pack: bool = False) -> None:
         self._priv = ecdh_priv
+        # A scrambled stream (Image/Video Encryption) hides its VPS/SPS, so
+        # the keyframe gate below would only fire on a chance match in the
+        # ciphertext — 8 s in one real session, 110 s in the next. The relay
+        # aligns the viewers to a keyframe on the decrypted bytes anyway, so
+        # such a stream starts at the first pack header instead.
+        self._sync_on_pack = sync_on_pack
         self._buf = bytearray()
         self._chacha20_key: bytes | None = None
         self._first_chunk_consumed = False
@@ -229,6 +235,17 @@ class StreamDecoder:
 
         self._pending.extend(plain)
         buf = bytes(self._pending)
+        if self._sync_on_pack:
+            pack_off = buf.find(MPEG_PS_PACK)
+            if pack_off >= 0:
+                self._mpeg_started = True
+                self._out.extend(buf[pack_off:])
+                self._pending.clear()
+                _LOGGER.debug(
+                    "CPD7 decoder: scrambled stream, synced on the pack header at +%d",
+                    pack_off,
+                )
+            return
         kf_off = self._find_keyframe(buf)
         if kf_off >= 0:
             # Found keyframe (HEVC VPS or H.264 SPS).  Prefer starting

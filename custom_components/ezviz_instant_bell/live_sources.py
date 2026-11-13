@@ -30,12 +30,15 @@ class Cpd7LanSource:
 
     def __init__(
         self, api: "StreamSupport", serial: str, channel: int = 1,
-        stream_quality: str = "main",
+        stream_quality: str = "main", scrambled: bool = False,
     ) -> None:
         self._api = api
         self._serial = serial
         self._channel = channel
         self._stream_quality = stream_quality
+        # True when the video is known to be scrambled (a stream key is in
+        # use): the decoder then cannot see a keyframe and syncs on a pack.
+        self._scrambled = scrambled
         self._client: Any = None
         self._decoder: Any = None
         self._closed = False
@@ -78,7 +81,7 @@ class Cpd7LanSource:
             key, local_ip = fresh
             client = self._connect(key, local_ip)
         self._client = client
-        self._decoder = StreamDecoder(client.ecdh_priv)
+        self._decoder = StreamDecoder(client.ecdh_priv, sync_on_pack=self._scrambled)
         self._started_at = time.monotonic()
         _LOGGER.info(
             "StreamRelay: LAN source up (serial=%s ip=%s stream=%s)",

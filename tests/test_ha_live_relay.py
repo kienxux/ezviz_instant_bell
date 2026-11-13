@@ -75,6 +75,13 @@ def relay(**kwargs) -> StreamRelay:
     return StreamRelay(kwargs.pop("api", FakeApi()), SERIAL, **kwargs)
 
 
+@pytest.fixture(autouse=True)
+def _decide_the_header_size_at_once():
+    """The synthetic streams here are far smaller than the 24 KB a real one must show first."""
+    with patch.object(live_relay, "DECRYPT_DETECT_MIN_BYTES", 0):
+        yield
+
+
 async def wait_for(condition, seconds: float = 5.0) -> None:
     end = time.monotonic() + seconds
     while not condition():
@@ -998,3 +1005,61 @@ def test_the_mjpeg_probe_follows_the_cached_gop() -> None:
     assert r.viewer_probe == live_relay.LAN_PROBE_PRELOADED
     cmd = _build_ffmpeg_cmd("ffmpeg", "tcp://x", fps=8, width=1, height=1, quality=5, probe_us=r.viewer_probe)
     assert cmd[cmd.index("-analyzeduration") + 1] == live_relay.LAN_PROBE_PRELOADED
+
+
+# --- what a real encrypted HP7 session taught (2026-11-13) ---------------------------
+
+
+def test_the_header_size_is_decided_only_after_enough_of_the_stream() -> None:
+    """On the first kilobyte the detection was wrong in two real sessions; it holds."""
+    plain, encrypted = _hevc_ps(b"ABCDEF", 0)
+    r = relay()
+    r._decrypt_key = "ABCDEF"
+    r._decrypt_min_bytes = len(encrypted) + 1
+    assert r._maybe_decrypt(encrypted) == b""
+    assert r._decrypt_header_size is None
+    assert r._decrypt_buf
+    out = r._maybe_decrypt(encrypted + pes(0xC0, b"\xff\xf1"))
+    assert r._decrypt_header_size == 0
+    assert out.startswith(plain[:6] + b"\xa0" + plain[7:])
+    assert out.count(plain[7:]) == 2  # both packets, decrypted with the one decision
+
+
+def test_a_scrambled_stream_syncs_the_decoder_on_a_pack_header() -> None:
+    """The SPS of an encrypted stream is unreadable: waiting for it took 8 to 110 s."""
+    d = cpd7.StreamDecoder(None, sync_on_pack=True)
+    d._absorb_plain(b"\x1a\xd7\xf8\xc6" + PACK + b"video")
+    assert d.take() == PACK + b"video"
+    d._absorb_plain(b"more")
+    assert d.take() == b"more"
+    plain = cpd7.StreamDecoder(None)
+    plain._absorb_plain(b"\x1a\xd7\xf8\xc6" + PACK + b"video")
+    assert plain.take() == b""  # a clear stream still waits for its keyframe
+
+
+def test_a_local_source_with_a_stream_key_asks_for_the_pack_sync() -> None:
+    class Client:
+        ecdh_priv = object()
+
+        def __init__(self, *a, **k) -> None:
+            pass
+
+        def start(self) -> None:
+            pass
+
+    seen = {}
+
+    def decoder(priv, sync_on_pack=False):
+        seen["sync"] = sync_on_pack
+        return object()
+
+    api = FakeApi()
+    api.fetch_lan_aes_key = lambda serial, force=False: b"0123456789abcdef"
+    api.get_local_ip = lambda serial, force=False: "192.168.1.2"
+    api.get_related_device = lambda serial: serial
+    with patch.object(cpd7, "Cpd7LanClient", Client), patch.object(cpd7, "StreamDecoder", decoder):
+        Cpd7LanSource(api, SERIAL, scrambled=True).start()
+    assert seen["sync"] is True
+    with patch.object(cpd7, "Cpd7LanClient", Client), patch.object(cpd7, "StreamDecoder", decoder):
+        Cpd7LanSource(api, SERIAL).start()
+    assert seen["sync"] is False

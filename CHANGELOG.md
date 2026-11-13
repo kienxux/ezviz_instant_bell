@@ -2,6 +2,12 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 1.2.1
+
+- Encrypted local live video no longer turns to garbage by chance. The size of the clear part of each video packet was decided on the first kilobyte of the session, where the answer is a coin toss (wrong twice in two real sessions on an HP7); a wrong answer made every frame of the session unreadable, and a session reopened in the background could flip from good to bad at any moment. The decision now waits for 24 KB (about 2 seconds), where it was right in 300 of 300 checks.
+- Encrypted local live video starts right away. The decoder waited for a keyframe marker that an encrypted stream does not show, so it started on a chance match: after 8 seconds in one real session, after 110 in the next. With a stream key in use it now starts at the first packet.
+- When the door station refuses a local session because another one is still open (it allows one at a time), the log says so instead of showing the raw answer. Measured on a real HP7: the station answered this to every attempt while another Home Assistant instance held a session.
+
 ## 1.2.0
 
 - The local live video starts in about 2 to 3 seconds instead of 11 to 12, also when nobody watched before. ffmpeg waited out its whole 10-second probe, twice in the motion-JPEG view. Every local viewer now starts on a keyframe with its parameter sets, so a 1-second probe is enough. Measured with a synthetic HP7-style stream; not yet confirmed on a door station.

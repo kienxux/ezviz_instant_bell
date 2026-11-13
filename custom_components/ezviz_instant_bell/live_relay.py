@@ -112,6 +112,12 @@ LAN_TAIL_MAX = 1024 * 1024
 # packet, normally well under a second. Past this size without anything to
 # decrypt it is stuck on a packet it cannot parse and skips to the next one.
 DECRYPT_STALL_BYTES = 2 * 1024 * 1024
+# How much of a scrambled stream is collected before the clear-NAL-header
+# size is decided. On the first chunk alone (about 1 KB) the detection
+# answered 1 for a stream that needs 0 in two real sessions, and a wrong
+# answer makes the whole session garbage; from 16 KB on it was right in
+# 300 of 300 decisions (HP7, H.264, ~14 KB/s — about 2 seconds).
+DECRYPT_DETECT_MIN_BYTES = 24 * 1024
 # Still images (#22): how long a request waits for the first keyframe (Home
 # Assistant gives it 10 s), how long the encoder may take, and how much of
 # the GOP it gets (it only needs the keyframe at the start).
@@ -323,6 +329,7 @@ class StreamRelay:
         # 1 for H.264, 0 when the header is encrypted too (HP7 firmware 5.4,
         # #22). Found once from the first chunk that shows it; 2 until then.
         self._decrypt_header_size: Optional[int] = None
+        self._decrypt_min_bytes = DECRYPT_DETECT_MIN_BYTES
         # The sound is encrypted too on that firmware (#22); made per session
         # once the key is known.
         self._aac: Optional[AacDecryptor] = None
@@ -780,6 +787,12 @@ class StreamRelay:
 
             self._decrypt_buf.extend(body)
             head = cut_to_packet_start(self._decrypt_buf)
+            if (
+                self._decrypt_header_size is None
+                and len(self._decrypt_buf) < self._decrypt_min_bytes
+            ):
+                # Not enough evidence yet for the header-size decision.
+                return head
             n = mpeg_ps_decryptable_prefix_length(bytes(self._decrypt_buf))
             if n <= 0 and len(self._decrypt_buf) > DECRYPT_STALL_BYTES:
                 head += cut_to_packet_start(self._decrypt_buf, stalled=True)
@@ -1099,6 +1112,7 @@ class StreamRelay:
             return Cpd7LanSource(
                 self._api, self._serial, channel=self._channel,
                 stream_quality=self._stream_quality,
+                scrambled=bool(self._decrypt_key or self._configured_key),
             )
 
         if self._stream_source == "cloud":

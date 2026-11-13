@@ -56,3 +56,11 @@ def test_local_hosts_are_accepted(host):
 def test_other_hosts_are_refused(host):
     with pytest.raises(ConnectionError):
         lan.check_lan_host(host)
+
+
+def test_a_session_held_elsewhere_is_named_in_the_error():
+    """A real HP7 answered 1052683 to every INVITE while Home Assistant held the session."""
+    msg = lan._invite_refused(b"<Response>\r\n<Result>1052683</Result>\r\n</Response>")
+    assert "only one at a time" in msg and "1052683" in msg
+    msg = lan._invite_refused(b"<Response><Result>7</Result></Response>")
+    assert msg.startswith("no <Session> in InviteStream response: <Response>")

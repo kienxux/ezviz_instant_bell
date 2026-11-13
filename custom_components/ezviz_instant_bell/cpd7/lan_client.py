@@ -51,6 +51,28 @@ PLACEHOLDER_OP_CODE = "ABCDEFG"
 INIT_SESSION_ID = 10011
 
 
+# Result codes of a refused InviteStream, as seen on a real HP7 (the key was
+# accepted — the answer came back encrypted — but no session was given).
+INVITE_RESULT_HINTS = {
+    "1052683": (
+        "the door station already has a LAN live session open and allows "
+        "only one at a time (another Home Assistant instance or tool?)"
+    ),
+}
+
+
+def _invite_refused(resp_plain: bytes) -> str:
+    """The error for an InviteStream answer without a session."""
+    result = re.search(rb"<Result>(\d+)</Result>", resp_plain)
+    code = result.group(1).decode() if result else ""
+    hint = INVITE_RESULT_HINTS.get(code)
+    if hint:
+        return f"{hint} (Result {code})"
+    return "no <Session> in InviteStream response: " + resp_plain[:200].decode(
+        errors="replace"
+    )
+
+
 def _encrypt(key: bytes, plaintext: bytes) -> bytes:
     return AES.new(key, AES.MODE_CBC, AES_IV).encrypt(pad(plaintext, AES.block_size))
 
@@ -309,10 +331,7 @@ class Cpd7LanClient:
 
         m = re.search(rb"<Session>(\d+)</Session>", resp_plain)
         if not m:
-            raise ConnectionError(
-                "no <Session> in InviteStream response: "
-                + resp_plain[:200].decode(errors="replace")
-            )
+            raise ConnectionError(_invite_refused(resp_plain))
         session = int(m.group(1))
 
         # PLAY (keep socket open for the encrypted stream that follows)
