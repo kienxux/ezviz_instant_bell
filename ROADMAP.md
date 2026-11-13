@@ -5,12 +5,12 @@ under *Later* has no date. Each item has an issue; add a 👍 there or open a ne
 
 ## Next
 
-- The keyboard backlight of the HP7 Pro, once its setting is found in the diagnostics (#25)
 - Check the motion/person mapping against real messages (diagnostics `recent_messages`)
 
 ## Done
 
-- A picture on demand: the action **Take a snapshot** saves a picture taken now from the live video (over the LAN, without the cloud), separate from the latest-event picture
+- 1.3.0: switch **Keyboard Backlight** for the keypad of the HP7 Pro (#25); picture on demand: the action **Take a snapshot** saves a picture taken now from the live video (over the LAN, without the cloud), separate from the latest-event picture
+- 1.2.x: the local live video starts in seconds and without asking the EZVIZ cloud; encrypted local video is readable from the start and shows at once
 - 1.1.0: the live video opens at a ring (and at motion or a person) and stays open for a set number of minutes; an option keeps the local live video open all the time, as Frigate does, so it shows at once
 - 1.0.0: first stable version: entity IDs, events, actions and options stay as they are, and a change that breaks them would need 2.0 (nothing was removed for it: the old event name `ezviz_hp7_unlock` and the buttons of 0.1.0 stay); options grouped in sections, with short labels and descriptions; a repair notice while the relay listens beyond this computer without a password; tests on the oldest supported Home Assistant (2025.9.0) and on a current one
 - 0.12.x: switch **Doorbell Indicator** (#22); the diagnostics list each setting (switch) of a door station with its state, to find settings the integration does not know yet (#25); the README reorganised, with Frigate and go2rtc examples checked with a real door station
@@ -29,7 +29,6 @@ under *Later* has no date. Each item has an issue; add a 👍 there or open a ne
 
 - Two-way audio. The library only knows talk as a capability flag and has no way to send audio, so this needs protocol research with a real door station (see issue #15).
 - A live video card of its own, with play, stop and an automatic stop.
-- A quicker first picture of the local live video (now about 10 to 15 seconds).
 - `pyezvizapi` 2.x, once Home Assistant's own EZVIZ integration moves to it (both have to use the same version).
 
 ## Not planned
