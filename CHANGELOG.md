@@ -2,6 +2,10 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## Unreleased
+
+- New action **Take a snapshot** (`ezviz_instant_bell.take_snapshot`): it saves a picture taken right now from the live video, over the LAN without the EZVIZ cloud, under **Media > My media**, and fires `ezviz_instant_bell_picture_saved` just like the event pictures, so the same automations can send it on. When the live video gives nothing, the latest event picture is saved instead. Give `serial` when the account has more than one door station.
+
 ## 1.2.1
 
 - Encrypted local live video no longer turns to garbage by chance. The size of the clear part of each video packet was decided on the first kilobyte of the session, where the answer is a coin toss (wrong twice in two real sessions on an HP7); a wrong answer made every frame of the session unreadable, and a session reopened in the background could flip from good to bad at any moment. The decision now waits for 24 KB (about 2 seconds), where it was right in 300 of 300 checks.

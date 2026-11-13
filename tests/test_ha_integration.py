@@ -642,6 +642,40 @@ async def test_unlock_services(hass: HomeAssistant, client: FakeClient) -> None:
         await hass.services.async_call(DOMAIN, "unlock_door", {"serial": "NOPE"}, blocking=True)
 
 
+async def test_take_snapshot_service(hass: HomeAssistant, client: FakeClient) -> None:
+    from custom_components.ezviz_instant_bell.const import EVENT_PICTURE_SAVED
+
+    entry = await setup(hass, client)
+    hub = entry.runtime_data
+
+    class _StubRelay:
+        async def still_image(self) -> bytes:
+            return b"\xff\xd8\xff\xe0JPEGDATA"
+
+    hub.live_relays[SERIAL] = _StubRelay()
+    events: list = []
+    hass.bus.async_listen(EVENT_PICTURE_SAVED, lambda ev: events.append(ev))
+
+    await hass.services.async_call(DOMAIN, "take_snapshot", {"serial": SERIAL}, blocking=True)
+    await hass.async_block_till_done()
+
+    assert len(events) == 1
+    data = events[0].data
+    assert data["serial"] == SERIAL
+    assert data["title"] == "Snapshot"
+    assert data["message_id"] is None
+    saved = Path(data["path"])
+    assert saved.exists()
+    assert saved.read_bytes() == b"\xff\xd8\xff\xe0JPEGDATA"
+    saved.unlink()
+
+    # No relay and no event picture: a clear error, no file.
+    hub.live_relays.clear()
+    with patch.object(hub, "_async_fetch_picture", return_value=None):
+        with pytest.raises(HomeAssistantError):
+            await hass.services.async_call(DOMAIN, "take_snapshot", {"serial": SERIAL}, blocking=True)
+
+
 async def test_snapshot_camera(hass: HomeAssistant, client: FakeClient) -> None:
     await setup(hass, client)
     from homeassistant.components.camera import async_get_image

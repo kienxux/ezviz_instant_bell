@@ -281,6 +281,7 @@ Actions (`serial` is needed only when you have more than one door station):
 | Action | What it does |
 | --- | --- |
 | `ezviz_instant_bell.unlock_door` / `unlock_gate` | Opens the door or the gate |
+| `ezviz_instant_bell.take_snapshot` | Saves a picture taken now from the live video, over the LAN without the cloud, under **Media > My media**; fires `ezviz_instant_bell_picture_saved` |
 | `ezviz_instant_bell.fetch_encryption_key` | Gets the key for encrypted video: without `code`, EZVIZ e-mails a 4-digit code; call it again with that code. Administrators only |
 | `ezviz_instant_bell.set_video_encryption` | Turns the door station's video encryption on or off (`enable`, `verification_code`). Administrators only |
 

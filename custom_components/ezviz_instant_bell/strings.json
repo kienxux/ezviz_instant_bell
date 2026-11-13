@@ -459,6 +459,16 @@
           "description": "The 4-digit code from the e-mail. Leave empty to have one sent."
         }
       }
+    },
+    "take_snapshot": {
+      "name": "Take a snapshot",
+      "description": "Save a picture taken now from the live video, over the LAN without the EZVIZ cloud. It goes under Media > My media and fires ezviz_instant_bell_picture_saved, like the event pictures. When the live video gives nothing, the latest event picture is saved instead.",
+      "fields": {
+        "serial": {
+          "name": "Serial number",
+          "description": "Serial number of the doorbell. Optional when only one is set up."
+        }
+      }
     }
   }
 }
