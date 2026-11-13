@@ -46,3 +46,29 @@ repository.
 **Switches** (environment): `LANLIVE_SYNC_ON_PACK=0|1` (default 1 with a stream key, as the relay),
 `LANLIVE_DETECT_MIN=<bytes>` (default the relay's 24 KB), `LANLIVE_REPO=<path>` (default the repository
 the script is in).
+
+## lancorrelate.py
+
+Puts a long packet capture of the unit (for example a day) next to its events, to find out whether
+anything is sent **locally** when it rings, unlocks or sees motion, or whether everything goes only
+to the EZVIZ cloud. It only reads a file; nothing is sent to any device.
+
+```bash
+python tools/lancorrelate.py day.pcap --device 192.168.x.y --events notes.txt [--events history.csv]
+```
+
+- **Capture:** the FRITZ!Box packet capture (*Paketmitschnitt*) of the interface the unit is on; for
+  an HP7 that is the indoor monitor on Wi-Fi (the door station reaches the monitor by wire). Turn off
+  *Keep the live video open all the time* for the day, or the video fills the file. The file is read
+  into memory at once.
+- **`--device`:** the unit's IPv4 address. Its MAC address is learned from it, so IPv6 counts too.
+- **`--events`:** notes in local time, one per line (`2026-11-14 12:03:15 ring`, a comment may follow),
+  and/or the CSV download of Home Assistant's History page for the event entities. Rings, unlocks and
+  motion done on purpose at noted times are the best evidence.
+- **Output:** the peers with their DNS names, whether each TCP connection is TLS (with its server name)
+  or another protocol (its first 4 bytes), the traffic around each event, and per kind of event the
+  packet signatures seen around most events and rarely otherwise. A local one seen around every event
+  and almost never otherwise is marked `LOCAL CANDIDATE`.
+
+The capture holds the whole network traffic of the unit: keep it outside the repository and do not
+share it; the report contains addresses and names, but no content.
