@@ -83,3 +83,31 @@ def test_the_local_packet_at_each_ring_is_the_candidate(tmp_path: Path) -> None:
     assert "not TLS, starts 9ebaace9" in out
     candidates = [line for line in out.splitlines() if "LOCAL CANDIDATE" in line]
     assert len(candidates) == 1 and "udp/6000 len=72" in candidates[0], out
+
+
+def test_ethernet_padding_is_not_payload(tmp_path: Path) -> None:
+    """A bare ACK in a 60-byte frame carries zero padding; it must not look like a first payload."""
+    ack = tcp(DEVICE, CLOUD, 50001, 6800, b"")
+    ack += b"\x00" * (60 - len(ack))
+    first = tcp(DEVICE, CLOUD, 50001, 6800, b"\x24\x0b\x01\x2e" + b"x" * 30)
+    cap = tmp_path / "pad.pcap"
+    write_pcap(cap, [(T0, ack), (T0 + 1, first)])
+    out = subprocess.run([sys.executable, "-I", str(SCRIPT), str(cap), "--device", DEVICE],
+                         capture_output=True, text=True, check=True).stdout
+    assert "not TLS, starts 240b012e" in out, out
+
+
+def test_the_fritzbox_modified_pcap_format_is_read(tmp_path: Path) -> None:
+    """The FRITZ!Box writes magic a1b2cd34 (big endian): 8 more bytes in every packet header."""
+    frames = [(T0 + i, tcp(DEVICE, CLOUD, 50001, 6800, b"\x24\x0b\x01\x2e" + b"x" * 20)) for i in range(3)]
+    out = [struct.pack(">IHHiIII", 0xA1B2CD34, 2, 4, 0, 0, 2048, 1)]
+    for ts, frame in frames:
+        out.append(struct.pack(">IIIIIHBB", int(ts), 0, len(frame), len(frame), 0, 0x0800, 0, 0) + frame)
+    cap = tmp_path / "fritz.eth"
+    cap.write_bytes(b"".join(out))
+    text = subprocess.run([sys.executable, "-I", str(SCRIPT), str(cap), "--device", DEVICE],
+                          capture_output=True, text=True, check=True).stdout
+    assert "3 packets of the unit" in text and "not TLS, starts 240b012e" in text, text
+    listing = subprocess.run([sys.executable, "-I", str(SCRIPT), str(cap)],
+                             capture_output=True, text=True, check=True).stdout
+    assert DEVICE in listing and "1 local hosts" in listing, listing

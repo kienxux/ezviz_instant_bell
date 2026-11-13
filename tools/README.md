@@ -62,6 +62,14 @@ python tools/lancorrelate.py day.pcap --device 192.168.x.y --events notes.txt [-
   *Keep the live video open all the time* for the day, or the video fills the file. The file is read
   into memory at once.
 - **`--device`:** the unit's IPv4 address. Its MAC address is learned from it, so IPv6 counts too.
+  Without it the tool only lists the hosts of the capture with the names they look up (an EZVIZ unit
+  looks up `*.ezvizlife.com`), so you can find the address.
+- **`--timeline SECONDS`:** also lists the unit's traffic in buckets of that many seconds, with the
+  busiest peer of each: a call or an unlock shows as a burst after a quiet stretch.
+- **Time:** the FRITZ!Box writes the clock of the capture in UTC (checked against the server time of an
+  EZVIZ push message: 13 ms apart). Give `--tz Europe/Berlin` (the default) for the times in your notes;
+  the report prints the notes' time zone.
+- **Formats:** pcap, pcapng and the FRITZ!Box "modified pcap" (magic `a1b2cd34`, file name `.eth`).
 - **`--events`:** notes in local time, one per line (`2026-11-14 12:03:15 ring`, a comment may follow),
   and/or the CSV download of Home Assistant's History page for the event entities. Rings, unlocks and
   motion done on purpose at noted times are the best evidence.

@@ -53,16 +53,19 @@ def read_frames(path: Path):
         return
     for endian in "<>":
         m = struct.unpack(endian + "I", magic)[0]
-        if m in (0xA1B2C3D4, 0xA1B23C4D):
+        if m in (0xA1B2C3D4, 0xA1B23C4D, 0xA1B2CD34):
             break
     else:
         sys.exit(f"{path}: not a pcap or pcapng file")
-    scale = 1e-6 if m == 0xA1B2C3D4 else 1e-9
+    scale = 1e-9 if m == 0xA1B23C4D else 1e-6
+    # 0xA1B2CD34 is the "modified pcap" of the FRITZ!Box (and old Linux
+    # tools): the same file with 8 more bytes in every packet header.
+    extra = 8 if m == 0xA1B2CD34 else 0
     linktype = struct.unpack(endian + "I", data[20:24])[0]
     off = 24
-    while off + 16 <= len(data):
+    while off + 16 + extra <= len(data):
         sec, frac, incl, _ = struct.unpack(endian + "IIII", data[off:off + 16])
-        off += 16
+        off += 16 + extra
         yield sec + frac * scale, linktype, data[off:off + incl]
         off += incl
 
@@ -121,11 +124,13 @@ def ip_layer(etype: int, p: bytes):
     """(src, dst, proto, transport payload) for IPv4 or IPv6, else None."""
     if etype == 0x0800 and len(p) >= 20:
         ihl = (p[0] & 0x0F) * 4
+        end = struct.unpack(">H", p[2:4])[0] or len(p)  # not the Ethernet padding behind it
         return (str(ipaddress.IPv4Address(p[12:16])), str(ipaddress.IPv4Address(p[16:20])),
-                p[9], p[ihl:])
+                p[9], p[ihl:end])
     if etype == 0x86DD and len(p) >= 40:
+        end = 40 + struct.unpack(">H", p[4:6])[0] or len(p)
         return (str(ipaddress.IPv6Address(p[8:24])), str(ipaddress.IPv6Address(p[24:40])),
-                p[6], p[40:])
+                p[6], p[40:end])
     return None
 
 
@@ -160,6 +165,20 @@ def tls_server_name(p: bytes):
     except (IndexError, struct.error):
         pass
     return ""
+
+
+def dns_question(p: bytes):
+    """The name asked for in a DNS query, or None."""
+    try:
+        if len(p) < 13 or p[2] & 0x80 or struct.unpack(">H", p[4:6])[0] < 1:
+            return None
+        labels, o = [], 12
+        while p[o]:
+            labels.append(p[o + 1:o + 1 + p[o]].decode("ascii", "replace"))
+            o += 1 + p[o]
+        return ".".join(labels)
+    except (IndexError, struct.error):
+        return None
 
 
 def dns_answers(p: bytes):
@@ -238,12 +257,40 @@ def load_events(paths, tz: ZoneInfo):
     return sorted(events)
 
 
+def hosts_overview(frames, tz: ZoneInfo) -> None:
+    """Which hosts of the home network are in the capture, with the names they look up."""
+    hosts = {}
+    for ts, lt, fr in frames:
+        h = parse(lt, fr)
+        ipl = h and ip_layer(h[2], h[3])
+        if not ipl or ipl[0].count(":") or peer_class(ipl[0]) != "local":
+            continue
+        rec = hosts.setdefault(ipl[0], {"mac": h[0], "packets": 0, "bytes": 0, "names": Counter()})
+        rec["packets"] += 1
+        rec["bytes"] += len(fr)
+        _, dport, body = ports(ipl[2], ipl[3])
+        if ipl[2] == 17 and dport == 53:
+            name = dns_question(body)
+            if name:
+                rec["names"][name] += 1
+    t0, t1 = frames[0][0], frames[-1][0]
+    when = lambda ts: datetime.fromtimestamp(ts, timezone.utc).astimezone(tz).strftime("%H:%M:%S")  # noqa: E731
+    print(f"{len(frames)} packets from {when(t0)} to {when(t1)} ({tz.key}, as the capture's clock says), "
+          f"{len(hosts)} local hosts. Choose the unit and run again with --device IP.\n")
+    for ip, r in sorted(hosts.items(), key=lambda kv: -kv[1]["bytes"]):
+        mac = r["mac"].hex(":") if r["mac"] else "?"
+        names = ", ".join(n for n, _ in r["names"].most_common(4))
+        print(f"  {ip:15} {mac}  packets={r['packets']:>6} bytes={r['bytes']:>9}  {names}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("capture", type=Path)
-    ap.add_argument("--device", required=True, help="IPv4 address of the unit")
+    ap.add_argument("--device", help="IPv4 address of the unit; without it, only the hosts of the capture are listed")
     ap.add_argument("--events", action="append", default=[], help="notes or HA history CSV")
     ap.add_argument("--tz", default="Europe/Berlin", help="time zone of the notes")
+    ap.add_argument("--timeline", type=float, metavar="SECONDS",
+                    help="also list the traffic of the unit in buckets of this many seconds")
     ap.add_argument("--before", type=float, default=5.0, help="seconds before an event")
     ap.add_argument("--after", type=float, default=20.0, help="seconds after an event")
     args = ap.parse_args()
@@ -252,6 +299,9 @@ def main() -> None:
     frames = list(read_frames(args.capture))
     if not frames:
         sys.exit("no packets in the capture")
+    if not args.device:
+        hosts_overview(frames, tz)
+        return
     macs = set()
     for _, lt, fr in frames:
         h = parse(lt, fr)
@@ -318,6 +368,18 @@ def main() -> None:
     kinds = Counter((label(peer), dport, what) for (peer, _, dport), what in flows.items())
     for (peer, dport, what), n in kinds.most_common():
         print(f"  {peer:45} port {dport:<5} {n:>4}x  {what}")
+
+    if args.timeline:
+        print(f"\n== Timeline, {args.timeline:g} s buckets (bytes out / in, busiest peer) ==")
+        buckets = defaultdict(lambda: [0, 0, Counter()])
+        for ts, d, peer, cls, proto, port, ln, *_ in pkts:
+            b = buckets[int((ts - t0) // args.timeline)]
+            b[0 if d == "out" else 1] += ln
+            b[2][f"{label(peer)[:34]}:{pname.get(proto, proto)}/{port}"] += ln
+        for i in range(max(buckets) + 1):
+            o, n_in, c = buckets.get(i, [0, 0, Counter()])
+            top = ", ".join(f"{k} {v}" for k, v in c.most_common(2))
+            print(f"  {local(t0 + i * args.timeline)[11:]}  out={o:>8} in={n_in:>8}  {top}")
 
     events = load_events(args.events, tz)
     if not events:
