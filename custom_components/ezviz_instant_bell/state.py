@@ -163,6 +163,53 @@ def read_feature_states(info: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+# The keypad of an HP7 Pro: ``FEATURE_INFO.<index>.<resource>.KeypadMgr.KeypadLinkageParam``
+# holds the backlight and the button sound together (#25).
+KEYPAD_DOMAIN = "KeypadMgr"
+KEYPAD_ACTION = "KeypadLinkageParam"
+
+
+def find_keypad_params(info: dict[str, Any]) -> tuple[str, str, dict[str, Any]] | None:
+    """``(local_index, resource, KeypadLinkageParam)`` of a door station with a keypad.
+
+    The index and resource (``1``, ``Video`` on the HP7 Pro) are the path the
+    IoT feature endpoint needs to write the setting back.
+    """
+    tree = info.get("FEATURE_INFO")
+    if not isinstance(tree, dict):
+        return None
+    for index, resources in tree.items():
+        if not isinstance(resources, dict):
+            continue
+        for resource, domains in resources.items():
+            keypad = domains.get(KEYPAD_DOMAIN) if isinstance(domains, dict) else None
+            params = keypad.get(KEYPAD_ACTION) if isinstance(keypad, dict) else None
+            if isinstance(params, dict):
+                return str(index), str(resource), params
+    return None
+
+
+def read_keypad_backlight(info: dict[str, Any]) -> bool | None:
+    """Keyboard backlight (``LEDPromptParam.backlightEnabled``), if the device has a keypad."""
+    found = find_keypad_params(info)
+    if found is None:
+        return None
+    led = found[2].get("LEDPromptParam")
+    if isinstance(led, dict):
+        return coerce_bool(led.get("backlightEnabled"))
+    return None
+
+
+def keypad_params_with_backlight(current: dict[str, Any] | None, enable: bool) -> dict[str, Any]:
+    """The KeypadLinkageParam to write back: everything as it is, the backlight changed."""
+    params = json.loads(json.dumps(current)) if isinstance(current, dict) else {}
+    led = params.get("LEDPromptParam")
+    if not isinstance(led, dict):
+        led = params["LEDPromptParam"] = {}
+    led["backlightEnabled"] = bool(enable)
+    return params
+
+
 def read_key_list(info: dict[str, Any]) -> list[dict[str, Any]] | None:
     """Enrolled RFID cards, faces and palms (``KeyMgr.CardKeyInfo.KeyInfo``)."""
     keys = _find_first(info.get("FEATURE_INFO"), "KeyInfo")
@@ -232,6 +279,10 @@ def read_extra_states(info: dict[str, Any]) -> dict[str, Any]:
     night = read_night_light(info)
     if night is not None:
         out["label_light_on"] = night
+
+    backlight = read_keypad_backlight(info)
+    if backlight is not None:
+        out["keypad_backlight_on"] = backlight
 
     out.update(read_feature_states(info))
 

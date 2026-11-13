@@ -55,6 +55,18 @@ def test_switch_list_in_other_shapes():
     assert state.read_extra_states({"SWITCH": {"switchStatusInfos": [{"type": 7, "enable": 0}]}})["privacy_on"] is False
 
 
+def test_keypad_backlight_from_the_feature_tree():
+    # #25: the HP7 Pro reports it at FEATURE_INFO.1.Video.KeypadMgr.KeypadLinkageParam.LEDPromptParam
+    assert state.read_extra_states(DOOR)["keypad_backlight_on"] is False
+    assert "keypad_backlight_on" not in state.read_extra_states(MONITOR)
+    index, resource, params = state.find_keypad_params(DOOR)
+    assert (index, resource) == ("1", "Video")
+    written = state.keypad_params_with_backlight(params, True)
+    assert written == {"LEDPromptParam": {"backlightEnabled": True}, "soundPromptParam": {"buttonSound": True}}
+    assert params["LEDPromptParam"]["backlightEnabled"] is False  # the current value is not touched
+    assert state.keypad_params_with_backlight(None, False) == {"LEDPromptParam": {"backlightEnabled": False}}
+
+
 def test_key_list():
     keys = state.read_key_list(DOOR)
     assert [k["keyName"] for k in keys] == ["Alice", "Bob"]

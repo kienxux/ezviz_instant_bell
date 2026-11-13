@@ -283,6 +283,9 @@
       "indicator_light": {
         "name": "Doorbell Indicator"
       },
+      "keypad_backlight": {
+        "name": "Keyboard Backlight"
+      },
       "chime_pir": {
         "name": "Motion Sound Alert"
       },

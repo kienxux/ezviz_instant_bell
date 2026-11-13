@@ -2,6 +2,10 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## Unreleased
+
+- New switch **Keyboard Backlight** for the keypad of the HP7 Pro (#25). The EZVIZ cloud does not report it as one of the switches but inside the keypad settings (`KeypadMgr.KeypadLinkageParam`), found by comparing two diagnostics downloads from the reporter. The switch is made only when the door station reports these settings; the button sound stored next to it is written back unchanged. Reading the state is confirmed on a real HP7 Pro; switching it is not yet.
+
 ## 1.2.1
 
 - Encrypted local live video no longer turns to garbage by chance. The size of the clear part of each video packet was decided on the first kilobyte of the session, where the answer is a coin toss (wrong twice in two real sessions on an HP7); a wrong answer made every frame of the session unreadable, and a session reopened in the background could flip from good to bad at any moment. The decision now waits for 24 KB (about 2 seconds), where it was right in 300 of 300 checks.

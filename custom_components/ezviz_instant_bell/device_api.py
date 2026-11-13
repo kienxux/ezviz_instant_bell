@@ -30,6 +30,8 @@ class DeviceApi:
         self._chime_cache: dict[str, tuple[dict[str, Any], float]] = {}
         self._chime_fails: dict[str, int] = {}
         self._chime_skip: set[str] = set()
+        # Path and current value of the keypad settings, from the last status read.
+        self._keypad: dict[str, tuple[str, str, dict[str, Any]]] = {}
 
     # ------------------------------------------------------------------
     # Reading
@@ -54,6 +56,9 @@ class DeviceApi:
         camera = EzvizCamera(client, serial, device_obj=info)
         data = state.base_status(camera.status(refresh=True) or {})
         data.update(state.read_extra_states(info))
+        keypad = state.find_keypad_params(info)
+        if keypad is not None:
+            self._keypad[serial] = keypad
 
         chimes: dict[str, dict[str, Any]] = {}
         for target in [serial, *monitors]:
@@ -160,3 +165,20 @@ class DeviceApi:
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Label light by IoT feature not accepted (%s), using switch 611", err)
         client.switch_status(serial, state.LABEL_LIGHT_SWITCH_TYPE, bool(enable))
+
+    def set_keypad_backlight(self, serial: str, enable: bool) -> None:
+        """The keyboard backlight of an HP7 Pro (#25).
+
+        The cloud reports it inside ``KeypadMgr.KeypadLinkageParam`` together
+        with the button sound, so the whole setting is written back with only
+        the backlight changed. The path comes from the last status read.
+        """
+        index, resource, current = self._keypad.get(serial) or ("1", "Video", {})
+        self._get_client().set_iot_feature(
+            serial,
+            resource_identifier=resource,
+            local_index=index,
+            domain_id=state.KEYPAD_DOMAIN,
+            action_id=state.KEYPAD_ACTION,
+            value={"value": state.keypad_params_with_backlight(current, enable)},
+        )

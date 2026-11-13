@@ -283,6 +283,9 @@
       "indicator_light": {
         "name": "Klingel-Anzeigeleuchte"
       },
+      "keypad_backlight": {
+        "name": "Tastatur-Beleuchtung"
+      },
       "chime_pir": {
         "name": "Bewegungs-Signalton"
       },

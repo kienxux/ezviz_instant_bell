@@ -1503,6 +1503,16 @@
      "LightCtrl": {
       "NightLightEnable": false
      },
+     "KeypadMgr": {
+      "KeypadLinkageParam": {
+       "LEDPromptParam": {
+        "backlightEnabled": false
+       },
+       "soundPromptParam": {
+        "buttonSound": true
+       }
+      }
+     },
      "DisplayScreen": {
       "BrithtnessCfg": {
        "brightness": 5,

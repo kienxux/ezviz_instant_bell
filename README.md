@@ -90,14 +90,14 @@ To change the login, the region or the chosen door stations later, use **Reconfi
 | **Open** | Buttons `Unlock Door` and `Unlock Gate`, and the actions `ezviz_instant_bell.unlock_door` / `unlock_gate` |
 | **Sensors** | Name, firmware, online status, WiFi signal, SSID, local and WAN IP, motion, last alarm and its type, seconds since last motion, update available, microphone volume |
 | **Binary sensors** | Motion; short pulses (3 s) for doorbell ringing, gate open, lock unlocked and app unlock. Card, face, palm and code unlock and the smart and intelligent detection alarms depend on the model, so each appears the first time the door station reports one. Read-only states of mute, loitering, stranger and human detection, when the device reports them |
-| **Switches** | Doorbell chime and motion sound alert (door station and indoor monitor), do not disturb, privacy, armed, name-tag light, doorbell indicator (the light at the call button, when the door station has one) |
+| **Switches** | Doorbell chime and motion sound alert (door station and indoor monitor), do not disturb, privacy, armed, name-tag light, doorbell indicator (the light at the call button) and keyboard backlight (HP7 Pro), the last two only when the door station reports them |
 | **Sliders** | Chime volume (0 to 7) and ringtones for the doorbell and the motion alert, on the door station and on every indoor monitor |
 | **Camera** | `Live`: the live video (cloud or local network). `Last Snapshot`: the picture of the latest alarm |
 | **Media** | *Recordings (SD card)* and *Pictures of events* in the Media browser |
 | **Dashboard** | The visitor log card |
 | **Account** | `Terminals in use`, and a repair notice before EZVIZ's 10-terminal limit is reached |
 
-Other EZVIZ cameras and doorbells get no unlock buttons, chime controls, name-tag light or doorbell indicator (see [Which devices](#which-devices)). The events and actions for automations are listed in [Events and actions for automations](#events-and-actions-for-automations).
+Other EZVIZ cameras and doorbells get no unlock buttons, chime controls, name-tag light, doorbell indicator or keyboard backlight (see [Which devices](#which-devices)). The events and actions for automations are listed in [Events and actions for automations](#events-and-actions-for-automations).
 
 ## Rings and notifications
 

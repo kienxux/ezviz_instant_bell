@@ -392,6 +392,20 @@ async def test_doorbell_indicator_is_switch_3(hass: HomeAssistant, client: FakeC
     assert ("switch", SERIAL, 3, True) in client.calls
 
 
+async def test_keypad_backlight_writes_the_whole_keypad_setting(hass: HomeAssistant, client: FakeClient) -> None:
+    # #25: the door station of the fixture reports KeypadMgr.KeypadLinkageParam; the monitor does not.
+    await setup(hass, client)
+    assert hass.states.get(legacy_entity(hass, "switch", "keypad_backlight")).state == "off"
+    assert er.async_get(hass).async_get_entity_id("switch", DOMAIN, f"{LEGACY_DOMAIN}_{MONITOR}_keypad_backlight") is None
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": legacy_entity(hass, "switch", "keypad_backlight")}, blocking=True
+    )
+    call = next(c for c in client.calls if c[0] == "iot" and c[2] == "KeypadLinkageParam")
+    assert call[1] == SERIAL
+    assert call[3] == {"value": {"LEDPromptParam": {"backlightEnabled": True}, "soundPromptParam": {"buttonSound": True}}}
+    assert hass.states.get(legacy_entity(hass, "switch", "keypad_backlight")).state == "on"
+
+
 async def test_diagnostics_list_the_switches(hass: HomeAssistant, client: FakeClient) -> None:
     from custom_components.ezviz_instant_bell.diagnostics import async_get_config_entry_diagnostics
 
