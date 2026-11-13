@@ -318,6 +318,7 @@ Open them with **Configure** on the integration. Saving reloads the integration,
 
 - **Download diagnostics** from *Settings > Devices & services > EZVIZ HP7 / CP7 Video Intercom > three dots* and attach the file to your issue. It contains no password, account name, serial numbers, addresses or keys.
 - Switch on debug logging for `custom_components.ezviz_instant_bell` and look for "StreamRelay" (video) lines, and "Shared stream" lines for the addresses for other apps. Remove passwords, keys, tokens and serial numbers before sharing logs.
+- The door station gives its local live video to one client at a time. While Home Assistant holds it, a second program asking the door station directly (another Home Assistant instance, a test tool) is refused, and the log says "already has a LAN live session open". Give other apps the live video through Home Assistant instead (see [Frigate and go2rtc](#frigate-and-go2rtc)).
 - A setup that fails with an unknown value from the device is a bug in this integration: please report it.
 
 ## Privacy and security

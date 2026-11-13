@@ -6,3 +6,7 @@ venv/
 probe_dump.json
 bell_spike_log.jsonl
 *.eth
+
+# Output and secrets of tools/lanlive.py (they belong outside the repository)
+lanlive-out/
+secrets.env
