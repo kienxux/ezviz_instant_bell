@@ -665,6 +665,78 @@ class InstantBellHub:
         return None
 
     # ------------------------------------------------------------------
+    # Picture on demand (a snapshot taken now)
+    # ------------------------------------------------------------------
+
+    def _relay_for(self, serial: str) -> Any | None:
+        """The stream relay of a door station (matching the monitor serial too)."""
+        for known, relay in self.live_relays.items():
+            if known == serial or same_device(known, serial):
+                return relay
+        return None
+
+    async def async_take_snapshot(self, serial: str) -> Path:
+        """Grab a picture from the live video now and save it under Media.
+
+        Local first: the picture is a frame of the live stream, taken over the
+        LAN with no help from the EZVIZ cloud. Only when the live video gives
+        nothing (no relay, or it cannot start) does it fall back to the latest
+        picture EZVIZ took for an event. Fires ``ezviz_instant_bell_picture_saved``
+        like the event pictures, so the same automations can send it on.
+        """
+        data: bytes | None = None
+        relay = self._relay_for(serial)
+        if relay is not None:
+            try:
+                data = await relay.still_image()
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Snapshot from the live video of %s failed: %s", serial, err)
+        if not data:
+            # Fall back to the latest event picture, decrypted with the stored key.
+            status = self.coordinator.data.get(serial) if self.coordinator and self.coordinator.data else None
+            url = status.get("last_alarm_pic") if isinstance(status, dict) else None
+            if url:
+                data = await self._async_fetch_picture(url, serial)
+        if not data:
+            raise HomeAssistantError(
+                "No picture: the live video gave none and there is no recent event picture."
+            )
+        occurred = dt_util.now()
+        return await self._save_snapshot(serial, data, occurred)
+
+    async def _save_snapshot(self, serial: str, data: bytes, occurred: datetime) -> Path:
+        source, root = self.media_root()
+        device = self.names.get(serial) or serial
+        keep = int(self.entry.options.get(CONF_DETECTION_PICTURE_DAYS, DEFAULT_DETECTION_PICTURE_DAYS))
+        title = "Snapshot"
+
+        def _write() -> Path:
+            path = detection_pictures.picture_path(root, device, occurred, title)
+            detection_pictures.write_picture(path, data)
+            detection_pictures.prune(path.parent.parent, dt_util.now().date(), keep)
+            return path
+
+        try:
+            path = await self.hass.async_add_executor_job(_write)
+        except OSError as err:
+            raise HomeAssistantError(f"The snapshot could not be saved in {root}: {err}") from err
+        _LOGGER.debug("Saved snapshot %s", path)
+        relative = path.relative_to(root).as_posix()
+        self.hass.bus.async_fire(
+            EVENT_PICTURE_SAVED,
+            {
+                "entry_id": self.entry.entry_id,
+                "serial": serial,
+                "title": title,
+                "occurred": occurred.isoformat(),
+                "path": str(path),
+                "media_content_id": f"media-source://media_source/{source}/{relative}" if source else None,
+                "message_id": None,
+            },
+        )
+        return path
+
+    # ------------------------------------------------------------------
     # Pictures of motion and person events (Media > My media)
     # ------------------------------------------------------------------
 

@@ -2,8 +2,9 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
-## Unreleased
+## 1.3.0
 
+- New action **Take a snapshot** (`ezviz_instant_bell.take_snapshot`): it saves a picture taken right now from the live video, over the LAN without the EZVIZ cloud, under **Media > My media**, and fires `ezviz_instant_bell_picture_saved` just like the event pictures, so the same automations can send it on. When the live video gives nothing, the latest event picture is saved instead. Give `serial` when the account has more than one door station. Built and tested with a fake client; not yet confirmed on a door station.
 - New switch **Keyboard Backlight** for the keypad of the HP7 Pro (#25). The EZVIZ cloud does not report it as one of the switches but inside the keypad settings (`KeypadMgr.KeypadLinkageParam`), found by comparing two diagnostics downloads from the reporter. The switch is made only when the door station reports these settings; the button sound stored next to it is written back unchanged. Reading the state is confirmed on a real HP7 Pro; switching it is not yet.
 
 ## 1.2.1

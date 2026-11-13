@@ -34,3 +34,9 @@ fetch_encryption_key:
       required: false
       selector:
         text:
+take_snapshot:
+  fields:
+    serial:
+      required: false
+      selector:
+        text:

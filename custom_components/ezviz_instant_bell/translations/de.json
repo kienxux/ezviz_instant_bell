@@ -462,6 +462,16 @@
           "description": "Der 4-stellige Code aus der E-Mail. Leer lassen, um einen senden zu lassen."
         }
       }
+    },
+    "take_snapshot": {
+      "name": "Schnappschuss aufnehmen",
+      "description": "Speichert ein jetzt aus dem Live-Video aufgenommenes Bild, über das LAN ohne die EZVIZ-Cloud. Es landet unter Medien > Meine Medien und löst ezviz_instant_bell_picture_saved aus, wie die Ereignisbilder. Gibt das Live-Video nichts her, wird stattdessen das letzte Ereignisbild gespeichert.",
+      "fields": {
+        "serial": {
+          "name": "Seriennummer",
+          "description": "Seriennummer der Türklingel. Optional, wenn nur eine eingerichtet ist."
+        }
+      }
     }
   }
 }

@@ -139,8 +139,23 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 hass.config_entries.async_schedule_reload(entry.entry_id)
                 _LOGGER.warning("Stored the camera key for %s; the entry reloads and decrypts the stream.", ", ".join(found))
 
+    async def take_snapshot(call: ServiceCall) -> None:
+        wanted = str(call.data.get("serial") or "").strip()
+        matches: list[tuple[InstantBellHub, str]] = []
+        for _entry, hub in _hubs():
+            for serial in hub.serials:
+                if not wanted or serial == wanted or same_device(serial, wanted):
+                    matches.append((hub, serial))
+        if not matches:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="no_such_doorbell")
+        if len(matches) > 1 and not wanted:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="serial_needed")
+        hub, serial = matches[0]
+        await hub.async_take_snapshot(serial)
+
     hass.services.async_register(DOMAIN, "unlock_door", unlock_door, SERVICE_SCHEMA)
     hass.services.async_register(DOMAIN, "unlock_gate", unlock_gate, SERVICE_SCHEMA)
+    hass.services.async_register(DOMAIN, "take_snapshot", take_snapshot, SERVICE_SCHEMA)
     async_register_admin_service(
         hass,
         DOMAIN,
