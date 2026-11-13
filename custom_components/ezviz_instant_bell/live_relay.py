@@ -124,8 +124,10 @@ PROGRESS_LOG_SEC = 60.0
 # consumer left; evict it so its leaked ffmpeg stops competing for CPU (#44).
 DEAD_SUB_TIMEOUT = 30.0
 
-# How long the relay ffmpeg probes the local MPEG-PS (microseconds): a new
-# session, and a viewer that starts on the cached GOP.
+# How long ffmpeg probes the stream (microseconds): without a known start,
+# and when the stream starts on a keyframe with its parameter sets. Every
+# local viewer starts so (the cached GOP, the session's first chunk, or the
+# next keyframe), and with it every viewer of the relay's local output.
 LAN_PROBE_COLD = "10000000"
 LAN_PROBE_PRELOADED = "1000000"
 
@@ -134,10 +136,10 @@ LOCKOUT_THRESHOLD = 3
 LOCKOUT_BACKOFF = 600.0
 # Ceiling for the "device offline" retry cadence (#52). That branch stays
 # fast so a reboot recovers in ~60-120s, but it must not stay fast for
-# ever: each LAN retry drops the cached control key and re-fetches it,
-# which costs a p2p-register plus a CAS query. A stall lasting hours would
-# otherwise mean hundreds of cloud calls — the very thing LOCKOUT_BACKOFF
-# exists to prevent.
+# ever: each failed LAN start asks the cloud for the control key and the
+# address again, which costs a p2p-register, a CAS query and a device list.
+# A stall lasting hours would otherwise mean hundreds of cloud calls — the
+# very thing LOCKOUT_BACKOFF exists to prevent.
 OFFLINE_MAX_BACKOFF = 300.0
 
 # Pre-warm: how long a shared VTM session stays alive after the last HA
@@ -150,6 +152,10 @@ PREWARM_IDLE_TIMEOUT = 120.0
 # the relay looks whether it is still up and reopens it. A failed reopen still
 # waits out the retry limits above.
 KEEP_OPEN_CHECK = 15.0
+# A held session that ended is reopened at once, but not sooner than this
+# after it was opened: the door station's small LAN service must not get a
+# new session every second should it end each one at once.
+KEEP_REOPEN_MIN = 5.0
 
 
 async def _viewer_left(reader: asyncio.StreamReader) -> None:
@@ -340,6 +346,13 @@ class StreamRelay:
         self._lan_tail = bytearray()
         self._lan_before = b""
         self._gop_lock = threading.Lock()
+        # Held by the local reader from the GOP cache update to the fan-out,
+        # and by a viewer from the GOP snapshot to its subscription, so that
+        # a joining viewer gets every chunk exactly once.
+        self._subscribe_lock = threading.Lock()
+        # Whether the local session has handed out its first chunk: a viewer
+        # subscribed before that starts with the session, on its keyframe.
+        self._lan_fed = False
         # Counts restarts of the GOP cache, so a still image is encoded once
         # per keyframe and handed out until the next one (#22).
         self._gop_serial = 0
@@ -362,6 +375,9 @@ class StreamRelay:
             )
         self._hold_until: float = 0.0
         self._keeper: Optional[asyncio.Task] = None
+        # Set when the held session ended on its own, so the keeper reopens
+        # it at once instead of at its next check.
+        self._reopen = asyncio.Event()
 
     @property
     def port(self) -> int:
@@ -375,10 +391,11 @@ class StreamRelay:
     def viewer_probe(self) -> str:
         """How long a viewer's ffmpeg may probe the relay's output (microseconds).
 
-        Short while the relay starts new viewers on its cached GOP, so their
-        first picture comes at once; the long one for a fresh session (#39).
+        Short while the relay starts new viewers on a keyframe (the local
+        source always, the cloud one on its cached GOP), so their first
+        picture comes at once; the long one otherwise (#39).
         """
-        return LAN_PROBE_PRELOADED if self._gop_snapshot() else LAN_PROBE_COLD
+        return LAN_PROBE_PRELOADED if self._active_lan or self._gop_snapshot() else LAN_PROBE_COLD
 
     @property
     def detected_codec(self) -> Optional[str]:
@@ -1153,6 +1170,9 @@ class StreamRelay:
                     self._last_error_offline, self._stream_source, exc,
                 )
                 return
+            # Before the reader runs, so that a viewer joining now does not
+            # get the previous session's GOP.
+            self._new_session_cache()
             self._shared_vtm = vtm
             self._active_lan = isinstance(
                 vtm, (Cpd7LanSource, _PreStartedSource)
@@ -1205,11 +1225,18 @@ class StreamRelay:
     async def _keep(self) -> None:
         """Reopen the session while it is held; prewarm() keeps the retry limits."""
         while self._held():
+            self._reopen.clear()
+            opened = time.monotonic()
             try:
                 await self.prewarm()
             except Exception as exc:  # noqa: BLE001
                 _LOGGER.debug("StreamRelay: keep-open prewarm failed: %s", exc)
-            await asyncio.sleep(KEEP_OPEN_CHECK)
+            try:
+                await asyncio.wait_for(self._reopen.wait(), KEEP_OPEN_CHECK)
+            except asyncio.TimeoutError:
+                pass
+            else:
+                await asyncio.sleep(max(0.0, opened + KEEP_REOPEN_MIN - time.monotonic()))
 
     async def _shutdown_shared(self) -> None:
         async with self._shared_lock:
@@ -1269,18 +1296,24 @@ class StreamRelay:
             "StreamRelay: shared VTM reset after unexpected reader exit "
             "(serial=%s)", self._serial,
         )
+        if self._held():
+            self._reopen.set()
 
-    def _broadcast_reader(self) -> None:
-        """Read VTM payloads -> PesParser -> fan out to per-client queues."""
-        my_vtm = self._shared_vtm
-        parser = PesParser()
-        # Fresh session — a cached GOP from the previous source is stale.
-        with self._gop_lock:
+    def _new_session_cache(self) -> None:
+        """Forget the cached GOP of the previous source: it is stale."""
+        with self._subscribe_lock, self._gop_lock:
             self._gop_buf = bytearray()
             self._param_sets = b""
             self._param_nals = {}
             self._lan_tail = bytearray()
             self._lan_before = b""
+            self._lan_fed = False
+
+    def _broadcast_reader(self) -> None:
+        """Read VTM payloads -> PesParser -> fan out to per-client queues."""
+        my_vtm = self._shared_vtm
+        parser = PesParser()
+        self._new_session_cache()
         self._es_dump_buf = bytearray()
         self._es_dump_done = False
         self._ps_dump_buf = bytearray()
@@ -1323,9 +1356,16 @@ class StreamRelay:
                     # instead. Video stays a clean raw passthrough; audio
                     # comes from the de-mislabelled PES.
                     v_bytes += len(body)
-                    self._gop_update(body)
+                    with self._subscribe_lock:
+                        self._gop_update(body)
+                        if not self._lan_fed and not body.startswith(PACK_START):
+                            # The decoder started on the parameter set itself,
+                            # inside a packet: a demuxer would skip it. The
+                            # viewers start on the keyframe's entry instead.
+                            self._q_resync.update(id(q) for q in self._sub_raw_qs)
+                        self._fanout(self._sub_raw_qs, body, video=True)
+                        self._lan_fed = True
                     self._ps_dump(body)
-                    self._fanout(self._sub_raw_qs, body, video=True)
                     for stream_id, payload in parser.feed(body):
                         if stream_id == AUDIO_STREAM_ID and payload:
                             payload = self._readable_audio(payload)
@@ -1532,33 +1572,34 @@ class StreamRelay:
         # Preload BEFORE subscribing: chunks land in order ahead of the live
         # feed; a queue.Full mid-preload truncates the replay and the viewer
         # just falls back to waiting for the next keyframe.
-        gop = self._gop_snapshot()
-        if lan:
-            for chunk in gop:
-                try:
-                    raw_q.put_nowait(chunk)
-                except queue.Full:
-                    break
-            if not gop and self._kf_markers_seen:
-                # Joining a running session without a usable GOP: start at
-                # the next keyframe rather than in the middle of a frame.
-                self._q_resync.add(id(raw_q))
-            now0 = time.monotonic()
-            self._q_last_drain[id(raw_q)] = now0
-            self._q_last_drain[id(a_q)] = now0
-            self._sub_raw_qs.append(raw_q)
-            self._sub_a_qs.append(a_q)  # de-mislabelled AAC audio
-        else:
-            for chunk in gop:
-                try:
-                    v_q.put_nowait(chunk)
-                except queue.Full:
-                    break
-            now0 = time.monotonic()
-            self._q_last_drain[id(v_q)] = now0
-            self._q_last_drain[id(a_q)] = now0
-            self._sub_v_qs.append(v_q)
-            self._sub_a_qs.append(a_q)
+        with self._subscribe_lock:
+            gop = self._gop_snapshot()
+            if lan:
+                for chunk in gop:
+                    try:
+                        raw_q.put_nowait(chunk)
+                    except queue.Full:
+                        break
+                if not gop and self._lan_fed:
+                    # Joining a running session without a usable GOP: start at
+                    # the next keyframe rather than in the middle of a frame.
+                    self._q_resync.add(id(raw_q))
+                now0 = time.monotonic()
+                self._q_last_drain[id(raw_q)] = now0
+                self._q_last_drain[id(a_q)] = now0
+                self._sub_raw_qs.append(raw_q)
+                self._sub_a_qs.append(a_q)  # de-mislabelled AAC audio
+            else:
+                for chunk in gop:
+                    try:
+                        v_q.put_nowait(chunk)
+                    except queue.Full:
+                        break
+                now0 = time.monotonic()
+                self._q_last_drain[id(v_q)] = now0
+                self._q_last_drain[id(a_q)] = now0
+                self._sub_v_qs.append(v_q)
+                self._sub_a_qs.append(a_q)
         if gop:
             _LOGGER.debug(
                 "StreamRelay: preloaded %d GOP chunks to new client",
@@ -1610,10 +1651,11 @@ class StreamRelay:
                 # WebRTC path actually needs H.264, so gate the transcode on it.
                 # MPEG-PS can add streams at any time, so ffmpeg probes for the
                 # whole analyzeduration before it writes anything: 10 s of
-                # waiting. A viewer that starts on the cached GOP has the
-                # keyframe and its parameter sets in front, so a short probe
-                # is enough; a fresh session keeps the long one (#39).
-                lan_probe = LAN_PROBE_PRELOADED if gop else LAN_PROBE_COLD
+                # waiting. Every local viewer starts on a keyframe with its
+                # parameter sets in front (the cached GOP, the session's first
+                # chunk, which the decoder starts on the keyframe, or the next
+                # keyframe after a resync), so a short probe is enough (#39).
+                lan_probe = LAN_PROBE_PRELOADED
                 lan_transcode = self._stream_mode == "webrtc" and (
                     self._video_codec == "hevc"
                     or (

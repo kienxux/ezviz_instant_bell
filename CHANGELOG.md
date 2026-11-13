@@ -2,6 +2,14 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 1.2.0
+
+- The local live video starts in about 2 to 3 seconds instead of 11 to 12, also when nobody watched before. ffmpeg waited out its whole 10-second probe, twice in the motion-JPEG view. Every local viewer now starts on a keyframe with its parameter sets, so a 1-second probe is enough. Measured with a synthetic HP7-style stream; not yet confirmed on a door station.
+- The local live video no longer asks the EZVIZ cloud at each start. Before, every start downloaded the account's whole device list for the door station's address, and the local key was fetched again every hour. The stored key and address are now used; the cloud is asked only when the door station refuses them or cannot be reached, and the start is tried once more if either changed. The log says "The LAN key of … has changed since it was stored" if it ever does.
+- A local stream that stops sending is noticed after about 8 seconds instead of 32, and the log says how long the session lasted and whether the door station closed it. With **Keep the live video open all the time** or after a ring, it is reopened at once instead of at the next 15-second check (at most every 5 seconds).
+- A viewer that joins a running local stream gets every chunk exactly once; before, a chunk arriving at that moment could be lost or doubled.
+- Diagnostics: each door station (and indoor monitor) now also lists every plain setting the EZVIZ cloud reports for it, by its path, with its value (numbers and yes/no only; texts, lists, cards and network data are left out). The HP7 Pro's keyboard backlight is not among the switches (#25); two downloads, one with the backlight on and one with it off, can now show whether it is one of these settings.
+
 ## 1.1.4
 
 - Fixed: an HP7 that the EZVIZ account lists only once, as its indoor monitor (category `DBScreen`, no `BDoorBell` entry), got no unlock buttons, chime controls or name-tag light since 0.11.0; they were removed as if it were a camera (#27). `DBScreen` now counts as an HP7 / CP7 too. The setup form ticks the `BDoorBell` entry, or the `DBScreen` one when the account has no `BDoorBell`. On such an account, leave **Indoor monitor serials** empty: the monitor is the device itself.

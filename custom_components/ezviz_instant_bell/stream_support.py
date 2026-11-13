@@ -25,7 +25,6 @@ from requests import RequestException
 
 _LOGGER = logging.getLogger(__name__)
 
-LAN_AES_KEY_TTL = 3600.0
 # A mailed security code is valid about 30 minutes; a request without a key
 # within that time only mails another one.
 KEY_REQUEST_INTERVAL = 1800.0
@@ -53,7 +52,6 @@ class StreamSupport:
         self._on_learned = on_learned
         self._host = region_host
         self._lock = call_lock
-        self._lan_aes_cache: dict[str, tuple[bytes, float]] = {}
         self._lan_ip_cache: dict[str, str] = {}
         self._cam_key_cache: dict[str, str] = {}
         # When the cloud was last asked for a camera key without getting one:
@@ -128,24 +126,26 @@ class StreamSupport:
             _LOGGER.debug("EZVIZ p2p register failed (best effort): %s", exc)
 
     def fetch_lan_aes_key(self, serial: str, force: bool = False) -> bytes:
-        """The 16-byte AES-128 LAN control key of the device (cached for an hour).
+        """The 16-byte AES-128 LAN control key of the device.
 
-        When the cloud cannot be asked, the key stored on disk is used.
+        The key fetched before (kept on disk) is used, so that a local stream
+        starts without the cloud; ``force`` asks the cloud, after the device
+        refused the key or could not be reached. When the cloud cannot be
+        asked, the stored key is used.
         """
         bare = bare_serial(serial)
-        if not force:
-            cached = self._lan_aes_cache.get(bare)
-            if cached and (time.monotonic() - cached[1]) < LAN_AES_KEY_TTL:
-                return cached[0]
+        stored = self.remembered.get(bare, {}).get("lan_key", "")
+        if not force and len(stored) == 16:
+            return stored.encode("ascii")
         try:
             key_bytes = self._lan_key_from_cloud(bare)
         except Exception as exc:  # noqa: BLE001 - whatever failed, the stored key may still be good
-            stored = self.remembered.get(bare, {}).get("lan_key", "")
             if len(stored) != 16:
                 raise
             _LOGGER.info("LAN key of %s not fetched (%s), using the stored one", bare, exc)
             return stored.encode("ascii")
-        self._lan_aes_cache[bare] = (key_bytes, time.monotonic())
+        if stored and stored.encode("ascii") != key_bytes:
+            _LOGGER.info("The LAN key of %s has changed since it was stored", bare)
         self._learn(bare, "lan_key", key_bytes.decode("ascii"))
         return key_bytes
 
@@ -179,19 +179,15 @@ class StreamSupport:
             raise RuntimeError(f"invalid LAN AES key from CAS (Result={result}, key={key_str!r}){hint}")
         return key_str.encode("ascii")
 
-    def invalidate_lan_aes_key(self, serial: str | None = None) -> None:
-        """Forget the cached LAN key(s); called when the device refuses the handshake."""
-        if serial is None:
-            self._lan_aes_cache.clear()
-        else:
-            self._lan_aes_cache.pop(bare_serial(serial), None)
-
-    def get_local_ip(self, serial: str) -> str | None:
+    def get_local_ip(self, serial: str, force: bool = False) -> str | None:
         """The doorbell's LAN address from the account's CONNECTION data.
 
-        Remembered, so that the LAN stream keeps working while the cloud is slow.
+        The remembered address is used, so that a local stream starts without
+        the cloud; ``force`` asks the cloud (the device was not reached there).
         """
         bare = bare_serial(serial)
+        if not force and bare in self._lan_ip_cache:
+            return self._lan_ip_cache[bare]
         try:
             from pyezvizapi.local_stream import _local_sdk_endpoint_from_client
 

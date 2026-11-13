@@ -275,6 +275,21 @@ async def test_keep_open_reopens_a_local_session_that_ended(fake_lan) -> None:
     assert r._keeper is None
 
 
+async def test_a_held_session_that_ended_is_reopened_at_once(fake_lan) -> None:
+    r = relay(stream_source="local", keep_open=True)
+    with patch.object(live_relay, "KEEP_OPEN_CHECK", 60), patch.object(live_relay, "MIN_RETRY_INTERVAL", 0), patch.object(
+        live_relay, "KEEP_REOPEN_MIN", 0.5
+    ):
+        r._start_keeper()
+        await wait_for(lambda: r._shared_vtm is not None)
+        opened = time.monotonic()
+        fake_lan.made[0].close()  # the door station ends the session
+        await wait_for(lambda: len(fake_lan.made) == 2 and r._shared_vtm is not None, 2.0)
+        assert time.monotonic() - opened >= 0.4  # not sooner than KEEP_REOPEN_MIN after the last open
+        await r.stop()
+        await r._shutdown_shared()
+
+
 def test_keep_open_is_ignored_for_the_cloud() -> None:
     assert not relay(stream_source="cloud", keep_open=True)._keep_open
     assert not relay(stream_source="auto", keep_open=True)._keep_open
@@ -499,6 +514,19 @@ def test_a_viewer_that_fell_behind_skips_to_the_next_keyframe() -> None:
     assert [q.get_nowait(), q.get_nowait()] == [SPS_PPS + IDR, P]
 
 
+def test_a_local_session_that_starts_inside_a_packet_starts_its_viewers_on_a_pack() -> None:
+    # The decoder found no pack header in front of the first parameter set and started on it.
+    r = relay(stream_source="local")
+    r._active_lan = True
+    q: queue.Queue = queue.Queue()
+    r._q_last_drain[id(q)] = time.monotonic()
+    r._sub_raw_qs.append(q)
+    r._shared_vtm = FakeSource([SPS_PPS + IDR + P, PACK + pes_pts(0xE0, SPS_PPS + IDR)])
+    r._broadcast_reader()
+    first = q.get_nowait()
+    assert first.startswith(PACK) and SPS_PPS in first
+
+
 def test_a_full_audio_queue_keeps_playing_without_a_resync() -> None:
     r = relay()
     q = queue.Queue(maxsize=1)
@@ -527,35 +555,62 @@ def test_a_viewer_that_takes_nothing_for_too_long_is_dropped() -> None:
 
 
 class FakeLanApi:
-    def __init__(self, ip: str | None = "192.0.2.10") -> None:
+    def __init__(self, ip: str | None = "192.0.2.10", fresh_ip: str | None = None, fresh_key: bytes | None = None) -> None:
         self.ip = ip
-        self.invalidated: list[str] = []
+        self.fresh_ip = fresh_ip or ip
+        self.fresh_key = fresh_key or b"k" * 16
+        self.asked_cloud = 0
 
-    def fetch_lan_aes_key(self, serial):
+    def fetch_lan_aes_key(self, serial, force=False):
+        if force:
+            self.asked_cloud += 1
+            return self.fresh_key
         return b"k" * 16
 
-    def get_local_ip(self, serial):
-        return self.ip
+    def get_local_ip(self, serial, force=False):
+        return self.fresh_ip if force else self.ip
 
     def get_related_device(self, serial):
         return "BE0000001"
 
-    def invalidate_lan_aes_key(self, serial):
-        self.invalidated.append(serial)
 
+class Refusing:
+    """A door station that refuses every start except with ``accepts``' key and address."""
 
-def test_a_refused_local_session_drops_the_cached_key() -> None:
-    class Refusing:
-        def __init__(self, *args, **kwargs):
-            pass
+    accepts: tuple[bytes, str] | None = None
+    tried: list[tuple[bytes, str]] = []
 
-        def start(self):
+    def __init__(self, host, related, key, **kwargs):
+        self.host, self.key = host, key
+        self.ecdh_priv = None
+
+    def start(self):
+        Refusing.tried.append((self.key, self.host))
+        if (self.key, self.host) != Refusing.accepts:
             raise RuntimeError("No <Session> in InviteStream response")
 
+
+def test_a_local_start_needs_no_cloud() -> None:
+    Refusing.tried, Refusing.accepts = [], (b"k" * 16, "192.0.2.10")
     api = FakeLanApi()
-    with patch.object(cpd7, "Cpd7LanClient", Refusing), pytest.raises(RuntimeError):
+    with patch.object(cpd7, "Cpd7LanClient", Refusing), patch.object(cpd7, "StreamDecoder"):
         Cpd7LanSource(api, SERIAL).start()
-    assert api.invalidated == [SERIAL]
+    assert api.asked_cloud == 0 and Refusing.tried == [(b"k" * 16, "192.0.2.10")]
+
+
+def test_a_refused_local_start_is_tried_again_with_what_the_cloud_says() -> None:
+    # the router gave the door station a new address
+    Refusing.tried, Refusing.accepts = [], (b"k" * 16, "192.0.2.20")
+    api = FakeLanApi(fresh_ip="192.0.2.20")
+    with patch.object(cpd7, "Cpd7LanClient", Refusing), patch.object(cpd7, "StreamDecoder"):
+        Cpd7LanSource(api, SERIAL).start()
+    assert api.asked_cloud == 1 and Refusing.tried == [(b"k" * 16, "192.0.2.10"), (b"k" * 16, "192.0.2.20")]
+    # the same key and address from the cloud: not tried again
+    Refusing.tried, Refusing.accepts = [], None
+    api = FakeLanApi()
+    with patch.object(cpd7, "Cpd7LanClient", Refusing), pytest.raises(RuntimeError, match="Session"):
+        Cpd7LanSource(api, SERIAL).start()
+    assert api.asked_cloud == 1 and len(Refusing.tried) == 1
 
 
 def test_a_door_station_without_a_local_address_is_not_tried() -> None:
@@ -885,8 +940,11 @@ async def test_a_viewer_that_leaves_before_any_output_stops_its_ffmpeg() -> None
     assert ffmpeg.runs[0][1].killed and writer.closed and r._active_clients == 0
 
 
-async def lan_viewer_cmd(r: StreamRelay, gop: bytes | None) -> tuple[str, ...]:
-    """The relay ffmpeg command of a local viewer, with ``gop`` cached when it joins."""
+async def lan_viewer_cmd(r: StreamRelay, gop: bytes | None, fed: bool = False) -> tuple[str, ...]:
+    """The relay ffmpeg command of a local viewer, with ``gop`` cached when it joins.
+
+    ``fed``: the session has already handed out chunks.
+    """
     viewer = asyncio.StreamReader()
     viewer.feed_eof()
     ffmpeg = FakeExec(SilentFfmpeg)
@@ -897,6 +955,7 @@ async def lan_viewer_cmd(r: StreamRelay, gop: bytes | None) -> tuple[str, ...]:
         await asyncio.sleep(0.05)  # the session start empties the GOP cache
         if gop:
             r._gop_update(gop)
+        r._lan_fed = fed
         await asyncio.wait_for(r._handle_client(viewer, FakeWriter()), timeout=10)
         await r._shutdown_shared()
     return ffmpeg.runs[0][0]
@@ -913,9 +972,18 @@ async def test_a_viewer_on_the_cached_gop_gets_a_short_probe(fake_lan) -> None:
     assert probe_of(cmd) == live_relay.LAN_PROBE_PRELOADED
 
 
-async def test_a_viewer_of_a_fresh_session_keeps_the_long_probe(fake_lan) -> None:
+async def test_a_viewer_of_a_fresh_session_gets_a_short_probe_too(fake_lan) -> None:
+    # it starts with the session, which the decoder starts on a keyframe
     r = relay(stream_source="local")
-    assert probe_of(await lan_viewer_cmd(r, None)) == live_relay.LAN_PROBE_COLD
+    assert probe_of(await lan_viewer_cmd(r, None)) == live_relay.LAN_PROBE_PRELOADED
+
+
+async def test_a_viewer_joining_a_running_local_session_starts_on_the_next_keyframe(fake_lan) -> None:
+    r = relay(stream_source="local")
+    await lan_viewer_cmd(r, None)
+    assert not r._q_resync  # with the session: its first chunk is the keyframe
+    cmd = await lan_viewer_cmd(r, None, fed=True)
+    assert len(r._q_resync) == 1 and probe_of(cmd) == live_relay.LAN_PROBE_PRELOADED
 
 
 def test_the_mjpeg_probe_follows_the_cached_gop() -> None:
@@ -923,6 +991,9 @@ def test_the_mjpeg_probe_follows_the_cached_gop() -> None:
 
     r = relay()
     assert r.viewer_probe == live_relay.LAN_PROBE_COLD
+    r._active_lan = True
+    assert r.viewer_probe == live_relay.LAN_PROBE_PRELOADED  # the local output starts on a keyframe
+    r._active_lan = False
     r._gop_update(SPS_PPS + IDR)
     assert r.viewer_probe == live_relay.LAN_PROBE_PRELOADED
     cmd = _build_ffmpeg_cmd("ffmpeg", "tcp://x", fps=8, width=1, height=1, quality=5, probe_us=r.viewer_probe)

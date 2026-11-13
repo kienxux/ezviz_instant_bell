@@ -133,3 +133,15 @@ def test_alarm_from_answer():
     assert alarms.alarm_from_answer({"alarms": [{"a": 1}]}) == {"a": 1}
     assert alarms.alarm_from_answer({"alarms": []}) is None
     assert alarms.alarm_from_answer(None) is None
+
+
+def test_setting_values_are_plain_values_only() -> None:
+    info = {
+        "STATUS": {"optionals": {"KeyLight": '{"enable": 1}', "name": "Front door", "list": [1, 2], "Q12345678": {"on": 1}}},
+        "FEATURE_INFO": {"0": {"global": {"KeyMgr": {"CardKeyInfo": {"totalKeyNum": 2}}, "Backlight": {"enabled": True}}}},
+    }
+    assert state.read_setting_values(info) == {
+        "FEATURE_INFO.0.global.Backlight.enabled": True,
+        "STATUS.optionals.KeyLight.enable": 1,
+    }
+    assert state.read_setting_values(None) == {}

@@ -42,6 +42,8 @@ class StatusCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self._last_alarm_time: dict[str, str | None] = {}
         self._last_alarm_detail: dict[str, dict[str, Any]] = {}
         self._slowed_for_stream = False
+        # The account's device records of the last read, for the diagnostics.
+        self.last_infos: dict[str, Any] = {}
 
     def _apply_stream_aware_interval(self) -> None:
         """Read the status a quarter as often while someone watches the local stream.
@@ -63,6 +65,7 @@ class StatusCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         infos = api.fetch_infos()
         if not infos:
             return {}
+        self.last_infos = infos
         result: dict[str, dict[str, Any]] = {}
         for serial in self._hub.serials:
             status = api.build_status(serial, self._hub.monitors.get(serial, []), infos)

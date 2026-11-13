@@ -398,6 +398,13 @@ async def test_diagnostics_list_the_switches(hass: HomeAssistant, client: FakeCl
     entry = await setup(hass, client)
     door = (await async_get_config_entry_diagnostics(hass, entry))["doors"]["door_1"]
     assert door["status"]["switches"][3] is False and door["status"]["switches"][611] is False
+    # every plain setting by its path, to find one the integration does not know (#25)
+    settings = door["settings"]["door"]
+    assert settings["STATUS.optionals.IndicatorLight.enable"] == 0
+    assert settings["FEATURE_INFO.1.Video.LightCtrl.NightLightEnable"] is False
+    assert not any("KeyMgr" in path for path in settings)
+    assert door["settings"]["monitor_1"]["STATUS.optionals.device_screen_lightness"] == 8
+    assert all(isinstance(v, (bool, int, float)) for v in settings.values())
 
 
 async def test_label_light_falls_back_to_switch_611(hass: HomeAssistant, client: FakeClient) -> None:
@@ -1185,7 +1192,22 @@ async def test_lan_key_and_ip(hass: HomeAssistant, client: FakeClient) -> None:
     assert support.get_related_device(SERIAL) == "BE0000002"
     # the address is remembered when the cloud does not answer
     with patch("pyezvizapi.local_stream._local_sdk_endpoint_from_client", side_effect=RuntimeError("504")):
+        assert await hass.async_add_executor_job(support.get_local_ip, SERIAL, True) == "192.168.1.50"
+    # what was fetched once starts the next local stream without the cloud
+    with patch("pyezvizapi.cas.EzvizCAS", side_effect=AssertionError("cloud asked")), patch(
+        "pyezvizapi.local_stream._local_sdk_endpoint_from_client", side_effect=AssertionError("cloud asked")
+    ):
+        assert await hass.async_add_executor_job(support.fetch_lan_aes_key, SERIAL) == b"0123456789abcdef"
         assert await hass.async_add_executor_job(support.get_local_ip, SERIAL) == "192.168.1.50"
+
+    class NewCas(FakeCas):
+        def cas_get_encryption(self, serial):
+            return {"Response": {"Session": {"@Key": "fedcba9876543210"}}}
+
+    # asked again after the door station refused: the new key replaces the stored one
+    with patch("pyezvizapi.cas.EzvizCAS", NewCas), patch("requests.post"):
+        assert await hass.async_add_executor_job(support.fetch_lan_aes_key, SERIAL, True) == b"fedcba9876543210"
+    assert support.remembered["BE0000001"]["lan_key"] == "fedcba9876543210"
 
 
 async def test_lan_key_refused_gives_a_hint(hass: HomeAssistant, client: FakeClient) -> None:

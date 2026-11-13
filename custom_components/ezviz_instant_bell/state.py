@@ -12,6 +12,7 @@ feature does not get a phantom entity.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 PRIVACY_SWITCH_TYPE = 7
@@ -240,6 +241,43 @@ def read_extra_states(info: dict[str, Any]) -> dict[str, Any]:
         if defence is not None:
             out["defence_on"] = defence
     return out
+
+
+# Branches of the setting tree that hold people (cards, faces) or the network.
+PRIVATE_SETTINGS = ("KeyMgr", "StrangerDetection", "WIFI", "Network")
+_SERIAL_LIKE = re.compile(r"^[A-Z]{1,3}\d{6,}")
+
+
+def read_setting_values(info: Any) -> dict[str, bool | int | float]:
+    """Every plain setting the cloud reports for a device, by its path.
+
+    For the diagnostics: a setting the integration does not know yet (such as
+    the HP7 Pro's keyboard backlight, #25) is found by switching it in the app
+    between two downloads. Only numbers and yes/no values from ``STATUS`` and
+    ``FEATURE_INFO``; texts and lists can hold names, addresses or cards.
+    """
+    out: dict[str, bool | int | float] = {}
+
+    def walk(obj: Any, path: str) -> None:
+        if isinstance(obj, str) and obj.startswith("{"):
+            # Some firmware sends a setting as a JSON text.
+            try:
+                obj = json.loads(obj)
+            except ValueError:
+                return
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                key = str(key)
+                if _SERIAL_LIKE.match(key) or any(p in key for p in PRIVATE_SETTINGS):
+                    continue
+                walk(value, f"{path}.{key}")
+        elif isinstance(obj, (bool, int, float)):
+            out[path] = obj
+
+    if isinstance(info, dict):
+        for section in ("STATUS", "FEATURE_INFO"):
+            walk(info.get(section), section)
+    return dict(sorted(out.items()))
 
 
 def base_status(cam_status: dict[str, Any]) -> dict[str, Any]:

@@ -5,12 +5,17 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .stream_support import StreamSupport
 
 _LOGGER = logging.getLogger(__name__)
+
+# The door station sends about 15 frames a second, so a read that waits this
+# long already means trouble; four in a row (about 8 s) end the session.
+LAN_READ_TIMEOUT = 2.0
 
 
 class Cpd7LanSource:
@@ -34,10 +39,17 @@ class Cpd7LanSource:
         self._client: Any = None
         self._decoder: Any = None
         self._closed = False
+        self._started_at = 0.0
 
     def start(self) -> "Cpd7LanSource":
-        """Open the LAN session (blocking — run in an executor)."""
-        from .cpd7 import Cpd7LanClient, StreamDecoder
+        """Open the LAN session (blocking — run in an executor).
+
+        Key and address are the stored ones, so the start needs no cloud.
+        Only when the device refuses them or is not reached there are both
+        asked from the cloud again, and the start is tried once more if
+        either has changed (new address from the router, new key).
+        """
+        from .cpd7 import StreamDecoder
 
         key = self._api.fetch_lan_aes_key(self._serial)
         local_ip = self._api.get_local_ip(self._serial)
@@ -46,43 +58,56 @@ class Cpd7LanSource:
                 f"could not resolve LAN IP for {self._serial} "
                 "(device not on this network?)"
             )
+        try:
+            client = self._connect(key, local_ip)
+        except Exception:
+            try:
+                fresh = (
+                    self._api.fetch_lan_aes_key(self._serial, force=True),
+                    self._api.get_local_ip(self._serial, force=True),
+                )
+            except Exception as exc:  # noqa: BLE001 - the first error is the one to report
+                _LOGGER.debug("StreamRelay: LAN key/address not refreshed: %s", exc)
+                fresh = (key, local_ip)
+            if not fresh[1] or fresh == (key, local_ip):
+                raise
+            _LOGGER.info(
+                "StreamRelay: LAN %s of %s changed in the cloud, trying again",
+                "address" if fresh[0] == key else "key", self._serial,
+            )
+            key, local_ip = fresh
+            client = self._connect(key, local_ip)
+        self._client = client
+        self._decoder = StreamDecoder(client.ecdh_priv)
+        self._started_at = time.monotonic()
+        _LOGGER.info(
+            "StreamRelay: LAN source up (serial=%s ip=%s stream=%s)",
+            self._serial, local_ip, self._stream_quality,
+        )
+        return self
+
+    def _connect(self, key: bytes, local_ip: str) -> Any:
+        from .cpd7 import Cpd7LanClient
+
         related = self._api.get_related_device(self._serial)
         client = Cpd7LanClient(
             local_ip, related, key, channel=self._channel,
-            stream_quality=self._stream_quality,
+            stream_quality=self._stream_quality, recv_timeout=LAN_READ_TIMEOUT,
         )
         try:
             client.start()
         except Exception:
-            # Same level as the "prewarm failed" warning below so this shows
-            # up without needing debug logging enabled — ip/related let us
-            # tell "stale/wrong LAN target" apart from "device genuinely not
-            # answering there".
+            # Same level as the "prewarm failed" warning so this shows up
+            # without debug logging — ip/related tell "stale/wrong LAN
+            # target" apart from "device genuinely not answering there".
             _LOGGER.warning(
                 "StreamRelay: LAN InviteStream rejected (serial=%s ip=%s "
                 "related=%s) — see the error below for the device's raw "
                 "response",
                 self._serial, local_ip, related,
             )
-            # fetch_lan_aes_key() caches the control key for
-            # LAN_AES_KEY_TTL (1h) and is never invalidated on
-            # failure — every retry in that window keeps re-encrypting
-            # INIT/INVITE with the same key. If the doorbell rotates its
-            # local control key on a reboot, the device can't decrypt our
-            # request and falls back to exactly this generic plaintext
-            # rejection (Result 3, no <Session>) — indistinguishable on the
-            # wire from any other InviteStream refusal. Drop the cached key
-            # so the next attempt asks CAS for a fresh one instead of
-            # silently reusing a stale one for up to the full TTL.
-            self._api.invalidate_lan_aes_key(self._serial)
             raise
-        self._client = client
-        self._decoder = StreamDecoder(client.ecdh_priv)
-        _LOGGER.info(
-            "StreamRelay: LAN source up (serial=%s ip=%s stream=%s)",
-            self._serial, local_ip, self._stream_quality,
-        )
-        return self
+        return client
 
     @property
     def streamssn(self) -> str:
@@ -97,6 +122,14 @@ class Cpd7LanSource:
                 empty_strikes += 1
                 # Tolerate brief gaps; give up after sustained silence.
                 if empty_strikes > 3:
+                    if not self._closed:
+                        _LOGGER.info(
+                            "StreamRelay: local stream of %s ended after %.0f s (%s)",
+                            self._serial, time.monotonic() - self._started_at,
+                            "closed by the door station"
+                            if getattr(self._client, "peer_closed", False)
+                            else f"no data for {4 * LAN_READ_TIMEOUT:.0f} s",
+                        )
                     break
                 continue
             empty_strikes = 0

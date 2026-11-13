@@ -263,7 +263,7 @@ Most of this integration works through the EZVIZ cloud, like the EZVIZ app does.
 - After the integration has run once with the cloud, it stores the door station's local key and address, its model and its indoor monitors in `<config>/.storage/ezviz_instant_bell.local.<entry>`.
 - If EZVIZ cannot be reached when Home Assistant starts, the integration starts anyway with the same entities. The **Live** camera plays with the stored key when its source is `local` or `auto`; the other entities show as unavailable, and a repair notice says why. A new login is tried every 5 minutes, and everything starts again by itself when EZVIZ answers.
 - What still needs the cloud: rings, unlocking the door, settings, recordings and pictures. Unlocking says so instead of failing silently.
-- If the door station changes its local key (it may after a reboot), the stored key no longer fits until the cloud answers once.
+- The local live video uses the stored key and address also while the cloud is up, so it starts without waiting for EZVIZ. Only when the door station refuses them or cannot be reached there does it ask the cloud for both again (for a new address from the router, or a new key); if either changed, it tries once more at once. Until the cloud answers, a changed key or address does not work.
 
 ## Events and actions for automations
 

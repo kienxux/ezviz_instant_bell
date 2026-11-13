@@ -17,6 +17,7 @@ from homeassistant.core import HomeAssistant
 from . import InstantBellConfigEntry
 from .const import CONF_MONITOR_SERIALS, CONF_STREAM_TOKEN
 from .keys import CONF_KEY, CONF_KEYS
+from .state import read_setting_values
 
 TO_REDACT = {"username", "password", CONF_KEY, CONF_KEYS, CONF_MONITOR_SERIALS, CONF_STREAM_TOKEN, "names", "devices"}
 
@@ -42,15 +43,22 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: Instant
     hub = entry.runtime_data
     coordinator = hub.coordinator
     data = (coordinator.data if coordinator is not None else None) or {}
+    infos = getattr(coordinator, "last_infos", None) or {}
     doors = {}
     for number, serial in enumerate(hub.serials, start=1):
         relay = hub.live_relays.get(serial)
+        monitors = hub.monitors.get(serial, [])
+        settings = {"door": read_setting_values(infos.get(serial))}
+        for n, monitor in enumerate(monitors, start=1):
+            settings[f"monitor_{n}"] = read_setting_values(infos.get(monitor))
         doors[f"door_{number}"] = {
-            "monitors": len(hub.monitors.get(serial, [])),
+            "monitors": len(monitors),
             "stream_mode": hub.stream_modes.get(serial),
             "stream_source": getattr(relay, "active_source", None),
             "video_codec": getattr(relay, "detected_codec", None),
             "status": _status(data.get(serial, {})),
+            # Plain values of every setting the cloud reports, to find unknown ones (#25).
+            "settings": settings,
         }
     return {
         # Reading the package metadata touches the disk: not on the event loop.

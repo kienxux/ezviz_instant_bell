@@ -240,6 +240,8 @@ class Cpd7LanClient:
         self._recv_timeout = recv_timeout
         self._cmd_timeout = cmd_timeout
         self._play_sock: socket.socket | None = None
+        # Set when the door station closed the play connection (not a timeout).
+        self.peer_closed = False
         self._ecdh_priv = None
         self._ecdh_pub_b64: str | None = None
         self._closed = False
@@ -330,11 +332,15 @@ class Cpd7LanClient:
             return b""
         self._play_sock.settimeout(self._recv_timeout)
         try:
-            return self._play_sock.recv(max_bytes)
+            data = self._play_sock.recv(max_bytes)
         except TimeoutError:
             return b""
         except OSError:
+            self.peer_closed = True
             return b""
+        if not data:
+            self.peer_closed = True
+        return data
 
     def close(self) -> None:
         self._closed = True
