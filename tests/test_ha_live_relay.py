@@ -271,7 +271,11 @@ async def test_without_a_hold_the_usual_idle_timeout_applies() -> None:
 async def test_keep_open_reopens_a_local_session_that_ended(fake_lan) -> None:
     r = relay(stream_source="local", keep_open=True)
     assert r._keep_open
-    with patch.object(live_relay, "KEEP_OPEN_CHECK", 0.01), patch.object(live_relay, "MIN_RETRY_INTERVAL", 0):
+    # KEEP_REOPEN_MIN is patched too: its 5 s default is tested in the next test, and left alone
+    # this one needed 5 s inside a 5 s window, which a slow runner missed by a millisecond.
+    with patch.object(live_relay, "KEEP_OPEN_CHECK", 0.01), patch.object(live_relay, "MIN_RETRY_INTERVAL", 0), patch.object(
+        live_relay, "KEEP_REOPEN_MIN", 0.0
+    ):
         r._start_keeper()
         await wait_for(lambda: r._shared_vtm is not None)
         assert r._idle_handle is None  # nothing times it out
