@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
 from homeassistant.setup import async_setup_component
@@ -373,6 +373,41 @@ async def test_chime_write_falls_back_to_the_public_call(hass: HomeAssistant, cl
     assert kv[1] == MONITOR and kv[3]["volume"] == 2
 
 
+async def test_chime_sliders_reach_the_hp7_pro_range(hass: HomeAssistant, client: FakeClient) -> None:
+    """An HP7 Pro reported volume 63 and has 20 ringtones, index 0-19 (#31)."""
+    client.chime = {"volume": 63, "doorbell": 15, "pir": 0, "doorbell_enable": 1, "pir_enable": 0}
+    await setup(hass, client)
+    volume = legacy_entity(hass, "number", "chime_volume_monitor", MONITOR)
+    ringtone = legacy_entity(hass, "number", "chime_ringtone_monitor", MONITOR)
+    assert hass.states.get(volume).attributes["max"] == 100
+    assert hass.states.get(ringtone).attributes["max"] == 19
+    await hass.services.async_call("number", "set_value", {"entity_id": ringtone, "value": 19}, blocking=True)
+    sent = json.loads(next(c for c in client.calls if c[0] == "request")[3]["value"])
+    assert sent["doorbell"] == 19 and sent["volume"] == 63
+
+
+async def test_chime_is_not_written_without_the_current_settings(hass: HomeAssistant, client: FakeClient) -> None:
+    """Guessed values once reset the volume and ringtone of an HP7 Pro (#31)."""
+    await setup(hass, client)
+    def unreadable(*args, **kwargs):
+        raise RuntimeError("timeout")
+    client.get_dev_config = unreadable
+    eid = legacy_entity(hass, "switch", "chime_sound_monitor", MONITOR)
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call("switch", "turn_off", {"entity_id": eid}, blocking=True)
+    assert not [c for c in client.calls if c[0] in ("request", "kv")]
+
+
+async def test_chime_write_reads_the_settings_fresh(hass: HomeAssistant, client: FakeClient) -> None:
+    """A change made in the app since the last read is kept, not overwritten from the cache."""
+    await setup(hass, client)
+    client.chime = {**client.chime, "volume": 55}
+    eid = legacy_entity(hass, "switch", "chime_sound_monitor", MONITOR)
+    await hass.services.async_call("switch", "turn_off", {"entity_id": eid}, blocking=True)
+    sent = json.loads(next(c for c in client.calls if c[0] == "request")[3]["value"])
+    assert sent["volume"] == 55 and sent["doorbell_enable"] == 0
+
+
 async def test_other_switches_call_the_right_api(hass: HomeAssistant, client: FakeClient) -> None:
     await setup(hass, client)
     for suffix, service in (("dnd", "turn_on"), ("privacy", "turn_on"), ("defence", "turn_off"), ("label_light", "turn_on")):
@@ -419,6 +454,8 @@ async def test_diagnostics_list_the_switches(hass: HomeAssistant, client: FakeCl
     assert not any("KeyMgr" in path for path in settings)
     assert door["settings"]["monitor_1"]["STATUS.optionals.device_screen_lightness"] == 8
     assert all(isinstance(v, (bool, int, float)) for v in settings.values())
+    # the chime settings as last read (#31); the door station has none
+    assert door["chime"] == {"door": None, "monitor_1": {"doorbell": 4, "doorbell_enable": 1, "pir": 1, "pir_enable": 0, "volume": 3}}
 
 
 async def test_label_light_falls_back_to_switch_611(hass: HomeAssistant, client: FakeClient) -> None:
@@ -524,8 +561,8 @@ async def test_push_unlock_event(hass: HomeAssistant, client: FakeClient) -> Non
 async def test_unlock_fires_one_home_assistant_event_per_unlock(hass: HomeAssistant, client: FakeClient) -> None:
     await setup(hass, client)
     seen, legacy_seen = [], []
-    hass.bus.async_listen(EVENT_UNLOCK, lambda e: seen.append(e.data))
-    hass.bus.async_listen(EVENT_UNLOCK_LEGACY, lambda e: legacy_seen.append(e.data))
+    hass.bus.async_listen(EVENT_UNLOCK, callback(lambda e: seen.append(e.data)))
+    hass.bus.async_listen(EVENT_UNLOCK_LEGACY, callback(lambda e: legacy_seen.append(e.data)))
     push_unlock(client)
     await hass.async_block_till_done(wait_background_tasks=True)
     assert hass.states.get(legacy_entity(hass, "binary_sensor", "alarm_unlock_lock")).state == "on"
@@ -559,7 +596,7 @@ async def test_a_card_unlock_makes_its_sensor_and_still_counts(hass: HomeAssista
     entry = await setup(hass, client)
     assert alarm_sensor(hass, "unlock_rfid") is None
     seen = []
-    hass.bus.async_listen(EVENT_UNLOCK, lambda e: seen.append(e.data["category"]))
+    hass.bus.async_listen(EVENT_UNLOCK, callback(lambda e: seen.append(e.data["category"])))
     push_unlock(client, title="RFID card unlock")
     await hass.async_block_till_done(wait_background_tasks=True)
     rfid = alarm_sensor(hass, "unlock_rfid")
@@ -668,7 +705,7 @@ async def test_take_snapshot_service(hass: HomeAssistant, client: FakeClient) ->
 
     hub.live_relays[SERIAL] = _StubRelay()
     events: list = []
-    hass.bus.async_listen(EVENT_PICTURE_SAVED, lambda ev: events.append(ev))
+    hass.bus.async_listen(EVENT_PICTURE_SAVED, callback(lambda ev: events.append(ev)))
 
     await hass.services.async_call(DOMAIN, "take_snapshot", {"serial": SERIAL}, blocking=True)
     await hass.async_block_till_done()
@@ -1919,7 +1956,7 @@ async def test_a_ring_saves_its_clip_and_says_where_it_is(hass: HomeAssistant, c
     entry = await setup(hass, client, {"save_clips": True})
     hub = entry.runtime_data
     saved = []
-    hass.bus.async_listen("ezviz_instant_bell_clip_saved", lambda event: saved.append(event.data))
+    hass.bus.async_listen("ezviz_instant_bell_clip_saved", callback(lambda event: saved.append(event.data)))
     with patch("custom_components.ezviz_instant_bell.hub.CLIP_SAVE_FIRST_WAIT", 0), patch(
         "custom_components.ezviz_instant_bell.hub.CLIP_SAVE_POLL", 0.01
     ), patch.object(hub.clips, "_ffmpeg", return_value=fake_ffmpeg(tmp_path)), patch(
@@ -1944,7 +1981,7 @@ async def test_a_ring_saves_its_clip_and_says_where_it_is(hass: HomeAssistant, c
 async def test_no_clip_is_saved_unless_the_option_is_on(hass: HomeAssistant, client: FakeClient) -> None:
     entry = await setup(hass, client)
     saved = []
-    hass.bus.async_listen("ezviz_instant_bell_clip_saved", lambda event: saved.append(event))
+    hass.bus.async_listen("ezviz_instant_bell_clip_saved", callback(lambda event: saved.append(event)))
     client.messages = [ring_message("m-ring", 5)]
     await poll_once(hass)
     await hass.async_block_till_done(wait_background_tasks=True)
@@ -1974,9 +2011,9 @@ async def test_a_motion_picture_is_saved_in_the_media_folder(hass: HomeAssistant
     hass.config.media_dirs = {"local": str(tmp_path / "media")}
     entry = await setup(hass, client, {"save_detection_pictures": True})
     saved = []
-    hass.bus.async_listen("ezviz_instant_bell_picture_saved", lambda event: saved.append(event.data))
+    hass.bus.async_listen("ezviz_instant_bell_picture_saved", callback(lambda event: saved.append(event.data)))
     rings = []
-    hass.bus.async_listen("state_changed", lambda e: rings.append(e) if e.data["entity_id"].startswith("event.") else None)
+    hass.bus.async_listen("state_changed", callback(lambda e: rings.append(e) if e.data["entity_id"].startswith("event.") else None))
     client.messages = [
         motion_message("m-motion", 3),
         motion_message("m-name", 2, deviceSerial=None, **{"from": "Tor"}, title="Human detected"),
@@ -2019,7 +2056,7 @@ async def test_motion_and_person_fire_the_event_entity_when_switched_on(hass: Ho
     bell = entity_id(hass, "event", "bell")
     image = hass.data["image"].get_entity(entity_id(hass, "image", "last_picture"))
     seen = []
-    hass.bus.async_listen("state_changed", lambda e: seen.append(e.data["new_state"]) if e.data["entity_id"] == bell else None)
+    hass.bus.async_listen("state_changed", callback(lambda e: seen.append(e.data["new_state"]) if e.data["entity_id"] == bell else None))
     client.messages = [  # newest first, as the cloud sends them
         motion_message("m-person", 1, deviceSerial=None, **{"from": "Tor"}, title="Human detected"),
         motion_message("m-unknown", 2, title="Bewegung erkannt"),  # not recognised: no event
@@ -2154,7 +2191,8 @@ async def test_opening_from_home_assistant_is_announced_with_the_user(hass: Home
     first = await hass.auth.async_create_user("First")
     second = await hass.auth.async_create_user("Second")
     seen = []
-    hass.bus.async_listen("ezviz_instant_bell_door_opened", lambda event: seen.append(event))
+    # A plain lambda runs in the executor on older HA versions: events then arrive in no fixed order.
+    hass.bus.async_listen("ezviz_instant_bell_door_opened", callback(lambda event: seen.append(event)))
     await hass.services.async_call(
         "button", "press", {"entity_id": legacy_entity(hass, "button", "unlock_door")},
         blocking=True, context=Context(user_id=first.id),
@@ -2168,7 +2206,7 @@ async def test_opening_from_home_assistant_is_announced_with_the_user(hass: Home
 async def test_a_failed_opening_is_not_announced(hass: HomeAssistant, client: FakeClient) -> None:
     await setup(hass, client)
     seen = []
-    hass.bus.async_listen("ezviz_instant_bell_door_opened", lambda event: seen.append(event))
+    hass.bus.async_listen("ezviz_instant_bell_door_opened", callback(lambda event: seen.append(event)))
     client.fail_unlock = True
     with pytest.raises(HomeAssistantError):
         await hass.services.async_call(DOMAIN, "unlock_door", {}, blocking=True)
@@ -2199,7 +2237,7 @@ async def test_two_rings_of_one_visit_announce_the_recording_once(hass: HomeAssi
     entry = await setup(hass, client, {"save_clips": True})
     hub = entry.runtime_data
     saved, rings = [], []
-    hass.bus.async_listen("ezviz_instant_bell_clip_saved", lambda event: saved.append(event.data))
+    hass.bus.async_listen("ezviz_instant_bell_clip_saved", callback(lambda event: saved.append(event.data)))
     from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
     async_dispatcher_connect(hass, hub.signal_event, lambda event: rings.append(event))

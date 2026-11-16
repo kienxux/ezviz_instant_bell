@@ -22,14 +22,6 @@ LABEL_LIGHT_SWITCH_TYPE = 611
 
 # Values of the ``ChimeMusic`` setting that are used when the device does not
 # report them (all fields are written back together, so the rest is preserved).
-CHIME_DEFAULTS: dict[str, int] = {
-    "doorbell": 10,
-    "pir": 0,
-    "volume": 7,
-    "doorbell_enable": 1,
-    "pir_enable": 0,
-}
-
 KNOWN_MODELS = ("HP7", "CP7", "HP4", "DP1", "DP2")
 DEFAULT_MODEL = "HP7"
 
@@ -385,9 +377,9 @@ def chime_values(config: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def merge_chime(current: dict[str, Any] | None, **fields: int) -> dict[str, Any]:
-    """New ChimeMusic dictionary: defaults, then what the device has, then the change."""
-    return {**CHIME_DEFAULTS, **(current or {}), **fields}
+def merge_chime(current: dict[str, Any], **fields: int) -> dict[str, Any]:
+    """New ChimeMusic dictionary: what the device has, then the change."""
+    return {**current, **fields}
 
 
 def chime_status(per_serial: dict[str, dict[str, Any]], door: str, monitors: list[str]) -> dict[str, Any]:

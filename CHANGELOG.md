@@ -2,6 +2,15 @@
 
 All notable changes. The newest version is first. Versions follow the `version` in `manifest.json`.
 
+## 1.3.1
+
+- Fixed: the **Volume** sliders of the chime went only from 0 to 7, but an HP7 Pro reported 63 (#31). Moving the slider set the chime almost silent. They now go from 0 to 100. That 100 is the top of the scale is assumed, not yet confirmed on a door station.
+- Fixed: the ringtone sliders stopped at 15, so the last four of the HP7 Pro's 20 ringtones could not be chosen (#31). They now go to 19. The number counts from 0: "Ringtone 16" in the app is 15.
+- Fixed: a chime switch or slider could set the other chime settings back. When the current settings could not be read, a change was written together with guessed values (volume 7, ringtone 10). Now the settings are read fresh before every change, and nothing is written if they cannot be read; Home Assistant shows an error instead. A change made in the app shortly before is no longer overwritten from the cache.
+- Renamed to match the EZVIZ app (#31): "Name Tag Light" is now **Name Holder Light**, "Alarm Type" **Last Alarm Type**, "Lock Unlocked" **Door Unlocked**, "Last picture" **Last Picture**. Entity IDs stay the same, so automations keep working; a name you changed yourself stays as well.
+- New installs: the text **Motion** sensor is off by default (the **Motion Detection** binary sensor shows the same), and **Update Available** is on by default. Existing installs keep their choice.
+- Diagnostics: each door station now also lists the chime settings (`ChimeMusic`) as last read, numbers and yes/no only, to check the chime controls (#31).
+
 ## 1.3.0
 
 - New action **Take a snapshot** (`ezviz_instant_bell.take_snapshot`): it saves a picture taken right now from the live video, over the LAN without the EZVIZ cloud, under **Media > My media**, and fires `ezviz_instant_bell_picture_saved` just like the event pictures, so the same automations can send it on. When the live video gives nothing, the latest event picture is saved instead. Give `serial` when the account has more than one door station. Built and tested with a fake client; not yet confirmed on a door station.
