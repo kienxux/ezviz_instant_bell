@@ -98,7 +98,8 @@ def test_chime_values():
 def test_merge_chime_keeps_other_fields():
     merged = state.merge_chime({"volume": 2, "extra": 9}, doorbell_enable=0)
     assert merged["volume"] == 2 and merged["extra"] == 9 and merged["doorbell_enable"] == 0
-    assert merged["doorbell"] == state.CHIME_DEFAULTS["doorbell"]
+    # nothing is guessed for fields the device did not send (#31)
+    assert "doorbell" not in merged
 
 
 def test_chime_status_layout():

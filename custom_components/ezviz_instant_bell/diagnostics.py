@@ -49,8 +49,10 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: Instant
         relay = hub.live_relays.get(serial)
         monitors = hub.monitors.get(serial, [])
         settings = {"door": read_setting_values(infos.get(serial))}
+        chime = {"door": hub.api.chime_diagnostics(serial)}
         for n, monitor in enumerate(monitors, start=1):
             settings[f"monitor_{n}"] = read_setting_values(infos.get(monitor))
+            chime[f"monitor_{n}"] = hub.api.chime_diagnostics(monitor)
         doors[f"door_{number}"] = {
             "monitors": len(monitors),
             "stream_mode": hub.stream_modes.get(serial),
@@ -59,6 +61,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: Instant
             "status": _status(data.get(serial, {})),
             # Plain values of every setting the cloud reports, to find unknown ones (#25).
             "settings": settings,
+            # The ChimeMusic settings as last read, to check the chime controls (#31).
+            "chime": chime,
         }
     return {
         # Reading the package metadata touches the disk: not on the event loop.

@@ -86,12 +86,12 @@ To change the login, the region or the chosen door stations later, use **Reconfi
 
 | Kind | Entities |
 | --- | --- |
-| **Instant bell** | `Doorbell` (event: `ring`, `door_unlock`, `gate_open`, `motion`, `person`, `other`) and `Last picture` (image), both within seconds |
+| **Instant bell** | `Doorbell` (event: `ring`, `door_unlock`, `gate_open`, `motion`, `person`, `other`) and `Last Picture` (image), both within seconds |
 | **Open** | Buttons `Unlock Door` and `Unlock Gate`, and the actions `ezviz_instant_bell.unlock_door` / `unlock_gate` |
-| **Sensors** | Name, firmware, online status, WiFi signal, SSID, local and WAN IP, motion, last alarm and its type, seconds since last motion, update available, microphone volume |
-| **Binary sensors** | Motion; short pulses (3 s) for doorbell ringing, gate open, lock unlocked and app unlock. Card, face, palm and code unlock and the smart and intelligent detection alarms depend on the model, so each appears the first time the door station reports one. Read-only states of mute, loitering, stranger and human detection, when the device reports them |
-| **Switches** | Doorbell chime and motion sound alert (door station and indoor monitor), do not disturb, privacy, armed, name-tag light, doorbell indicator (the light at the call button) and keyboard backlight (HP7 Pro), the last two only when the door station reports them |
-| **Sliders** | Chime volume (0 to 7) and ringtones for the doorbell and the motion alert, on the door station and on every indoor monitor |
+| **Sensors** | Name, firmware, online status, WiFi signal, SSID, local and WAN IP, motion (text, off by default), last alarm and its type, seconds since last motion, update available, microphone volume |
+| **Binary sensors** | Motion; short pulses (3 s) for doorbell ringing, gate open, door unlocked and app unlock. Card, face, palm and code unlock and the smart and intelligent detection alarms depend on the model, so each appears the first time the door station reports one. Read-only states of mute, loitering, stranger and human detection, when the device reports them |
+| **Switches** | Doorbell chime and motion sound alert (door station and indoor monitor), do not disturb, privacy, armed, name holder light, doorbell indicator (the light at the call button) and keyboard backlight (HP7 Pro), the last two only when the door station reports them |
+| **Sliders** | Chime volume (0 to 100) and ringtones for the doorbell and the motion alert (0 to 19; the app counts from 1, so "Ringtone 16" is 15), on the door station and on every indoor monitor |
 | **Camera** | `Live`: the live video (cloud or local network). `Last Snapshot`: the picture of the latest alarm |
 | **Media** | *Recordings (SD card)* and *Pictures of events* in the Media browser |
 | **Dashboard** | The visitor log card |
@@ -133,7 +133,7 @@ Switch on **Motion as an event of the Doorbell entity** and/or **Person as an ev
 
 - They come through the same message check as the rings, a few seconds after the door station reports them. Each check reads the newest 5 entries.
 - Motion and person are told apart by the name of the message (for example *Motion Detection Alarm*, *Human detected*, *Smart Detection Alarm*) and by its code. A message that is recognised as neither stays `other`, as before. The codes of the latest messages are in the diagnostics download (`recent_messages`); please attach it to an issue if your door station's messages land in the wrong type.
-- Their picture does not replace the **Last picture** of a ring. To keep it, see [Save the pictures of motion and people](#save-the-pictures-of-motion-and-people).
+- Their picture does not replace the **Last Picture** of a ring. To keep it, see [Save the pictures of motion and people](#save-the-pictures-of-motion-and-people).
 - Which events the door station reports is set in the EZVIZ app.
 
 ## Visitor log card
@@ -187,7 +187,7 @@ Switch on **Save the video of every ring** in the options and the integration ke
 Switch on **Save the picture of every motion and person event** in the options. The integration then stores the picture of each motion and person event in the media folder of Home Assistant. No automation is needed. Find them under **Media > My media > ezviz_instant_bell > your door station > a day**, named like `14-03-12_motion_detection_alarm.jpg`.
 
 - The picture arrives about 5 to 12 seconds after the event, through the same message check as the rings.
-- Everything the door station reports with a picture counts, except rings and door or gate openings. Rings already have the **Last picture** entity, which this option does not change.
+- Everything the door station reports with a picture counts, except rings and door or gate openings. Rings already have the **Last Picture** entity, which this option does not change.
 - Which events the door station reports (motion, human detection, sensitivity, zones) is set in the EZVIZ app.
 - Pictures are kept for 30 days by default (option **Keep the saved pictures for**); older day folders are deleted. Nothing outside `ezviz_instant_bell` in the media folder is touched.
 - Each saved picture fires `ezviz_instant_bell_picture_saved` with `path` and `media_content_id`, should you want a notification after all.

@@ -177,7 +177,7 @@
         "name": "Last Alarm"
       },
       "alarm_name": {
-        "name": "Alarm Type"
+        "name": "Last Alarm Type"
       },
       "seconds_last_trigger": {
         "name": "Seconds Since Last Motion"
@@ -217,7 +217,7 @@
         "name": "Gate Open"
       },
       "unlock_lock": {
-        "name": "Lock Unlocked"
+        "name": "Door Unlocked"
       },
       "unlock_rfid": {
         "name": "RFID Unlock"
@@ -278,7 +278,7 @@
         "name": "Armed"
       },
       "label_light": {
-        "name": "Name Tag Light"
+        "name": "Name Holder Light"
       },
       "indicator_light": {
         "name": "Doorbell Indicator"
@@ -340,7 +340,7 @@
     },
     "image": {
       "last_picture": {
-        "name": "Last picture"
+        "name": "Last Picture"
       }
     }
   },

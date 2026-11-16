@@ -27,18 +27,20 @@ class NumberDef:
     monitor: bool = False
 
 
-# The firmware gives the ringtone as an index; its upper limit depends on the
-# firmware, so the slider is generous (0-15) and the device ignores a value it
-# does not know.
+# The firmware gives the ringtone as an index from 0 ("Ringtone 1" in the app);
+# the HP7 Pro has 20 (#31). The volume is not 0-7 as first assumed: an HP7 Pro
+# reported 63, so the slider goes to 100.
+VOLUME_MAX = 100
+RINGTONE_MAX = 19
 DOOR_NUMBERS = (
-    NumberDef("chime_volume", "chime_volume", "volume", 7),
-    NumberDef("chime_ringtone", "chime_ringtone", "doorbell", 15),
-    NumberDef("chime_pir_ringtone", "chime_pir_ringtone", "pir", 15),
+    NumberDef("chime_volume", "chime_volume", "volume", VOLUME_MAX),
+    NumberDef("chime_ringtone", "chime_ringtone", "doorbell", RINGTONE_MAX),
+    NumberDef("chime_pir_ringtone", "chime_pir_ringtone", "pir", RINGTONE_MAX),
 )
 MONITOR_NUMBERS = (
-    NumberDef("chime_volume_monitor", "chime_volume", "volume", 7, monitor=True),
-    NumberDef("chime_ringtone_monitor", "chime_ringtone", "doorbell", 15, monitor=True),
-    NumberDef("chime_pir_ringtone_monitor", "chime_pir_ringtone", "pir", 15, monitor=True),
+    NumberDef("chime_volume_monitor", "chime_volume", "volume", VOLUME_MAX, monitor=True),
+    NumberDef("chime_ringtone_monitor", "chime_ringtone", "doorbell", RINGTONE_MAX, monitor=True),
+    NumberDef("chime_pir_ringtone_monitor", "chime_pir_ringtone", "pir", RINGTONE_MAX, monitor=True),
 )
 
 

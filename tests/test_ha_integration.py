@@ -373,6 +373,41 @@ async def test_chime_write_falls_back_to_the_public_call(hass: HomeAssistant, cl
     assert kv[1] == MONITOR and kv[3]["volume"] == 2
 
 
+async def test_chime_sliders_reach_the_hp7_pro_range(hass: HomeAssistant, client: FakeClient) -> None:
+    """An HP7 Pro reported volume 63 and has 20 ringtones, index 0-19 (#31)."""
+    client.chime = {"volume": 63, "doorbell": 15, "pir": 0, "doorbell_enable": 1, "pir_enable": 0}
+    await setup(hass, client)
+    volume = legacy_entity(hass, "number", "chime_volume_monitor", MONITOR)
+    ringtone = legacy_entity(hass, "number", "chime_ringtone_monitor", MONITOR)
+    assert hass.states.get(volume).attributes["max"] == 100
+    assert hass.states.get(ringtone).attributes["max"] == 19
+    await hass.services.async_call("number", "set_value", {"entity_id": ringtone, "value": 19}, blocking=True)
+    sent = json.loads(next(c for c in client.calls if c[0] == "request")[3]["value"])
+    assert sent["doorbell"] == 19 and sent["volume"] == 63
+
+
+async def test_chime_is_not_written_without_the_current_settings(hass: HomeAssistant, client: FakeClient) -> None:
+    """Guessed values once reset the volume and ringtone of an HP7 Pro (#31)."""
+    await setup(hass, client)
+    def unreadable(*args, **kwargs):
+        raise RuntimeError("timeout")
+    client.get_dev_config = unreadable
+    eid = legacy_entity(hass, "switch", "chime_sound_monitor", MONITOR)
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call("switch", "turn_off", {"entity_id": eid}, blocking=True)
+    assert not [c for c in client.calls if c[0] in ("request", "kv")]
+
+
+async def test_chime_write_reads_the_settings_fresh(hass: HomeAssistant, client: FakeClient) -> None:
+    """A change made in the app since the last read is kept, not overwritten from the cache."""
+    await setup(hass, client)
+    client.chime = {**client.chime, "volume": 55}
+    eid = legacy_entity(hass, "switch", "chime_sound_monitor", MONITOR)
+    await hass.services.async_call("switch", "turn_off", {"entity_id": eid}, blocking=True)
+    sent = json.loads(next(c for c in client.calls if c[0] == "request")[3]["value"])
+    assert sent["volume"] == 55 and sent["doorbell_enable"] == 0
+
+
 async def test_other_switches_call_the_right_api(hass: HomeAssistant, client: FakeClient) -> None:
     await setup(hass, client)
     for suffix, service in (("dnd", "turn_on"), ("privacy", "turn_on"), ("defence", "turn_off"), ("label_light", "turn_on")):
@@ -419,6 +454,8 @@ async def test_diagnostics_list_the_switches(hass: HomeAssistant, client: FakeCl
     assert not any("KeyMgr" in path for path in settings)
     assert door["settings"]["monitor_1"]["STATUS.optionals.device_screen_lightness"] == 8
     assert all(isinstance(v, (bool, int, float)) for v in settings.values())
+    # the chime settings as last read (#31); the door station has none
+    assert door["chime"] == {"door": None, "monitor_1": {"doorbell": 4, "doorbell_enable": 1, "pir": 1, "pir_enable": 0, "volume": 3}}
 
 
 async def test_label_light_falls_back_to_switch_611(hass: HomeAssistant, client: FakeClient) -> None:

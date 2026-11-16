@@ -177,7 +177,7 @@
         "name": "Letzter Alarm"
       },
       "alarm_name": {
-        "name": "Alarmart"
+        "name": "Letzte Alarmart"
       },
       "seconds_last_trigger": {
         "name": "Sekunden seit letzter Bewegung"
@@ -217,7 +217,7 @@
         "name": "Tor offen"
       },
       "unlock_lock": {
-        "name": "Schloss entriegelt"
+        "name": "Tür entriegelt"
       },
       "unlock_rfid": {
         "name": "Entriegelung per RFID"

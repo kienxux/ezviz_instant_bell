@@ -85,11 +85,12 @@ class DeviceApi:
     # Chime
     # ------------------------------------------------------------------
 
-    def get_chime_config(self, serial: str) -> dict[str, Any] | None:
-        if serial in self._chime_skip:
+    def get_chime_config(self, serial: str, *, fresh: bool = False) -> dict[str, Any] | None:
+        """The ChimeMusic settings; ``fresh`` skips the cache and the skip list."""
+        if serial in self._chime_skip and not fresh:
             return None
         cached = self._chime_cache.get(serial)
-        if cached and time.monotonic() - cached[1] < CHIME_CACHE_SECONDS:
+        if cached and not fresh and time.monotonic() - cached[1] < CHIME_CACHE_SECONDS:
             return cached[0]
         try:
             answer = self._get_client().get_dev_config(serial, 1, CHIME_KEY)
@@ -115,8 +116,16 @@ class DeviceApi:
         return config
 
     def set_chime_fields(self, serial: str, **fields: int) -> None:
-        """Change some chime settings and keep the others as they are."""
-        merged = state.merge_chime(self.get_chime_config(serial), **fields)
+        """Change some chime settings and keep the others as they are.
+
+        The current settings are read fresh first. Without them nothing is
+        written: guessed values for the other fields once set the volume and
+        the ringtone of an HP7 Pro back (#31).
+        """
+        current = self.get_chime_config(serial, fresh=True)
+        if current is None:
+            raise RuntimeError("Could not read the current chime settings, nothing was changed")
+        merged = state.merge_chime(current, **fields)
         client = self._get_client()
         import json
 
@@ -132,6 +141,13 @@ class DeviceApi:
             _LOGGER.debug("Chime write as query failed (%s), trying the public call", err)
             client.set_dev_config_kv(serial, 1, CHIME_KEY, merged)
         self._chime_cache.pop(serial, None)
+
+    def chime_diagnostics(self, serial: str) -> dict[str, Any] | None:
+        """Numbers and yes/no values of the last ChimeMusic read, for the diagnostics."""
+        cached = self._chime_cache.get(serial)
+        if not cached:
+            return None
+        return {k: v for k, v in sorted(cached[0].items()) if isinstance(v, (bool, int, float))}
 
     # ------------------------------------------------------------------
     # Switches

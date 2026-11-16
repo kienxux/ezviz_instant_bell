@@ -100,7 +100,7 @@ SENSORS: tuple[SensorDef, ...] = (
     SensorDef("ssid", "mdi:wifi", diagnostic=True, enabled_default=False),
     SensorDef("local_ip", "mdi:ip", diagnostic=True, enabled_default=False),
     SensorDef("wan_ip", "mdi:wan", diagnostic=True, enabled_default=False),
-    SensorDef("motion", "mdi:run", _motion),
+    SensorDef("motion", "mdi:run", _motion, enabled_default=False),
     SensorDef("last_alarm_time", "mdi:clock-alert", _timestamp, SensorDeviceClass.TIMESTAMP),
     SensorDef("alarm_name", "mdi:alert"),
     SensorDef(
@@ -112,7 +112,7 @@ SENSORS: tuple[SensorDef, ...] = (
         diagnostic=True,
         enabled_default=False,
     ),
-    SensorDef("upgrade_available", "mdi:update", _yes_no, diagnostic=True, enabled_default=False),
+    SensorDef("upgrade_available", "mdi:update", _yes_no, diagnostic=True),
 )
 MIC_VOLUME = SensorDef("mic_volume", "mdi:microphone", None, unit=PERCENTAGE, diagnostic=True)
 
