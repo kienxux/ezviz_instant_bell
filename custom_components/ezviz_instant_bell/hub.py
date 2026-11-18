@@ -57,6 +57,7 @@ from .const import (
     ISSUE_CLOUD_OFFLINE,
     PICTURE_ATTEMPTS,
     PICTURE_RETRY_DELAY,
+    RECORDING_ERROR_PAUSE,
     RECORDING_LIST_TTL_PAST,
     RECORDING_LIST_TTL_TODAY,
     RECORDING_MAX_PAGES,
@@ -160,6 +161,7 @@ class InstantBellHub:
         self._history: dict[tuple[str, str], tuple[float, list[HistoryItem]]] = {}
         self._history_pictures: OrderedDict[tuple[str, str], bytes] = OrderedDict()
         self._recordings: dict[tuple[str, str], tuple[float, list[Recording]]] = {}
+        self._recordings_pause: dict[str, float] = {}
         self.clips = ClipStore(hass, self)
 
     # ------------------------------------------------------------------
@@ -834,10 +836,21 @@ class InstantBellHub:
         ttl = RECORDING_LIST_TTL_TODAY if day >= dt_util.now().date() else RECORDING_LIST_TTL_PAST
         if cached and not refresh and time.monotonic() - cached[0] < ttl:
             return cached[1]
+        # After a device error the list is not asked for again for a while; a ring clip (refresh) still tries.
+        if not refresh and time.monotonic() < self._recordings_pause.get(serial, 0.0):
+            if cached:
+                return cached[1]
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="recordings_failed",
+                translation_placeholders={"error": "device error, retrying later"},
+            )
         try:
             items = await self.hass.async_add_executor_job(self._fetch_recordings_day, serial, day)
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Recordings of %s for %s failed: %s", serial, day, err)
+            if "DEVICE_EXCEPTION" in str(err):
+                self._recordings_pause[serial] = time.monotonic() + RECORDING_ERROR_PAUSE
             if cached:
                 return cached[1]
             raise HomeAssistantError(

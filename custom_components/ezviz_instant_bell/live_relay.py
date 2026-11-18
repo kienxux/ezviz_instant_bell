@@ -945,12 +945,15 @@ class StreamRelay:
         if self._warned_scrambled or parser.scrambled_packets < 8:
             return
         self._warned_scrambled = True
-        _LOGGER.warning(
+        # A key already in use means this is routine on every session start.
+        _LOGGER.log(
+            logging.DEBUG if self._decrypt_key is not None else logging.WARNING,
             "StreamRelay: the doorbell is SCRAMBLING the video "
             "(PES_scrambling_control set on %d packets, serial=%s). Image/"
-            "Video Encryption is enabled on the device; looking for the key "
-            "so the stream can be decrypted.",
+            "Video Encryption is enabled on the device; %s.",
             parser.scrambled_packets, self._serial,
+            "decrypting with the known key" if self._decrypt_key is not None
+            else "looking for the key so the stream can be decrypted",
         )
         self._enable_decryption()
         if self._decrypt_key is not None:
