@@ -33,8 +33,9 @@ blueprint:
       name: Phone notification services
       description: >
         The service of the companion app of each phone that should get the message,
-        for example notify.mobile_app_my_phone. Add one entry per phone. The first
-        person who taps "Open door" opens it.
+        for example notify.mobile_app_my_phone (always starts with mobile_app_; in
+        Tools > Actions, search "notify"). Add one entry per
+        phone. The first person who taps "Open door" opens it.
       selector:
         text:
           multiple: true
@@ -61,8 +62,15 @@ variables:
   bell_entity: !input bell
   picture_entity: !input picture
   notify_input: !input notify_service
-  # Older automations hold a single text; newer ones a list.
-  notify_services: "{{ notify_input if notify_input is not string else [notify_input] }}"
+  # Older automations hold a single text; newer ones a list. Blank entries (the
+  # UI adds one easily) are dropped and a missing "notify." prefix is added.
+  notify_services: >
+    {% set items = notify_input if notify_input is not string else [notify_input] %}
+    {% set ns = namespace(out=[]) %}
+    {% for s in items | map('trim') | select %}
+      {% set ns.out = ns.out + [s if s.startswith('notify.') else 'notify.' ~ s] %}
+    {% endfor %}
+    {{ ns.out }}
   # Random per run: a guessable ID would let anyone who can fire events open the door.
   # (Three draws: the template sandbox refuses a range above 100000.)
   action_id: "EZVIZ_OPEN_{{ range(100000) | random }}{{ range(100000) | random }}{{ range(100000) | random }}"
