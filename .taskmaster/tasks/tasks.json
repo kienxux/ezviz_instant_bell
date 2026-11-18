@@ -1,0 +1,403 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": "1",
+        "title": "Local ring in HA: event push channel research",
+        "priority": "high",
+        "status": "pending",
+        "dependencies": [],
+        "description": "Find out whether the HP7 (not the CPD5 already tested) delivers a ring to the LAN so HA can react without the cloud.",
+        "details": "Earlier captures showed the CPD5 sends rings cloud-only; the HP7 is a different model and was never captured at a ring. Approach, all passive, with the user's go-ahead: (1) listen to the station's own UDP broadcasts on 50160 multicast 239.255.255.251 and 50162 broadcast while the user rings the bell twice, and see whether the periodic /trans/3.1.1/0/req/8209 message changes or an extra message appears at the ring; (2) a FRITZ!Box capture at a ring to confirm whether the station talks only to the cloud. If a local signal exists, add a passive UDP listener that fires the existing ring event. If not, record that HP7 rings are cloud-only like the CPD5 and keep the cloud ring path. No commands are sent to the device.",
+        "testStrategy": "A unit test that the UDP listener fires the ring event on a captured packet; a real ring reproduces it.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Passive UDP listen at two rings (user rings the bell)",
+            "description": "Passive UDP listen at two rings (user rings the bell)",
+            "status": "pending",
+            "dependencies": [],
+            "details": "Capture 50160/50162 around the ring; diff against the idle /discover and /trans traffic.",
+            "testStrategy": "",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "FRITZ!Box capture at a ring to confirm cloud-vs-LAN",
+            "description": "FRITZ!Box capture at a ring to confirm cloud-vs-LAN",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "details": "Does the station send anything to the LAN host at the ring, or only to the cloud?",
+            "testStrategy": "",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Decide: local listener or keep cloud",
+            "description": "Decide: local listener or keep cloud",
+            "status": "pending",
+            "dependencies": [
+              2
+            ],
+            "details": "If a local ring signal exists, a passive listener fires the ring event; else document HP7 = cloud-only.",
+            "testStrategy": "",
+            "parentId": "undefined"
+          }
+        ]
+      },
+      {
+        "id": "2",
+        "title": "Two-way talk: confirm the path and pick the HA approach",
+        "priority": "high",
+        "status": "pending",
+        "dependencies": [],
+        "description": "Decide how talk can work and whether any part is local. Evidence so far: the EZVIZ talk client is cloud/CAS P2P mediated (VerifyAndTalkStart to a talk server), not a plain LAN channel.",
+        "details": "The public EZVIZ Open SDK exposes talk only through its cloud player (startVoiceTalk/stopVoiceTalk, needs an appKey). pyezvizapi 1.0.5/2.0.0 still has no send path. The native talk client connects to a talk server and does ECDH + P2P, which is the cloud relay, so talk is almost certainly NOT purely local on this hardware. Steps: (1) one FRITZ!Box capture while pressing the app talk button to confirm server/port/timing (not content); (2) from that, decide the HA approach. Most realistic: a half-duplex push-to-talk that uploads audio through the EZVIZ cloud API if a documented upload endpoint exists, exposed in HA as a button/service plus a go2rtc/WebRTC mic card. Keep audio OUT separate from the already-working audio IN of the live stream. If no cloud upload endpoint is usable without the appKey SDK, record that talk needs the official SDK and stop.",
+        "testStrategy": "Decision written on #15 with the capture evidence; any HA code behind a documented API with a unit test.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "FRITZ!Box capture of the app talk button",
+            "description": "FRITZ!Box capture of the app talk button",
+            "status": "pending",
+            "dependencies": [],
+            "details": "Server, port, timing of the talk session at a button press.",
+            "testStrategy": "",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Check pyezvizapi/cloud API for a usable talk-start/upload endpoint",
+            "description": "Check pyezvizapi/cloud API for a usable talk-start/upload endpoint",
+            "status": "pending",
+            "dependencies": [],
+            "details": "Is there a documented cloud call that starts talk and accepts audio, without the appKey-only SDK?",
+            "testStrategy": "",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Decide the HA approach or record the blocker",
+            "description": "Decide the HA approach or record the blocker",
+            "status": "pending",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Half-duplex push-to-talk via the cloud API + mic card, or 'needs the official SDK'. Update #15 and ROADMAP.",
+            "testStrategy": "",
+            "parentId": "undefined"
+          }
+        ]
+      },
+      {
+        "id": "3",
+        "title": "Release 1.2.1 from branch local-live-fixes",
+        "priority": "high",
+        "status": "done",
+        "dependencies": [],
+        "description": "Ship the three verified real-device fixes (24 KB header-size detection, pack-header sync on encrypted streams, INVITE Result 1052683 hint).",
+        "details": "Branch local-live-fixes, worktree /tmp/ezviz-lanfix, 362 tests green, verified on the HP7. Bump manifest to 1.2.1, CHANGELOG heading, README note (one local viewer at a time), ROADMAP 'quicker first picture' to Done. Commit, PR, CI green, release.",
+        "testStrategy": "pytest + pytest-oldest + hacs + hassfest green before tagging.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Review the diff, bump version, update README/ROADMAP",
+            "description": "Review the diff, bump version, update README/ROADMAP",
+            "status": "pending",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": "",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Commit, push, PR",
+            "description": "Commit, push, PR",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "details": "",
+            "testStrategy": "",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "CI green, release v1.2.1, remove the worktree",
+            "description": "CI green, release v1.2.1, remove the worktree",
+            "status": "pending",
+            "dependencies": [
+              2
+            ],
+            "details": "",
+            "testStrategy": "",
+            "parentId": "undefined"
+          }
+        ],
+        "updatedAt": "2026-11-13T13:34:34.499Z"
+      },
+      {
+        "id": "4",
+        "title": "Confirm the 1.2.x numbers on the real door station",
+        "priority": "medium",
+        "status": "pending",
+        "dependencies": [
+          "3"
+        ],
+        "description": "Replace 'measured with a synthetic stream' with real HP7 numbers using the harness (HA stopped).",
+        "details": "Measure first decoded frame, sync time, decode errors per 10 s over >=5 min, audio decryptable. Update the CHANGELOG wording.",
+        "testStrategy": "Numbers in the harness output; changelog updated.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "One 6-min harness session, extract the numbers",
+            "description": "One 6-min harness session, extract the numbers",
+            "status": "pending",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": "",
+            "parentId": "undefined"
+          }
+        ]
+      },
+      {
+        "id": "5",
+        "title": "Offline corruption: cause and fix",
+        "priority": "medium",
+        "status": "pending",
+        "dependencies": [
+          "3"
+        ],
+        "description": "A running session turned to garbage ~3 min after the station lost internet (SPS changed). Find whether a fresh offline session decodes.",
+        "details": "User blocks the station's internet on the FRITZ!Box. Run (a) running session across the block; run (b) fresh session while blocked. Fresh OK -> relay re-detects header size and resyncs on SPS change; fresh broken -> device encrypts differently offline, document.",
+        "testStrategy": "Synthetic SPS-change resync test; a harness run decodes after the change.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Harness run (a) across an internet block",
+            "description": "Harness run (a) across an internet block",
+            "status": "pending",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": "",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Harness run (b) fresh while blocked",
+            "description": "Harness run (b) fresh while blocked",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "details": "",
+            "testStrategy": "",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Decide and implement resync or document",
+            "description": "Decide and implement resync or document",
+            "status": "pending",
+            "dependencies": [
+              2
+            ],
+            "details": "",
+            "testStrategy": "",
+            "parentId": "undefined"
+          }
+        ]
+      },
+      {
+        "id": "6",
+        "title": "Commit the LAN harness as tools/lanlive.py",
+        "priority": "medium",
+        "status": "done",
+        "dependencies": [],
+        "description": "Make the real-device harness part of the repo (outside custom_components so HACS never ships it).",
+        "details": "Secrets path from LANLIVE_SECRETS; print key lengths only; outputs git-ignored. tools/README.md with the one-client rule, 'stop HA first', the no-scan rule.",
+        "testStrategy": "pyflakes clean; grep the diff for anything key-shaped.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Move the script, write tools/README.md, gitignore outputs",
+            "description": "Move the script, write tools/README.md, gitignore outputs",
+            "status": "pending",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": "",
+            "parentId": "undefined"
+          }
+        ],
+        "updatedAt": "2026-11-13T17:08:32.086Z"
+      },
+      {
+        "id": "7",
+        "title": "Picture on demand: action take_snapshot (#26)",
+        "priority": "medium",
+        "status": "done",
+        "dependencies": [
+          "3"
+        ],
+        "description": "A snapshot taken now: from the running local session's keyframe if open, else the EZVIZ cloud capture_picture with one retry on 2009.",
+        "details": "New action, local path relay.still_image(), cloud path decrypts with the stored key (no cloud key request, see 1.1.2), fires ezviz_instant_bell_picture_saved. services.yaml, translations, README. Reply on #26.",
+        "testStrategy": "Both paths + 2009 retry; no cloud call when the local session is open.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Action with local+cloud path, event, translations, tests",
+            "description": "Action with local+cloud path, event, translations, tests",
+            "status": "pending",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": "",
+            "parentId": "undefined"
+          }
+        ],
+        "updatedAt": "2026-11-13T13:27:47.726Z"
+      },
+      {
+        "id": "8",
+        "title": "Motion/person mapping against real messages",
+        "priority": "medium",
+        "status": "pending",
+        "dependencies": [],
+        "description": "ROADMAP Next: compare recent_messages codes from a real diagnostics download with the mapping.",
+        "details": "User provides a diagnostics download after a motion and a person event; fix the mapping; add real messages as fixtures (pseudonymised).",
+        "testStrategy": "Fixture test per message -> event type.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Get a download, compare, fix, add fixtures",
+            "description": "Get a download, compare, fix, add fixtures",
+            "status": "pending",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": "",
+            "parentId": "undefined"
+          }
+        ]
+      },
+      {
+        "id": "9",
+        "title": "#25 keyboard backlight switch (HP7 Pro)",
+        "priority": "medium",
+        "status": "pending",
+        "dependencies": [],
+        "description": "Blocked on the reporter's on/off diagnostics pair from 1.2.0 (settings section).",
+        "details": "Diff the two downloads, add a switch where the path flips, fixture test, reply on #25.",
+        "testStrategy": "Fixture with/without the path.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Diff, add the switch behind a capability check, test",
+            "description": "Diff, add the switch behind a capability check, test",
+            "status": "pending",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": "",
+            "parentId": "undefined"
+          }
+        ]
+      },
+      {
+        "id": "10",
+        "title": "Live video card of its own (play, stop, auto-stop)",
+        "priority": "low",
+        "status": "pending",
+        "dependencies": [],
+        "description": "Frontend only, served like the visitor-log card, using the camera entity's stream.",
+        "details": "Play/stop, auto-stop after N minutes, resource registration + test, README example.",
+        "testStrategy": "Resource registration test; manual in a dashboard.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Card JS, resource registration, README",
+            "description": "Card JS, resource registration, README",
+            "status": "pending",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": "",
+            "parentId": "undefined"
+          }
+        ]
+      },
+      {
+        "id": "11",
+        "title": "pyezvizapi 2.0.0: migration plan (reviewed 2026-11-14)",
+        "priority": "low",
+        "status": "pending",
+        "dependencies": [],
+        "description": "Reviewed 2.0.0 (PyPI 2026-11-08). HA core still pins 1.0.5.0, ha-ezviz pins <2.0.0. Stay on <1.1 until HA core moves; prepare the migration now.",
+        "details": "Findings 2026-11-14. BREAKING for us: (a) flat modules removed: pyezvizapi.camera, api_endpoints, cas, cloud_stream, stream, local_stream (we import all six; new homes: devices.camera, cloud.endpoints, cloud.cas, streaming.cloud.bootstrap, streaming.cloud.protocol, streaming.local.session). pyezvizapi.utils.decrypt_image and pyezvizapi.mqtt stay. (b) Push: legacy HTTP push registration is gone; get_mqtt_client only works after client.enable_channel99() and with a synchronous on_token_updated callback that stores the WHOLE token durably (HA Store, marshalled from the worker thread). The token carries a feature_code marker: our feature_code.py must patch FEATURE_CODE in pyezvizapi.constants, client, cloud.auth, cloud.cas, cloud.token, cloud.operations.* (and set it before login) or the saved token is rejected (EzvizAuthTokenExpired). Monitor MQTTClient.raise_if_failed() and get_push_diagnostics() from the hub health path. (c) Python >=3.12, paho-mqtt>=2, cryptography added as a runtime dependency. WORTH TAKING: register_p2p_session() before the CAS getDevOperationCode lookup (some devices reject the key lookup until the sessionId is registered; could explain CAS key failures on #22-type streams). CAS fixes: ClientType=3 default, framed response reads, expired-cert tolerance. Unlock/lock now raise on application-level rejection instead of reporting success (we should mirror that: check resultCode ourselves on 1.0.5). HPD7 unlock routing (#268): camera wrapper used resourceId instead of resourceIdentifier; we call the client method directly, verify our route string at upgrade. Chime helpers (get/set_device_chime_info, CHIME_INDICATOR_LIGHT=611, SupportChime* flags) match what we already do in device_api.py. Alarm timestamp fix (_shared/alarm_time.py): prefer the UTC epoch over a DST-shifted string; compare with parsing.parse_local_time for the motion sensor. probe_local_stream()/LocalSdkProtocolDetector: detects legacy RTP/PS vs ECDH on a local session, could replace part of our 1 s probe. IDEAS (need the user and the device): LAN RTSP switch (lan rtsp status|enable; hcnetsdk servicesSwitch on port 8000 with the device verification code) - read-only status check on the HP7 monitor first; if the switch exists and enables, go2rtc/Frigate could use plain RTSP. LAN SD-card recording download without the cloud (save clip --source local-playback) and cloud-mediated SD playback (CloudPlaybackClipSource): a local path for the ring clip we now fetch through the cloud. NOT THERE: no talk/voice send path in 2.0.0 (netConfigAndVoiceFileUpload is a file upload, not live talk). Channel-99 is still MQTT after an LBS handshake; it does not deliver rings locally.",
+        "testStrategy": "Guard test (tests/test_ha_library_contract.py) extended with the six new import paths; a push test with a fake on_token_updated store; CI green on both HA versions once HA core pins 2.x.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Monthly check: HA core and ha-ezviz pin of pyezvizapi",
+            "description": "Monthly check",
+            "status": "pending",
+            "dependencies": [],
+            "details": "2026-11-14: HA core dev = 1.0.5.0, ha-ezviz = >=1.0.5.0,<2.0.0.",
+            "testStrategy": "",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Import shim: resolve the six moved modules by try/except so both 1.0.5 and 2.x import",
+            "description": "Import shim",
+            "status": "pending",
+            "dependencies": [],
+            "details": "camera, api_endpoints, cas, cloud_stream, stream, local_stream. Add the 2.x names to the guard test.",
+            "testStrategy": "",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Channel-99 push: enable_channel99 + HA Store token callback + raise_if_failed in the hub",
+            "description": "Channel-99 push",
+            "status": "pending",
+            "dependencies": [
+              2
+            ],
+            "details": "Callback runs on the worker thread; use run_coroutine_threadsafe(...).result() into hass Store. Extend feature_code.apply_to_library to the 2.x modules and set the token marker.",
+            "testStrategy": "",
+            "parentId": "undefined"
+          },
+          {
+            "id": 4,
+            "title": "Take now on 1.0.5: check unlock resultCode ourselves; try register_p2p_session before the CAS key lookup",
+            "description": "Backportable improvements",
+            "status": "pending",
+            "dependencies": [],
+            "details": "Both are plain HTTP calls we can do with the 1.0.5 client (_request_json POST to the p2p configurations endpoint).",
+            "testStrategy": "",
+            "parentId": "undefined"
+          },
+          {
+            "id": 5,
+            "title": "User test: LAN RTSP switch status on the HP7 monitor (read-only, pyezvizapi 2.0 CLI in a venv)",
+            "description": "LAN RTSP switch",
+            "status": "pending",
+            "dependencies": [],
+            "details": "pyezvizapi lan rtsp status --host <monitor ip> --serial <serial> --lan-password-file <verification code>. Read-only first; enable only if the user agrees.",
+            "testStrategy": "",
+            "parentId": "undefined"
+          }
+        ]
+      }
+    ],
+    "metadata": {
+      "version": "1.0.0",
+      "lastModified": "2026-11-13T17:08:32.086Z",
+      "taskCount": 11,
+      "completedCount": 3,
+      "tags": [
+        "master"
+      ]
+    }
+  }
+}
